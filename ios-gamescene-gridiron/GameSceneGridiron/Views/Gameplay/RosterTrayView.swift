@@ -2,17 +2,18 @@ import SwiftUI
 
 /// Horizontally scrolling tray of unsolved missing players. Shrinks as players are placed.
 ///
-/// Drag model: a plain zero-distance drag gesture tracks the touch. Holding still on a
-/// card for ~0.28s starts the placement drag (only when a variant is selected); moving
-/// more than ~14pt before that cancels the hold so vertical scrolls still work.
+/// Interaction split so scrolling is never blocked:
+/// - A quick horizontal swipe moves the tray (the scroll view owns the touch; the long
+///   press fails as soon as the finger travels).
+/// - A tap selects/expandes a card (handled by the card's own button).
+/// - A press-and-hold (~0.28s, minimal movement) sequences into a zero-distance drag
+///   that carries the player onto the field.
 struct RosterTrayView: View {
     let viewModel: GameViewModel
 
     @GestureState private var isGestureActive: Bool = false
-    @State private var pressStartDate: Date?
 
     private let holdDuration: TimeInterval = 0.28
-    private let holdMaxMovement: CGFloat = 14
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -68,38 +69,24 @@ struct RosterTrayView: View {
     }
 
     private func dragGesture(for player: FootballPlayer) -> some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .named(GameplayView.coordinateSpace))
+        // Long press first: it FAILS the moment the finger travels, so a quick swipe is
+        // free to scroll the tray. Only a successful hold sequences into the drag.
+        LongPressGesture(minimumDuration: holdDuration, maximumDistance: 15)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(GameplayView.coordinateSpace)))
             .updating($isGestureActive) { _, state, _ in
                 state = true
             }
             .onChanged { value in
+                guard case .second(true, let drag?) = value else { return }
                 if viewModel.isDragging {
                     // Already carrying this player — follow the finger.
-                    viewModel.updateDrag(to: value.location)
-                    return
-                }
-                let movement = hypot(value.translation.width, value.translation.height)
-                guard movement <= holdMaxMovement else {
-                    // Moved too far, too fast: treat as a scroll, never start a drag.
-                    pressStartDate = nil
-                    return
-                }
-                let start = pressStartDate ?? value.time
-                if pressStartDate == nil { pressStartDate = start }
-                if value.time.timeIntervalSince(start) >= holdDuration {
-                    pressStartDate = nil
-                    if viewModel.beginDrag(playerID: player.id, at: value.location) {
-                        viewModel.updateDrag(to: value.location)
-                    }
+                    viewModel.updateDrag(to: drag.location)
+                } else {
+                    _ = viewModel.beginDrag(playerID: player.id, at: drag.location)
                 }
             }
             .onEnded { _ in
-                pressStartDate = nil
-                if viewModel.isDragging {
-                    viewModel.endDrag()
-                } else {
-                    viewModel.cancelDrag()
-                }
+                viewModel.endDrag()
             }
     }
 }
