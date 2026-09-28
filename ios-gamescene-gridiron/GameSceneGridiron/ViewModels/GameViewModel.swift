@@ -97,12 +97,14 @@ final class GameViewModel {
     func toggleExpanded(_ playerID: String) {
         guard result == .inProgress else { return }
         Haptics.tick()
+        AudioManager.shared.play(.cardSelect)
         expandedPlayerID = expandedPlayerID == playerID ? nil : playerID
     }
 
     func selectVariant(_ variant: PlayerVariant, for playerID: String) {
         guard result == .inProgress else { return }
         Haptics.tick()
+        AudioManager.shared.play(.profileSelect)
         expandedPlayerID = playerID
         if selectedVariants[playerID] == variant {
             selectedVariants[playerID] = nil
@@ -143,6 +145,7 @@ final class GameViewModel {
         inspectedEvidenceID = nil
         updateDrag(to: location)
         Haptics.pickUp()
+        AudioManager.shared.play(.dragBegin)
         return true
     }
 
@@ -194,10 +197,13 @@ final class GameViewModel {
                 lastPlacedPlayerID = player.id
             }
             Haptics.success()
+            AudioManager.shared.play(.placementCorrect)
             show(FeedbackMessage(title: "GOOD READ", detail: "\(player.position.rawValue) \(player.shortName) is in position.", tone: .success))
             advanceClueIfSolved()
 
             if remainingPlayers.isEmpty {
+                // Every player accounted for — the case itself is closed.
+                AudioManager.shared.play(.caseSolved)
                 finish(with: .won)
             }
         } else {
@@ -205,6 +211,7 @@ final class GameViewModel {
             rejectedSlotID = slot.id
             rejectionCount += 1
             Haptics.error()
+            AudioManager.shared.play(.placementWrong)
             show(FeedbackMessage(title: "THAT DOESN'T FIT THE EVIDENCE", detail: nil, tone: .failure))
 
             let rejected = slot.id
@@ -233,7 +240,13 @@ final class GameViewModel {
             withAnimation(.easeInOut(duration: 0.45)) {
                 self.result = outcome
             }
-            if outcome == .won { Haptics.success() } else { Haptics.warning() }
+            if outcome == .won {
+                Haptics.success()
+                AudioManager.shared.play(.quarterWon)
+            } else {
+                Haptics.warning()
+                AudioManager.shared.play(.quarterLost)
+            }
         }
     }
 
@@ -268,6 +281,7 @@ final class GameViewModel {
             currentClueIndex = index
         }
         Haptics.soft()
+        AudioManager.shared.play(.hintUsed)
         show(FeedbackMessage(title: "NEW LEAD", detail: hint.text, tone: .lead), duration: 4.2)
     }
 

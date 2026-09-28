@@ -82,6 +82,28 @@ struct GameplayView: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isDragging)
         .statusBarHidden(false)
+        .task {
+            AudioManager.shared.playMusic(.gameplayTheme)
+        }
+        .onChange(of: viewModel.isPaused) { _, isPaused in
+            let audio = AudioManager.shared
+            if isPaused {
+                audio.pauseMusic()
+            } else if viewModel.result == .inProgress {
+                audio.resumeMusic()
+            }
+        }
+        .onChange(of: viewModel.result) { _, result in
+            // Fade the bed out under the result stinger; bring it back on restart.
+            if result == .inProgress {
+                AudioManager.shared.playMusic(.gameplayTheme)
+            } else {
+                AudioManager.shared.stopMusic(fadeOutDuration: 1.4)
+            }
+        }
+        .onDisappear {
+            AudioManager.shared.stopMusic(fadeOutDuration: 0.6)
+        }
     }
 
     private var gameplayBackground: some View {

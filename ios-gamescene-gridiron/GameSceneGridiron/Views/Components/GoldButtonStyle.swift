@@ -27,6 +27,9 @@ struct GoldCapsuleButtonStyle: ButtonStyle {
             }
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, isPressed in
+                if isPressed { AudioManager.shared.play(.buttonPress) }
+            }
     }
 }
 
@@ -50,16 +53,26 @@ struct HUDButtonStyle: ButtonStyle {
             }
             .scaleEffect(configuration.isPressed ? 0.92 : 1)
             .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, isPressed in
+                if isPressed { AudioManager.shared.play(.buttonPress) }
+            }
     }
 }
 
 /// Generic springy press feedback for custom tappable surfaces.
+/// Opt in to the button-press sound for plain action buttons — surfaces that
+/// already have a distinct cue (player cards, variant chips, arrows) keep it off
+/// so sounds never double-fire.
 struct PressableButtonStyle: ButtonStyle {
     var scale: CGFloat = 0.96
+    var playsPressSound: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? scale : 1)
             .animation(.spring(response: 0.22, dampingFraction: 0.7), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, isPressed in
+                if isPressed && playsPressSound { AudioManager.shared.play(.buttonPress) }
+            }
     }
 }
