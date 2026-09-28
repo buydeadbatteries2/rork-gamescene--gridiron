@@ -15,20 +15,33 @@ struct PlayerCardView: View {
         VStack(spacing: 0) {
             Button(action: onToggle) {
                 VStack(spacing: 2) {
-                    ZStack {
-                        LinearGradient(
-                            colors: [Color(hex: 0x211B14), Color(hex: 0x110E0A)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        PlayerHelmetAvatar(
-                            position: player.position,
-                            variant: selectedVariant,
-                            size: isExpanded ? 60 : 74
-                        )
-                    }
-                    .frame(height: isExpanded ? 74 : 88)
-                    .overlay(alignment: .topTrailing) {
+                    // Realistic roster portrait: helmet + opaque dark visor, face never visible.
+                    Color(hex: 0x14110D)
+                        .frame(height: isExpanded ? 74 : 88)
+                        .overlay {
+                            Image(player.cardAsset)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .allowsHitTesting(false)
+                        }
+                        .overlay {
+                            LinearGradient(
+                                colors: [.clear, .clear, Color(hex: 0x14110D)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            .allowsHitTesting(false)
+                        }
+                        .overlay {
+                            LinearGradient(
+                                colors: [.clear, .black.opacity(0.3)],
+                                startPoint: .center,
+                                endPoint: .bottom
+                            )
+                            .allowsHitTesting(false)
+                        }
+                        .clipped()
+                        .overlay(alignment: .topTrailing) {
                             if let selectedVariant {
                                 Image(systemName: selectedVariant.symbol)
                                     .font(.system(size: 10, weight: .bold))

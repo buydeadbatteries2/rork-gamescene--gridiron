@@ -5,6 +5,8 @@ nonisolated struct FootballPlayer: Identifiable, Hashable, Sendable {
     let id: String
     let name: String
     let position: FootballPosition
+    /// Bundled imageset for the roster card portrait (helmet + dark visor, no visible face).
+    let cardAsset: String
 
     var side: TeamSide { position.side }
 

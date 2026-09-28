@@ -114,7 +114,10 @@ struct DraggedPlayerToken: View {
             Color(hex: 0x1A1510)
                 .frame(width: 52, height: 52)
                 .overlay {
-                    PlayerHelmetAvatar(position: player.position, variant: variant, size: 44)
+                    Image(player.cardAsset)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .allowsHitTesting(false)
                 }
                 .clipShape(.circle)
                 .overlay {
