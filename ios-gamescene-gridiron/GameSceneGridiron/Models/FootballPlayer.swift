@@ -5,9 +5,15 @@ nonisolated struct FootballPlayer: Identifiable, Hashable, Sendable {
     let id: String
     let name: String
     let position: FootballPosition
-    let portraitAsset: String
 
     var side: TeamSide { position.side }
+
+    /// Roster-style display name: first initial + last name, e.g. "D. Ellis".
+    var shortName: String {
+        let parts = name.split(separator: " ")
+        guard parts.count > 1, let first = parts.first, let last = parts.last else { return name }
+        return "\(first.prefix(1)). \(last)"
+    }
 }
 
 /// A player already standing on the field when the quarter begins.

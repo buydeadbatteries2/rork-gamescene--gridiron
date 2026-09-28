@@ -66,12 +66,12 @@ enum SampleQuarter {
     ]
 
     private static let missingPlayers: [FootballPlayer] = [
-        FootballPlayer(id: "p-wr", name: "Damon Ellis", position: .wr, portraitAsset: "football_player_portrait_2"),
-        FootballPlayer(id: "p-rb", name: "Marcus Reed", position: .rb, portraitAsset: "football_player_portrait"),
-        FootballPlayer(id: "p-te", name: "Evan Cole", position: .te, portraitAsset: "football_player_portrait_4"),
-        FootballPlayer(id: "p-lb", name: "Tomas Vega", position: .lb, portraitAsset: "linebacker_portrait"),
-        FootballPlayer(id: "p-cb", name: "Jae Park", position: .cb, portraitAsset: "football_player_portrait_3"),
-        FootballPlayer(id: "p-fs", name: "Andre Knox", position: .fs, portraitAsset: "football_player_portrait_5")
+        FootballPlayer(id: "p-wr", name: "Damon Ellis", position: .wr),
+        FootballPlayer(id: "p-rb", name: "Marcus Reed", position: .rb),
+        FootballPlayer(id: "p-te", name: "Evan Cole", position: .te),
+        FootballPlayer(id: "p-lb", name: "Tomas Vega", position: .lb),
+        FootballPlayer(id: "p-cb", name: "Jae Park", position: .cb),
+        FootballPlayer(id: "p-fs", name: "Andre Knox", position: .fs)
     ]
 
     private static let evidence: [EvidenceItem] = [

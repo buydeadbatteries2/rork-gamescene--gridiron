@@ -15,19 +15,20 @@ struct PlayerCardView: View {
         VStack(spacing: 0) {
             Button(action: onToggle) {
                 VStack(spacing: 2) {
-                    Color(hex: 0x14110D)
-                        .frame(height: isExpanded ? 74 : 86)
-                        .overlay {
-                            Image(player.portraitAsset)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .allowsHitTesting(false)
-                        }
-                        .overlay {
-                            LinearGradient(colors: [.clear, Color(hex: 0x14110D)], startPoint: .center, endPoint: .bottom)
-                        }
-                        .clipped()
-                        .overlay(alignment: .topTrailing) {
+                    ZStack {
+                        LinearGradient(
+                            colors: [Color(hex: 0x211B14), Color(hex: 0x110E0A)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        PlayerHelmetAvatar(
+                            position: player.position,
+                            variant: selectedVariant,
+                            size: isExpanded ? 60 : 74
+                        )
+                    }
+                    .frame(height: isExpanded ? 74 : 88)
+                    .overlay(alignment: .topTrailing) {
                             if let selectedVariant {
                                 Image(systemName: selectedVariant.symbol)
                                     .font(.system(size: 10, weight: .bold))
@@ -42,7 +43,7 @@ struct PlayerCardView: View {
                         .font(.system(size: 12, weight: .heavy).width(.condensed))
                         .tracking(1)
                         .foregroundStyle(Theme.gold)
-                    Text(player.name)
+                    Text(player.shortName)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(0.95))
                         .lineLimit(1)
@@ -53,7 +54,7 @@ struct PlayerCardView: View {
                 .contentShape(.rect)
             }
             .buttonStyle(PressableButtonStyle(scale: 0.97))
-            .accessibilityLabel("\(player.position.fullName), \(player.name)")
+            .accessibilityLabel("\(player.position.fullName), \(player.shortName)")
             .accessibilityValue(selectedVariant.map { "\($0.title) selected" } ?? "No profile selected")
             .accessibilityHint(isExpanded ? "Collapse" : "Show Fast, Power and Veteran profiles")
 

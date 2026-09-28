@@ -194,7 +194,7 @@ final class GameViewModel {
                 lastPlacedPlayerID = player.id
             }
             Haptics.success()
-            show(FeedbackMessage(title: "GOOD READ", detail: "\(player.position.rawValue) \(player.name) is in position.", tone: .success))
+            show(FeedbackMessage(title: "GOOD READ", detail: "\(player.position.rawValue) \(player.shortName) is in position.", tone: .success))
             advanceClueIfSolved()
 
             if remainingPlayers.isEmpty {
