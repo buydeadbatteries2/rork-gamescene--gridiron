@@ -11,6 +11,9 @@ final class GameViewModel {
 
     let puzzle: QuarterPuzzle
 
+    /// Position of this puzzle within the match (0-based; 4 = overtime).
+    var puzzleIndex: Int { puzzle.index }
+
     private(set) var lives: Int
     private(set) var hintsRemaining: Int
     private(set) var usedHints: [UsedHint] = []

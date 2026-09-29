@@ -17,11 +17,14 @@ import Foundation
 /// 6. LB Fast    → behind the defensive line on the right (strong) side, in front of
 ///    the safeties but behind the line, by the muddy footprints.
 /// Decoy slots (left backfield, left backer, deep right) are never correct.
-enum SampleQuarter {
+nonisolated enum SampleQuarter {
     static let puzzle = QuarterPuzzle(
         id: "sample-q1",
+        index: 0,
         quarterLabel: "Q1",
         title: "The Towel on the 38",
+        introHeading: "OPENING DRIVE",
+        introBody: "The opponent is testing your defensive discipline early.",
         startingLives: 3,
         startingHints: 3,
         visiblePlayers: visiblePlayers,
@@ -122,7 +125,7 @@ enum SampleQuarter {
         PuzzleClue(
             id: 5,
             text: "Whoever covers that seasoned route runner can't give him a clean release. He lines up directly across from him, just past the line of scrimmage, and the loose football at his feet shows how physical it got.",
-            difficulty: .hard,
+            difficulty: .medium,
             playerID: "p-cb"
         ),
         PuzzleClue(

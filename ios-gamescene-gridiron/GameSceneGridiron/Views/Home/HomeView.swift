@@ -89,7 +89,7 @@ struct HomeView: View {
             withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { glow = true }
         }
         .fullScreenCover(isPresented: $isPlaying) {
-            GameplayView(onExit: { isPlaying = false })
+            MatchFlowView()
         }
     }
 

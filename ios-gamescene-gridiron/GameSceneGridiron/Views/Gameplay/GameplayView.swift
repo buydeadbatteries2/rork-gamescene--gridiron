@@ -1,18 +1,33 @@
 import SwiftUI
 
-/// The sample quarter: HUD, field, clue notebook, roster tray and reserved ad area, stacked vertically.
+/// One live quarter: HUD, field, clue notebook, roster tray and reserved ad area,
+/// stacked vertically. The quarter view model is injected by the match flow so the
+/// match can carry the finished quarter's state into the result screen.
 struct GameplayView: View {
     static let coordinateSpace = "gameplay"
 
-    let onExit: () -> Void
+    let viewModel: GameViewModel
+    var matchViewModel: MatchViewModel?
+    let onQuit: () -> Void
+    let onQuarterComplete: (GameViewModel) -> Void
 
-    @State private var viewModel: GameViewModel = GameViewModel()
+    init(
+        viewModel: GameViewModel,
+        matchViewModel: MatchViewModel? = nil,
+        onQuit: @escaping () -> Void = {},
+        onQuarterComplete: @escaping (GameViewModel) -> Void = { _ in }
+    ) {
+        self.viewModel = viewModel
+        self.matchViewModel = matchViewModel
+        self.onQuit = onQuit
+        self.onQuarterComplete = onQuarterComplete
+    }
 
     var body: some View {
         @Bindable var viewModel = viewModel
 
         VStack(spacing: 14) {
-            GameHUDView(viewModel: viewModel) {
+            GameHUDView(viewModel: viewModel, matchViewModel: matchViewModel) {
                 Haptics.tick()
                 withAnimation(.easeOut(duration: 0.2)) { viewModel.isPaused = true }
             }
@@ -66,15 +81,9 @@ struct GameplayView: View {
                 PauseOverlay(
                     onResume: { withAnimation(.easeOut(duration: 0.2)) { viewModel.isPaused = false } },
                     onRestart: { viewModel.restart() },
-                    onQuit: onExit
+                    onQuit: onQuit
                 )
                 .transition(.opacity)
-            }
-        }
-        .overlay {
-            if viewModel.result != .inProgress {
-                QuarterResultView(viewModel: viewModel, onContinue: onExit)
-                    .transition(.opacity.combined(with: .scale(scale: 1.04)))
             }
         }
         .sheet(isPresented: $viewModel.isNotebookPresented) {
@@ -94,11 +103,12 @@ struct GameplayView: View {
             }
         }
         .onChange(of: viewModel.result) { _, result in
-            // Fade the bed out under the result stinger; bring it back on restart.
+            // Fade the bed out under the result stinger; report the verdict up to the match.
             if result == .inProgress {
                 AudioManager.shared.playMusic(.gameplayTheme)
             } else {
                 AudioManager.shared.stopMusic(fadeOutDuration: 1.4)
+                onQuarterComplete(viewModel)
             }
         }
         .onDisappear {
@@ -127,6 +137,6 @@ struct GameplayView: View {
 }
 
 #Preview {
-    GameplayView(onExit: {})
+    GameplayView(viewModel: GameViewModel(puzzle: SampleQuarter.puzzle))
         .preferredColorScheme(.dark)
 }

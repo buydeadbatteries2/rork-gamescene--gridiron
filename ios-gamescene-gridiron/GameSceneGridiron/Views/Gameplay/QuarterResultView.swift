@@ -1,14 +1,18 @@
 import SwiftUI
 
-/// Full-screen verdict for the quarter. Continue returns to Home in Phase 1.
+/// Cinematic quarter summary shown between quarters. Continue advances the match
+/// (next quarter intro, or the final verdict after Q4).
 struct QuarterResultView: View {
     let viewModel: GameViewModel
+    let matchViewModel: MatchViewModel
     let onContinue: () -> Void
 
     @State private var stampIn: Bool = false
     @State private var photoIn: Bool = false
 
     private var isWin: Bool { viewModel.result == .won }
+    private var isOvertime: Bool { viewModel.puzzle.index >= GameMatch.regulationQuarters }
+    private var quarterNumber: Int { viewModel.puzzle.index + 1 }
 
     var body: some View {
         ZStack {
@@ -27,6 +31,9 @@ struct QuarterResultView: View {
                         .opacity(stampIn ? 1 : 0)
                         .rotationEffect(.degrees(stampIn ? -2 : -9))
 
+                    quartersWon
+                        .opacity(photoIn ? 1 : 0)
+
                     fieldPhoto
                         .opacity(photoIn ? 1 : 0)
                         .offset(y: photoIn ? 0 : 30)
@@ -37,7 +44,7 @@ struct QuarterResultView: View {
                     } label: {
                         HStack {
                             Spacer()
-                            Text("CONTINUE")
+                            Text(matchViewModel.nextButtonTitle)
                             Spacer()
                             Image(systemName: "chevron.right").font(.system(size: 15, weight: .bold))
                         }
@@ -45,6 +52,7 @@ struct QuarterResultView: View {
                     }
                     .buttonStyle(GoldCapsuleButtonStyle())
                     .opacity(photoIn ? 1 : 0)
+                    .accessibilityHint(matchViewModel.shouldShowGameResult ? "Shows the final game result" : "Begins the next quarter")
                 }
                 .padding(.horizontal, 22)
                 .padding(.bottom, 32)
@@ -60,7 +68,7 @@ struct QuarterResultView: View {
                     .background(.black.opacity(0.45), in: .circle)
             }
             .padding(.leading, 16)
-            .accessibilityLabel("Close")
+            .accessibilityLabel("Continue")
         }
         .onAppear {
             withAnimation(.spring(response: 0.42, dampingFraction: 0.55).delay(0.15)) { stampIn = true }
@@ -71,14 +79,14 @@ struct QuarterResultView: View {
 
     private var stamp: some View {
         VStack(spacing: 6) {
-            Text(isWin ? "CASE SOLVED" : "QUARTER LOST")
+            Text(isWin ? "CASE SOLVED" : "CASE UNSOLVED")
                 .font(.system(size: 46, weight: .black).width(.compressed))
                 .foregroundStyle(isWin ? AnyShapeStyle(Theme.goldGradient) : AnyShapeStyle(Theme.danger))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
             HStack(spacing: 10) {
                 Rectangle().fill(Theme.gold.opacity(0.7)).frame(width: 28, height: 2)
-                Text(isWin ? "QUARTER WON" : "REGROUP")
+                Text(subheading)
                     .font(.system(size: 22, weight: .heavy).width(.compressed))
                     .tracking(2)
                     .foregroundStyle(Theme.goldLight)
@@ -96,6 +104,38 @@ struct QuarterResultView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    private var subheading: String {
+        if isOvertime {
+            return isWin ? "OVERTIME WON" : "OVERTIME LOST"
+        }
+        return isWin ? "QUARTER \(quarterNumber) SECURED" : "QUARTER \(quarterNumber) LOST"
+    }
+
+    /// Regulation progress: QUARTERS WON X / 4 with the full result track.
+    private var quartersWon: some View {
+        let match = matchViewModel.match
+        return VStack(spacing: 10) {
+            Text("QUARTERS WON")
+                .font(.system(size: 11, weight: .heavy).width(.condensed))
+                .tracking(2)
+                .foregroundStyle(Theme.paperInkSoft)
+            HStack(spacing: 4) {
+                Text("\(match.quartersSolved)")
+                    .font(.system(size: 30, weight: .black).width(.compressed))
+                    .foregroundStyle(Theme.goldLight)
+                Text("/ \(GameMatch.regulationQuarters)")
+                    .font(.system(size: 20, weight: .bold).width(.compressed))
+                    .foregroundStyle(Theme.paperInk.opacity(0.6))
+                    .padding(.top, 8)
+            }
+            QuarterProgressTrack(match: match)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .paperCard(cornerRadius: 4)
+        .padding(.horizontal, 26)
     }
 
     private var fieldPhoto: some View {

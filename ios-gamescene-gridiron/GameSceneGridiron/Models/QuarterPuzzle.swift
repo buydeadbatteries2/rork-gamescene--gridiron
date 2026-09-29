@@ -3,8 +3,13 @@ import Foundation
 /// A complete, self-contained quarter mystery. Swap in new definitions to add puzzles.
 nonisolated struct QuarterPuzzle: Identifiable, Hashable, Sendable {
     let id: String
+    /// 0-based position in the match; 4 = overtime.
+    let index: Int
     let quarterLabel: String
     let title: String
+    /// Short scenario shown on the quarter-intro screen, e.g. "OPENING DRIVE".
+    let introHeading: String
+    let introBody: String
     let startingLives: Int
     let startingHints: Int
     let visiblePlayers: [FieldPlayer]
