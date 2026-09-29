@@ -124,42 +124,53 @@ struct GameFieldView: View {
     }
 }
 
-/// The field surface. Uses the photoreal night-stadium render when bundled, and falls
-/// back to the original painted turf so the puzzle board always works.
+/// The field surface. Uses the bright broadcast-style turf render from the reference
+/// look when bundled, falls back to the night render, then the painted turf, so the
+/// puzzle board always works.
 struct FieldTurf: View {
-    private static let usesRenderedTurf = UIImage(named: "football_field_night") != nil
+    private static let turfImageName: String? = {
+        if UIImage(named: "football_field_empty") != nil { return "football_field_empty" }
+        if UIImage(named: "football_field_night") != nil { return "football_field_night" }
+        return nil
+    }()
+    private static var isBrightTurf: Bool { turfImageName == "football_field_empty" }
 
     var body: some View {
-        if Self.usesRenderedTurf {
-            renderedTurf
+        if let name = Self.turfImageName {
+            renderedTurf(name)
         } else {
             paintedTurf
         }
     }
 
     /// Photo-real stadium field + chalk markings + broadcast lighting.
-    private var renderedTurf: some View {
-        Theme.turfDark
+    private func renderedTurf(_ name: String) -> some View {
+        Theme.turf
             .overlay {
-                Image("football_field_night")
+                Image(name)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .allowsHitTesting(false)
             }
             .overlay { FieldMarkings().allowsHitTesting(false) }
             .overlay {
-                // Floodlight from the top fading into a darkened backfield foot.
+                // Gentle broadcast lighting: bright midfield, softly darkened backfield foot.
                 LinearGradient(
-                    colors: [Color.white.opacity(0.08), .clear, .black.opacity(0.38)],
+                    colors: [Color.white.opacity(Self.isBrightTurf ? 0.05 : 0.08), .clear, .black.opacity(Self.isBrightTurf ? 0.2 : 0.38)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 .allowsHitTesting(false)
             }
             .overlay {
-                // Darker perimeter edges keep the tactical board premium.
-                RadialGradient(colors: [.clear, .black.opacity(0.38)], center: .center, startRadius: 70, endRadius: 420)
-                    .allowsHitTesting(false)
+                // Darkened perimeter edges keep the tactical board premium.
+                RadialGradient(
+                    colors: [.clear, .black.opacity(Self.isBrightTurf ? 0.22 : 0.38)],
+                    center: .center,
+                    startRadius: 70,
+                    endRadius: 420
+                )
+                .allowsHitTesting(false)
             }
             .clipped()
             .accessibilityHidden(true)
@@ -241,10 +252,16 @@ struct FieldMarkings: View {
     }
 
     static func drawLineOfScrimmage(context: GraphicsContext, width: CGFloat, height: CGFloat) {
+        // Broadcast-style blue offside line just behind the yellow LOS.
+        var blue = Path()
+        blue.move(to: CGPoint(x: 0, y: height * 0.52 - height * 0.013))
+        blue.addLine(to: CGPoint(x: width, y: height * 0.52 - height * 0.013))
+        context.stroke(blue, with: .color(Color(hex: 0x4E8FD9).opacity(0.45)), lineWidth: 1.3)
+
         var los = Path()
         los.move(to: CGPoint(x: 0, y: height * 0.52))
         los.addLine(to: CGPoint(x: width, y: height * 0.52))
-        context.stroke(los, with: .color(Theme.gold.opacity(0.45)), style: StrokeStyle(lineWidth: 1.2, dash: [6, 4]))
+        context.stroke(los, with: .color(Theme.caution.opacity(0.85)), lineWidth: 2)
     }
 
     static func drawLabels(context: GraphicsContext, width: CGFloat, height: CGFloat) {
@@ -253,7 +270,7 @@ struct FieldMarkings: View {
             let y = height * CGFloat(index + 1) / 10
             let text = Text(label)
                 .font(.system(size: max(9, width * 0.038), weight: .bold, design: .serif))
-                .foregroundColor(Theme.chalk.opacity(0.55))
+                .foregroundColor(Theme.chalk.opacity(0.72))
             context.draw(context.resolve(text), at: CGPoint(x: width * 0.095, y: y))
             context.draw(context.resolve(text), at: CGPoint(x: width * 0.905, y: y))
         }

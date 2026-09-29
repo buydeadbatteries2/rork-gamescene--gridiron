@@ -105,32 +105,54 @@ struct ClueNotebookView: View {
     @ViewBuilder
     private func clueBody(_ clue: PuzzleClue) -> some View {
         let isSolved = viewModel.isClueSolved(clue)
-        VStack(alignment: .leading, spacing: 7) {
-            Text(ClueHighlighter.highlighted(clue.text))
-                .font(Theme.typewriter(15.5, relativeTo: .callout))
-                .foregroundStyle(Theme.paperInk.opacity(isSolved ? 0.45 : 1))
-                .lineSpacing(3.5)
-                .minimumScaleFactor(0.68)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+        HStack(alignment: .top, spacing: 9) {
+            ClueNumberBadge(number: viewModel.currentClueIndex + 1)
+                .padding(.top, 2)
 
-            if let hint = viewModel.usedHint(for: clue), !isSolved {
-                Label {
-                    Text(ClueHighlighter.highlighted(hint.text))
-                        .font(.system(size: 12, weight: .medium))
-                        .lineSpacing(2)
-                        .lineLimit(3)
-                        .minimumScaleFactor(0.8)
-                } icon: {
-                    Image(systemName: "lightbulb.fill")
-                        .font(.system(size: 11, weight: .bold))
+            VStack(alignment: .leading, spacing: 7) {
+                Text(ClueHighlighter.highlighted(clue.text))
+                    .font(Theme.typewriter(15.5, relativeTo: .callout))
+                    .foregroundStyle(Theme.paperInk.opacity(isSolved ? 0.45 : 1))
+                    .lineSpacing(3.5)
+                    .minimumScaleFactor(0.68)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                if let hint = viewModel.usedHint(for: clue), !isSolved {
+                    Label {
+                        Text(ClueHighlighter.highlighted(hint.text))
+                            .font(.system(size: 12, weight: .medium))
+                            .lineSpacing(2)
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.8)
+                    } icon: {
+                        Image(systemName: "lightbulb.fill")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundStyle(Theme.bronzeDeep)
                 }
-                .foregroundStyle(Theme.bronzeDeep)
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .overlay(alignment: .bottomTrailing) {
             if isSolved { SolvedStamp().padding(.trailing, 4) }
         }
+    }
+}
+
+/// Colored playbook-style clue number (yellow, blue, red, green, purple — cycling).
+struct ClueNumberBadge: View {
+    let number: Int
+
+    var body: some View {
+        Text("\(number)")
+            .font(.system(size: 13, weight: .black, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(Color.white)
+            .frame(width: 24, height: 24)
+            .background(Circle().fill(Theme.clueNumberColor(number - 1)))
+            .overlay(Circle().strokeBorder(Color.black.opacity(0.15), lineWidth: 1))
+            .shadow(color: .black.opacity(0.15), radius: 1, y: 1)
+            .accessibilityLabel("Clue \(number)")
     }
 }
 

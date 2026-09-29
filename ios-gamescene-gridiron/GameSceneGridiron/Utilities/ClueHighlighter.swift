@@ -14,22 +14,28 @@ enum ClueHighlighter {
     }
 
     private static let rules: [Rule] = [
-        // 1. Physical evidence — orange marker
+        // 0. Rule-outs — rose marker ("not a cornerback"), highest priority so the
+        // whole negation reads as one thought before position highlighting kicks in.
+        Rule(
+            pattern: #"\bnot (?:a|an|the) \w+(?: \w+)?\b"#,
+            color: Theme.highlightNegative
+        ),
+        // 1. Physical evidence — blue marker
         Rule(
             pattern: #"\b(orange towel|loose football|muddy footprints|water bottle|dropped glove|towel|football|bottle|glove|footprints)\b"#,
             color: Theme.highlightEvidence
         ),
-        // 2. Who the clue is about — green marker
+        // 2. Who the clue is about — orange marker
         Rule(
             pattern: #"\b(running back|wide receiver|tight end|cornerback|linebacker|strong safety|free safety|quarterback|defensive end|offensive line|safety|lineman|blocker|receiver|defender|route runner|back)\b"#,
             color: Theme.highlightPosition
         ),
-        // 3. Fast / Power / Veteran flavor — gold marker
+        // 3. Fast / Power / Veteran flavor — purple marker
         Rule(
             pattern: #"\b(film study|twelve seasons|strong enough|quick|speed|strong|physical|seasoned|fast)\b"#,
             color: Theme.highlightTrait
         ),
-        // 4. Where on the field — blue marker
+        // 4. Where on the field — yellow marker
         Rule(
             pattern: #"\b(right sideline|left sideline|right side|left side|dead center|directly across|across from|deeper than|center of the field|line of scrimmage|top of the field|bottom of the field|in front of|deeper|deep|wide|behind|sideline|backfield)\b"#,
             color: Theme.highlightDirection
