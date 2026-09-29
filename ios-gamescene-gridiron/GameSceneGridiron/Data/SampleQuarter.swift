@@ -69,12 +69,12 @@ nonisolated enum SampleQuarter {
     ]
 
     private static let missingPlayers: [FootballPlayer] = [
-        FootballPlayer(id: "p-wr", name: "Damon Ellis", position: .wr, cardAsset: "football_receiver_portrait_2"),
-        FootballPlayer(id: "p-rb", name: "Marcus Reed", position: .rb, cardAsset: "football_running_back_2"),
-        FootballPlayer(id: "p-te", name: "Evan Cole", position: .te, cardAsset: "football_tight_end_portrait"),
-        FootballPlayer(id: "p-lb", name: "Tomas Vega", position: .lb, cardAsset: "football_linebacker_portrait"),
-        FootballPlayer(id: "p-cb", name: "Jae Park", position: .cb, cardAsset: "cornerback_portrait_2"),
-        FootballPlayer(id: "p-fs", name: "Andre Knox", position: .fs, cardAsset: "football_player_portrait_7")
+        FootballPlayer(id: "p-wr", name: "Damon Ellis", position: .wr, cardAsset: "football_player_receiver"),
+        FootballPlayer(id: "p-rb", name: "Marcus Reed", position: .rb, cardAsset: "football_player_running_back_2"),
+        FootballPlayer(id: "p-te", name: "Evan Cole", position: .te, cardAsset: "football_player_blank_helmet_2"),
+        FootballPlayer(id: "p-lb", name: "Tomas Vega", position: .lb, cardAsset: "football_player_blank_helmet_3"),
+        FootballPlayer(id: "p-cb", name: "Jae Park", position: .cb, cardAsset: "football_player_cornerback"),
+        FootballPlayer(id: "p-fs", name: "Andre Knox", position: .fs, cardAsset: "football_player_blank_gear_2")
     ]
 
     private static let evidence: [EvidenceItem] = [

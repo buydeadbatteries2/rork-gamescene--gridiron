@@ -1,12 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// Compact football-player piece. With no kit supplied it uses the rendered
-/// mini-athlete busts (offense black/gold, defense white/navy — plain logo-free
-/// kits, dark opaque visor, no face) with a position-colored base badge; when a
-/// `TeamKit` is supplied it renders a team-colored vector token so franchises
-/// wear their own colors on the field. Falls back to the vector marker if the
-/// art is missing. Offense reads dark, defense reads white at a glance.
+/// Compact football-player piece: a team-colored vector token (plain blank
+/// helmet, opaque dark visor, no face, no numbers, no logos — compliant by
+/// construction) with a position-colored base badge. Offense reads dark,
+/// defense reads white at a glance.
 struct FootballPlayerView: View {
     let position: FootballPosition
     var size: CGFloat = 24
@@ -16,8 +14,6 @@ struct FootballPlayerView: View {
     var kit: TeamKit?
 
     private var isOffense: Bool { position.side == .offense }
-    private var tokenImageName: String { isOffense ? "football_player_figure" : "football_player_figure_2" }
-    private var usesRenderedToken: Bool { kit == nil && UIImage(named: tokenImageName) != nil }
     private var arch: HelmetArch { HelmetArch(position: position) }
     private var helmetDiameter: CGFloat { size * 0.64 * arch.helmetScale }
     private var facemaskColor: Color { isOffense ? Color(hex: 0xC9A25A) : Color(hex: 0x8B97A3) }
@@ -40,14 +36,8 @@ struct FootballPlayerView: View {
     }
 
     var body: some View {
-        ZStack {
-            if usesRenderedToken {
-                renderedToken
-            } else {
-                vectorToken
-            }
-        }
-        .frame(width: size * 1.1, height: size * 1.42)
+        vectorToken
+            .frame(width: size * 1.1, height: size * 1.42)
         .overlay(alignment: .topTrailing) {
             if let variant {
                 Image(systemName: variant.symbol)
@@ -74,30 +64,7 @@ struct FootballPlayerView: View {
         .accessibilityLabel(accessibilityText)
     }
 
-    /// Rendered mini-athlete with a position-colored base tag.
-    private var renderedToken: some View {
-        VStack(spacing: 1) {
-            Color.clear
-                .frame(width: size * 1.05, height: size * 1.05)
-                .overlay {
-                    Image(tokenImageName)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .allowsHitTesting(false)
-                }
-            Text(position.rawValue)
-                .font(.system(size: size * 0.28, weight: .heavy).width(.condensed))
-                .foregroundStyle(Color.white.opacity(0.95))
-                .padding(.horizontal, size * 0.12)
-                .padding(.vertical, size * 0.02)
-                .background(Theme.positionAccent(position).opacity(0.92), in: .capsule)
-                .shadow(color: .black.opacity(0.55), radius: 1.5)
-                .offset(y: -size * 0.02)
-        }
-        .frame(width: size * 1.1, alignment: .top)
-    }
-
-    /// Vector fallback (original marker) used when the rendered art is unavailable.
+    /// Team-colored vector marker: blank helmet, dark visor, plain jersey.
     private var vectorToken: some View {
         ZStack(alignment: .center) {
             Capsule()
@@ -173,6 +140,8 @@ struct DraggedPlayerToken: View {
     let player: FootballPlayer
     let variant: PlayerVariant?
     let isOverSlot: Bool
+    /// Team primary tint over the controlled body asset.
+    var tint: Color?
 
     var body: some View {
         VStack(spacing: 3) {
@@ -182,6 +151,7 @@ struct DraggedPlayerToken: View {
                     Image(player.cardAsset)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
+                        .colorMultiply(tint ?? .white)
                         .allowsHitTesting(false)
                 }
                 .clipShape(.circle)

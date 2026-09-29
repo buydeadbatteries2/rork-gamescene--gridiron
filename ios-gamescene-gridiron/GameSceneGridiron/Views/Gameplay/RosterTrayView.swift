@@ -10,6 +10,8 @@ import SwiftUI
 ///   press-and-hold (~0.28s) sequences into the placement drag.
 struct RosterTrayView: View {
     let viewModel: GameViewModel
+    /// Team primary tint applied to the controlled body assets on every card.
+    var tint: Color? = nil
 
     private enum SlideDirection { case forward, back }
 
@@ -106,6 +108,7 @@ struct RosterTrayView: View {
                 ForEach(pages[index]) { player in
                     PlayerCardView(
                         player: player,
+                        tint: tint,
                         isExpanded: viewModel.expandedPlayerID == player.id,
                         selectedVariant: viewModel.selectedVariant(for: player.id),
                         isBeingDragged: viewModel.draggingPlayerID == player.id,

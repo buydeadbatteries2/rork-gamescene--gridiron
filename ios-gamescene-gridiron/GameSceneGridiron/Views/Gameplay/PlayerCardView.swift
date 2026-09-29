@@ -5,6 +5,9 @@ import SwiftUI
 /// Tap to reveal variants; press-and-hold and drag to place.
 struct PlayerCardView: View {
     let player: FootballPlayer
+    /// Team primary color multiplied over the controlled body asset so the
+    /// fictional franchise recolors its players. Nil keeps the neutral base.
+    var tint: Color?
     let isExpanded: Bool
     let selectedVariant: PlayerVariant?
     let isBeingDragged: Bool
@@ -79,6 +82,7 @@ struct PlayerCardView: View {
                 Image(player.cardAsset)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
+                    .colorMultiply(tint ?? .white)
                     .allowsHitTesting(false)
             }
             .overlay {

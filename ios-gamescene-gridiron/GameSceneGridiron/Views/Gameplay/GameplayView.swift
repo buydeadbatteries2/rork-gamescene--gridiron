@@ -53,7 +53,7 @@ struct GameplayView: View {
             }
             .padding(.horizontal, 16)
 
-            RosterTrayView(viewModel: viewModel)
+            RosterTrayView(viewModel: viewModel, tint: userTeam?.primaryColor)
                 .frame(height: 200, alignment: .bottom)
 
             AdBannerPlaceholder()
@@ -66,7 +66,8 @@ struct GameplayView: View {
                 DraggedPlayerToken(
                     player: player,
                     variant: viewModel.selectedVariant(for: player.id),
-                    isOverSlot: viewModel.hoveredSlotID != nil
+                    isOverSlot: viewModel.hoveredSlotID != nil,
+                    tint: userTeam?.primaryColor
                 )
                 .position(x: viewModel.dragLocation.x, y: viewModel.dragLocation.y - GameViewModel.dragLift)
                 .transition(.scale(scale: 0.5).combined(with: .opacity))

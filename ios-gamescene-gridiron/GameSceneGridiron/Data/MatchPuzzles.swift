@@ -22,15 +22,19 @@ nonisolated enum MatchPuzzles {
 
     static let overtime: QuarterPuzzle = overtimePuzzle
 
-    // MARK: - Q2 — The Shifted Front
+    // MARK: - Q2 — The Silent Count
 
+    /// A completely separate investigation from Q1: protection crisis with a
+    /// missing passer, a missing lineman, and a defense that rotates a safety
+    /// into the box. Shares no clue logic, hint text, formation or evidence
+    /// layout with any other quarter.
     static let quarter2 = QuarterPuzzle(
         id: "match-q2",
         index: 1,
         quarterLabel: "Q2",
-        title: "The Shifted Front",
-        introHeading: "ADJUSTMENT",
-        introBody: "They've changed formations. Read the evidence before the snap.",
+        title: "The Silent Count",
+        introHeading: "PROTECTION CRISIS",
+        introBody: "The line is patched, the huddle is silent. Read it before the snap.",
         startingLives: 3,
         startingHints: 3,
         visiblePlayers: q2Visible,
@@ -40,107 +44,107 @@ nonisolated enum MatchPuzzles {
         clues: q2Clues,
         hints: q2Hints,
         solutions: [
-            "q2-wr": PlacementSolution(slotID: "q2-s-left-wide", variant: .veteran),
-            "q2-rb": PlacementSolution(slotID: "q2-s-rb-right", variant: .fast),
-            "q2-te": PlacementSolution(slotID: "q2-s-left-edge", variant: .power),
-            "q2-dl": PlacementSolution(slotID: "q2-s-wide-rush", variant: .fast),
-            "q2-cb": PlacementSolution(slotID: "q2-s-left-corner", variant: .power),
-            "q2-fs": PlacementSolution(slotID: "q2-s-deep-center", variant: .veteran)
+            "q2-qb": PlacementSolution(slotID: "q2-s-gun", variant: .fast),
+            "q2-ol": PlacementSolution(slotID: "q2-s-right-guard", variant: .power),
+            "q2-wr": PlacementSolution(slotID: "q2-s-right-wide", variant: .veteran),
+            "q2-cb": PlacementSolution(slotID: "q2-s-right-corner", variant: .fast),
+            "q2-de": PlacementSolution(slotID: "q2-s-edge-rush", variant: .fast),
+            "q2-ss": PlacementSolution(slotID: "q2-s-box-right", variant: .veteran)
         ]
     )
 
     private static let q2Visible: [FieldPlayer] = [
-        FieldPlayer(id: "q2-v-lt", position: .ol, x: 0.32, y: 0.565),
-        FieldPlayer(id: "q2-v-lg", position: .ol, x: 0.42, y: 0.565),
-        FieldPlayer(id: "q2-v-c", position: .ol, x: 0.52, y: 0.565),
-        FieldPlayer(id: "q2-v-rg", position: .ol, x: 0.62, y: 0.565),
-        FieldPlayer(id: "q2-v-rt", position: .ol, x: 0.72, y: 0.565),
-        FieldPlayer(id: "q2-v-qb", position: .qb, x: 0.50, y: 0.68),
-        FieldPlayer(id: "q2-v-wr", position: .wr, x: 0.925, y: 0.52),
-        FieldPlayer(id: "q2-v-de1", position: .dl, x: 0.28, y: 0.475),
+        FieldPlayer(id: "q2-v-lt", position: .ol, x: 0.30, y: 0.565),
+        FieldPlayer(id: "q2-v-lg", position: .ol, x: 0.40, y: 0.565),
+        FieldPlayer(id: "q2-v-c", position: .ol, x: 0.50, y: 0.565),
+        FieldPlayer(id: "q2-v-rt", position: .ol, x: 0.70, y: 0.565),
+        FieldPlayer(id: "q2-v-te", position: .te, x: 0.775, y: 0.565),
+        FieldPlayer(id: "q2-v-rb", position: .rb, x: 0.42, y: 0.68),
+        FieldPlayer(id: "q2-v-wr", position: .wr, x: 0.075, y: 0.53),
         FieldPlayer(id: "q2-v-dt1", position: .dl, x: 0.42, y: 0.475),
         FieldPlayer(id: "q2-v-dt2", position: .dl, x: 0.58, y: 0.475),
         FieldPlayer(id: "q2-v-de2", position: .dl, x: 0.72, y: 0.475),
         FieldPlayer(id: "q2-v-mlb", position: .lb, x: 0.50, y: 0.36),
-        FieldPlayer(id: "q2-v-cb", position: .cb, x: 0.925, y: 0.435),
-        FieldPlayer(id: "q2-v-ss", position: .ss, x: 0.62, y: 0.27)
+        FieldPlayer(id: "q2-v-fs", position: .fs, x: 0.50, y: 0.135),
+        FieldPlayer(id: "q2-v-cb", position: .cb, x: 0.075, y: 0.435)
     ]
 
     private static let q2Missing: [FootballPlayer] = [
-        FootballPlayer(id: "q2-wr", name: "Silas Barnes", position: .wr, cardAsset: "football_receiver_portrait"),
-        FootballPlayer(id: "q2-rb", name: "Reggie Boone", position: .rb, cardAsset: "football_running_back"),
-        FootballPlayer(id: "q2-te", name: "Owen Marsh", position: .te, cardAsset: "football_player_portrait"),
-        FootballPlayer(id: "q2-dl", name: "Bruno Diaz", position: .dl, cardAsset: "linebacker_helmet_portrait"),
-        FootballPlayer(id: "q2-cb", name: "Kofi Mensah", position: .cb, cardAsset: "cornerback_portrait"),
-        FootballPlayer(id: "q2-fs", name: "Ray Underwood", position: .fs, cardAsset: "football_safety_portrait")
+        FootballPlayer(id: "q2-qb", name: "Dane Whitlock", position: .qb, cardAsset: "football_player_blank_helmet"),
+        FootballPlayer(id: "q2-ol", name: "Bruno Kaminski", position: .ol, cardAsset: "football_player_lineman"),
+        FootballPlayer(id: "q2-wr", name: "Silas Barnes", position: .wr, cardAsset: "football_player_render"),
+        FootballPlayer(id: "q2-cb", name: "Kofi Mensah", position: .cb, cardAsset: "football_player_backpedal"),
+        FootballPlayer(id: "q2-de", name: "Ilya Varga", position: .dl, cardAsset: "football_player_defensive_end"),
+        FootballPlayer(id: "q2-ss", name: "Ray Underwood", position: .ss, cardAsset: "football_player_blank_gear_2")
     ]
 
     private static let q2Evidence: [EvidenceItem] = [
-        EvidenceItem(id: "q2-e-glove", kind: .droppedGlove, x: 0.22, y: 0.615, rotation: 24),
-        EvidenceItem(id: "q2-e-towel", kind: .orangeTowel, x: 0.70, y: 0.66, rotation: -15),
-        EvidenceItem(id: "q2-e-ball", kind: .looseFootball, x: 0.05, y: 0.48, rotation: 12),
-        EvidenceItem(id: "q2-e-mud", kind: .muddyFootprints, x: 0.19, y: 0.32, rotation: 55),
-        EvidenceItem(id: "q2-e-bottle", kind: .waterBottle, x: 0.53, y: 0.04, rotation: 70)
+        EvidenceItem(id: "q2-e-towel", kind: .orangeTowel, x: 0.13, y: 0.83, rotation: -18),
+        EvidenceItem(id: "q2-e-ball", kind: .looseFootball, x: 0.545, y: 0.615, rotation: 8),
+        EvidenceItem(id: "q2-e-glove", kind: .droppedGlove, x: 0.955, y: 0.585, rotation: 26),
+        EvidenceItem(id: "q2-e-mud", kind: .muddyFootprints, x: 0.10, y: 0.295, rotation: 55),
+        EvidenceItem(id: "q2-e-bottle", kind: .waterBottle, x: 0.90, y: 0.055, rotation: 70)
     ]
 
     private static let q2Slots: [PlacementSlot] = [
-        PlacementSlot(id: "q2-s-left-wide", x: 0.075, y: 0.525),    // WR (correct)
-        PlacementSlot(id: "q2-s-left-corner", x: 0.075, y: 0.425),  // CB (correct)
-        PlacementSlot(id: "q2-s-left-edge", x: 0.245, y: 0.565),    // TE (correct)
-        PlacementSlot(id: "q2-s-wide-rush", x: 0.175, y: 0.47),     // DL (correct)
-        PlacementSlot(id: "q2-s-rb-right", x: 0.66, y: 0.72),       // RB (correct)
-        PlacementSlot(id: "q2-s-deep-center", x: 0.50, y: 0.115),   // FS (correct)
-        PlacementSlot(id: "q2-s-left-backfield", x: 0.34, y: 0.70), // decoy
-        PlacementSlot(id: "q2-s-right-backer", x: 0.66, y: 0.36),   // decoy
-        PlacementSlot(id: "q2-s-deep-right", x: 0.84, y: 0.15)      // decoy
+        PlacementSlot(id: "q2-s-gun", x: 0.50, y: 0.655),        // QB (correct)
+        PlacementSlot(id: "q2-s-right-guard", x: 0.60, y: 0.565), // OL (correct)
+        PlacementSlot(id: "q2-s-right-wide", x: 0.925, y: 0.53),  // WR (correct)
+        PlacementSlot(id: "q2-s-right-corner", x: 0.925, y: 0.435), // CB (correct)
+        PlacementSlot(id: "q2-s-edge-rush", x: 0.165, y: 0.465),  // DE (correct)
+        PlacementSlot(id: "q2-s-box-right", x: 0.66, y: 0.295),   // SS (correct)
+        PlacementSlot(id: "q2-s-left-backfield", x: 0.36, y: 0.72), // decoy
+        PlacementSlot(id: "q2-s-deep-right", x: 0.82, y: 0.155),  // decoy
+        PlacementSlot(id: "q2-s-left-slot", x: 0.205, y: 0.525),  // decoy
+        PlacementSlot(id: "q2-s-mike-left", x: 0.34, y: 0.365)    // decoy
     ]
 
     private static let q2Clues: [PuzzleClue] = [
         PuzzleClue(
             id: 1,
-            text: "A quick back is what this play needs. He lines up beside the orange towel, just outside the right guard, one step deeper than the quarterback.",
+            text: "The center's hands are empty and the loose football lies four yards behind the line, dead center. The passer who takes it can leave the pocket at a sprint — this offense wants legs, not a statue.",
             difficulty: .easy,
-            playerID: "q2-rb"
+            playerID: "q2-qb"
         ),
         PuzzleClue(
             id: 2,
-            text: "The last line of defense stands alone, dead center, deeper than everyone on the field — the water bottle rests at his back.",
-            difficulty: .easy,
-            playerID: "q2-fs"
+            text: "There's a gap in the wall: one interior lineman is missing between the center and the right tackle, shoulder to shoulder with both. Whoever fills it anchors against a bull rush — strength, nothing else.",
+            difficulty: .medium,
+            playerID: "q2-ol"
         ),
         PuzzleClue(
             id: 3,
-            text: "The dropped glove lies at the left edge of the line. Our extra blocker takes the spot shoulder to shoulder with the left tackle — and sealing an end takes strength, not speed.",
-            difficulty: .medium,
-            playerID: "q2-te"
-        ),
-        PuzzleClue(
-            id: 4,
-            text: "Our newest target splits out on the opposite sideline from the receiver you can already see — the same sideline as the loose football, right on the line of scrimmage.",
+            text: "Our visible target owns the left sideline. The new one mirrors him across the field, right on the line of scrimmage beside the dropped glove — a timing technician who wins with route discipline, not wheels.",
             difficulty: .medium,
             playerID: "q2-wr"
         ),
         PuzzleClue(
-            id: 5,
-            text: "The defender assigned to that new target lines up directly across the line of scrimmage from him. Jamming a receiver at the line is power work — no recovery speed required.",
+            id: 4,
+            text: "Straight across that new target — same sideline, just past the line of scrimmage. Nobody helps over the top on that island, so recovery speed is the only requirement.",
             difficulty: .medium,
             playerID: "q2-cb"
         ),
         PuzzleClue(
-            id: 6,
-            text: "One defender stands up wide — wider than the whole front, over the extra blocker's side of the field — hunting the edge with pure speed. The muddy footprints on that side tell you where the game will be decided.",
+            id: 5,
+            text: "The defense attacks the short wall: their widest rusher stands up beyond the tackles on the side away from the tight end, hunting the edge at full sprint. The muddy footprints on the left mark his lane.",
             difficulty: .hard,
-            playerID: "q2-dl"
+            playerID: "q2-de"
+        ),
+        PuzzleClue(
+            id: 6,
+            text: "The deep men split the field's duties. One stays tall at the very top of the picture. The other crashes down into the box on the right, between the front and the second level — ten years of reads, packing against the run.",
+            difficulty: .hard,
+            playerID: "q2-ss"
         )
     ]
 
     private static let q2Hints: [PuzzleHint] = [
-        PuzzleHint(id: "q2-h-rb", playerID: "q2-rb", text: "The towel sits just outside the right guard. The quick back lines up beside it, a step deeper than the passer."),
-        PuzzleHint(id: "q2-h-fs", playerID: "q2-fs", text: "Dead center, deeper than everyone — top of the field, next to the water bottle."),
-        PuzzleHint(id: "q2-h-te", playerID: "q2-te", text: "The glove marks the left edge of the line. Shoulder to shoulder with the left tackle means no gap at all."),
-        PuzzleHint(id: "q2-h-wr", playerID: "q2-wr", text: "The receiver you can see is on the RIGHT sideline. The new target takes the LEFT sideline, on the line of scrimmage."),
-        PuzzleHint(id: "q2-h-cb", playerID: "q2-cb", text: "Directly across the line of scrimmage from the new target — same sideline, just past the LOS. Power, not pace."),
-        PuzzleHint(id: "q2-h-dl", playerID: "q2-dl", text: "Wider than every down lineman, standing up over the tight end's side. The footprints confirm the edge.")
+        PuzzleHint(id: "q2-h-qb", playerID: "q2-qb", text: "Dead center in the shotgun, about four yards behind the ball on the line — the loose football marks the spot."),
+        PuzzleHint(id: "q2-h-ol", playerID: "q2-ol", text: "Between the center and the right tackle. No daylight on either shoulder."),
+        PuzzleHint(id: "q2-h-wr", playerID: "q2-wr", text: "The visible receiver is on the LEFT. This one takes the RIGHT sideline, on the line of scrimmage, next to the glove."),
+        PuzzleHint(id: "q2-h-cb", playerID: "q2-cb", text: "Across from the new target on the far sideline, just past the line of scrimmage — an island with no help over the top."),
+        PuzzleHint(id: "q2-h-de", playerID: "q2-de", text: "Standing up wider than every down lineman, on the left — the side away from the tight end. The footprints point to his lane."),
+        PuzzleHint(id: "q2-h-ss", playerID: "q2-ss", text: "Dropped into the box on the right, between the line and the linebackers. The free safety stays deep alone.")
     ]
 
     // MARK: - Q3 — The Silent Bunch
@@ -166,7 +170,7 @@ nonisolated enum MatchPuzzles {
             "q3-rb": PlacementSolution(slotID: "q3-s-rb-left", variant: .fast),
             "q3-cb": PlacementSolution(slotID: "q3-s-left-corner", variant: .power),
             "q3-slb": PlacementSolution(slotID: "q3-s-right-backer", variant: .veteran),
-            "q3-fs": PlacementSolution(slotID: "q3-s-deep-center", variant: .veteran)
+            "q3-ss": PlacementSolution(slotID: "q3-s-deep-center", variant: .veteran)
         ]
     )
 
@@ -190,12 +194,12 @@ nonisolated enum MatchPuzzles {
     ]
 
     private static let q3Missing: [FootballPlayer] = [
-        FootballPlayer(id: "q3-wr", name: "Tobias Finch", position: .wr, cardAsset: "football_player_portrait_2"),
-        FootballPlayer(id: "q3-te", name: "Gus Halloran", position: .te, cardAsset: "football_player_portrait_3"),
-        FootballPlayer(id: "q3-rb", name: "Devon Carter", position: .rb, cardAsset: "football_player_portrait_4"),
-        FootballPlayer(id: "q3-cb", name: "Miles Okafor", position: .cb, cardAsset: "cornerback_portrait_2"),
-        FootballPlayer(id: "q3-slb", name: "Pete Lindqvist", position: .lb, cardAsset: "linebacker_portrait"),
-        FootballPlayer(id: "q3-fs", name: "Amos Delgado", position: .fs, cardAsset: "football_player_portrait_5")
+        FootballPlayer(id: "q3-wr", name: "Tobias Finch", position: .wr, cardAsset: "football_player_render"),
+        FootballPlayer(id: "q3-te", name: "Gus Halloran", position: .te, cardAsset: "football_player_blank_helmet_2"),
+        FootballPlayer(id: "q3-rb", name: "Devon Carter", position: .rb, cardAsset: "football_player_running_back_2"),
+        FootballPlayer(id: "q3-cb", name: "Miles Okafor", position: .cb, cardAsset: "football_player_cornerback"),
+        FootballPlayer(id: "q3-slb", name: "Pete Lindqvist", position: .lb, cardAsset: "football_player_linebacker"),
+        FootballPlayer(id: "q3-ss", name: "Amos Delgado", position: .ss, cardAsset: "football_player_blank_gear_2")
     ]
 
     private static let q3Evidence: [EvidenceItem] = [
@@ -251,9 +255,9 @@ nonisolated enum MatchPuzzles {
         ),
         PuzzleClue(
             id: 6,
-            text: "One man alone at the very top of the picture, dead center, deeper than anyone, the water bottle at his back. Twelve years in the league — nothing surprises him anymore.",
+            text: "The last man at the top of the picture keeps his eyes glued to the bunch. Dead center, deeper than every defender, the water bottle resting against his heel — nothing gets behind him.",
             difficulty: .hard,
-            playerID: "q3-fs"
+            playerID: "q3-ss"
         )
     ]
 
@@ -263,7 +267,7 @@ nonisolated enum MatchPuzzles {
         PuzzleHint(id: "q3-h-wr", playerID: "q3-wr", text: "The bunch is on the LEFT sideline. The empty spot is the OUTSIDE of the pair, on the line of scrimmage."),
         PuzzleHint(id: "q3-h-cb", playerID: "q3-cb", text: "Directly across the line of scrimmage from the outside bunch receiver — same sideline."),
         PuzzleHint(id: "q3-h-slb", playerID: "q3-slb", text: "Between the line and the safeties, on the right side — where the footprints end."),
-        PuzzleHint(id: "q3-h-fs", playerID: "q3-fs", text: "Top of the field, dead center, next to the bottle.")
+        PuzzleHint(id: "q3-h-ss", playerID: "q3-ss", text: "Top of the field, dead center, beside the bottle — facing the bunch.")
     ]
 
     // MARK: - Q4 — Fourth and Inches
@@ -311,12 +315,12 @@ nonisolated enum MatchPuzzles {
     ]
 
     private static let q4Missing: [FootballPlayer] = [
-        FootballPlayer(id: "q4-te", name: "Hank Ostrowski", position: .te, cardAsset: "football_player_portrait_6"),
-        FootballPlayer(id: "q4-wr", name: "Caleb Turner", position: .wr, cardAsset: "football_receiver_portrait_2"),
-        FootballPlayer(id: "q4-rb", name: "Ishmael Wren", position: .rb, cardAsset: "football_running_back"),
-        FootballPlayer(id: "q4-cb", name: "Dante Ruiz", position: .cb, cardAsset: "cornerback_portrait"),
-        FootballPlayer(id: "q4-dl", name: "Yusuf Kamara", position: .dl, cardAsset: "linebacker_helmet_portrait"),
-        FootballPlayer(id: "q4-fs", name: "Vic Sorensen", position: .fs, cardAsset: "football_player_portrait_3")
+        FootballPlayer(id: "q4-te", name: "Hank Ostrowski", position: .te, cardAsset: "football_player_blank_helmet_2"),
+        FootballPlayer(id: "q4-wr", name: "Caleb Turner", position: .wr, cardAsset: "football_player_receiver"),
+        FootballPlayer(id: "q4-rb", name: "Ishmael Wren", position: .rb, cardAsset: "football_player_running_back_2"),
+        FootballPlayer(id: "q4-cb", name: "Dante Ruiz", position: .cb, cardAsset: "football_player_backpedal"),
+        FootballPlayer(id: "q4-dl", name: "Yusuf Kamara", position: .dl, cardAsset: "football_player_tackle_2"),
+        FootballPlayer(id: "q4-fs", name: "Vic Sorensen", position: .fs, cardAsset: "football_player_blank_gear_2")
     ]
 
     private static let q4Evidence: [EvidenceItem] = [
@@ -431,11 +435,11 @@ nonisolated enum MatchPuzzles {
     ]
 
     private static let otMissing: [FootballPlayer] = [
-        FootballPlayer(id: "ot-te", name: "Ezekiel Brandt", position: .te, cardAsset: "football_tight_end_portrait"),
-        FootballPlayer(id: "ot-rb", name: "Lamar Ogunde", position: .rb, cardAsset: "football_running_back_2"),
-        FootballPlayer(id: "ot-wr", name: "Nico Petrov", position: .wr, cardAsset: "football_receiver_portrait"),
-        FootballPlayer(id: "ot-mlb", name: "Solomon Reyes", position: .lb, cardAsset: "linebacker_portrait"),
-        FootballPlayer(id: "ot-ss", name: "Trey Bolden", position: .ss, cardAsset: "football_safety_portrait")
+        FootballPlayer(id: "ot-te", name: "Ezekiel Brandt", position: .te, cardAsset: "football_player_blank_helmet_2"),
+        FootballPlayer(id: "ot-rb", name: "Lamar Ogunde", position: .rb, cardAsset: "football_player_running_back"),
+        FootballPlayer(id: "ot-wr", name: "Nico Petrov", position: .wr, cardAsset: "football_player_receiver"),
+        FootballPlayer(id: "ot-mlb", name: "Solomon Reyes", position: .lb, cardAsset: "football_player_linebacker"),
+        FootballPlayer(id: "ot-ss", name: "Trey Bolden", position: .ss, cardAsset: "football_player_backpedal")
     ]
 
     private static let otEvidence: [EvidenceItem] = [
@@ -472,7 +476,7 @@ nonisolated enum MatchPuzzles {
         ),
         PuzzleClue(
             id: 3,
-            text: "The handoff goes between the tackles. The ball carrier lines up straight behind the fullback, deepest in the backfield, just short of the orange towel — and from a yard out, muscle beats wiggle.",
+            text: "The handoff goes between the tackles. The ball carrier sets up straight behind the fullback — the deepest man in the backfield — and from a yard out, muscle beats wiggle.",
             difficulty: .hard,
             playerID: "ot-rb"
         ),
@@ -493,7 +497,7 @@ nonisolated enum MatchPuzzles {
     private static let otHints: [PuzzleHint] = [
         PuzzleHint(id: "ot-h-te", playerID: "ot-te", text: "The glove lies at the LEFT tackle's outside shoulder. The extra blocker stands beside it."),
         PuzzleHint(id: "ot-h-wr", playerID: "ot-wr", text: "Right sideline, next to the water bottle — the only receiver spot on the field."),
-        PuzzleHint(id: "ot-h-rb", playerID: "ot-rb", text: "Straight behind the fullback, deepest in the backfield, beside the towel."),
+        PuzzleHint(id: "ot-h-rb", playerID: "ot-rb", text: "Straight behind the fullback — deepest man in the backfield. One yard; no wiggle needed."),
         PuzzleHint(id: "ot-h-mlb", playerID: "ot-mlb", text: "Dead center between the line and the deep men — where the mud is."),
         PuzzleHint(id: "ot-h-ss", playerID: "ot-ss", text: "Top of the field, dead center, alone.")
     ]
