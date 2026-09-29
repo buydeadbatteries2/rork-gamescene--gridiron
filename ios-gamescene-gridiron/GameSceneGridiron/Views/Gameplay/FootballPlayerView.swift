@@ -1,10 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// Compact football-player board piece. Uses the rendered three-point-stance
-/// athletes from the reference look (offense white kit, defense crimson — plain
-/// logo-free uniforms, no visible faces) with a position-colored base badge;
-/// falls back to the bust art, then the vector marker.
+/// Compact football-player piece. Uses the rendered mini-athlete busts (offense
+/// black/gold, defense white/navy — plain logo-free kits, dark opaque visor, no face)
+/// with a position-colored base badge; falls back to the vector marker if the art is
+/// missing. Offense reads dark, defense reads white at a glance.
 struct FootballPlayerView: View {
     let position: FootballPosition
     var size: CGFloat = 24
@@ -12,27 +12,21 @@ struct FootballPlayerView: View {
     var isHighlighted: Bool = false
 
     private var isOffense: Bool { position.side == .offense }
-
-    /// Stance-style board piece, then the legacy bust, then nothing (vector fallback).
-    private var tokenImageName: String? {
-        let primary = isOffense ? "football_player_stance" : "football_player_stance_2"
-        if UIImage(named: primary) != nil { return primary }
-        let legacy = isOffense ? "football_player_figure" : "football_player_figure_2"
-        return UIImage(named: legacy) != nil ? legacy : nil
-    }
+    private var tokenImageName: String { isOffense ? "football_player_figure" : "football_player_figure_2" }
+    private var usesRenderedToken: Bool { UIImage(named: tokenImageName) != nil }
     private var arch: HelmetArch { HelmetArch(position: position) }
     private var helmetDiameter: CGFloat { size * 0.64 * arch.helmetScale }
-    private var facemaskColor: Color { isOffense ? Color(hex: 0x3B4A5C) : Color(hex: 0x9AA3AB) }
+    private var facemaskColor: Color { isOffense ? Color(hex: 0xC9A25A) : Color(hex: 0x8B97A3) }
 
     var body: some View {
         ZStack {
-            if let tokenName = tokenImageName {
-                renderedToken(tokenName)
+            if usesRenderedToken {
+                renderedToken
             } else {
                 vectorToken
             }
         }
-        .frame(width: size * 1.9, height: size * 1.5)
+        .frame(width: size * 1.1, height: size * 1.42)
         .overlay(alignment: .topTrailing) {
             if let variant {
                 Image(systemName: variant.symbol)
@@ -40,7 +34,7 @@ struct FootballPlayerView: View {
                     .foregroundStyle(Theme.ink)
                     .frame(width: size * 0.44, height: size * 0.44)
                     .background(Theme.goldGradient, in: .circle)
-                    .offset(x: size * 0.1, y: -size * 0.52)
+                    .offset(x: size * 0.06, y: isOffense ? -size * 0.38 : size * 0.06)
             }
         }
         .background {
@@ -59,26 +53,27 @@ struct FootballPlayerView: View {
         .accessibilityLabel(accessibilityText)
     }
 
-    /// Rendered three-point-stance piece with a position-colored base tag.
-    private func renderedToken(_ name: String) -> some View {
-        Color.clear
-            .frame(width: size * 1.9, height: size * 1.5)
-            .overlay {
-                Image(name)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .allowsHitTesting(false)
-            }
-            .overlay(alignment: .bottom) {
-                Text(position.rawValue)
-                    .font(.system(size: size * 0.28, weight: .heavy).width(.condensed))
-                    .foregroundStyle(Color.white.opacity(0.95))
-                    .padding(.horizontal, size * 0.12)
-                    .padding(.vertical, size * 0.02)
-                    .background(Theme.positionAccent(position).opacity(0.92), in: .capsule)
-                    .shadow(color: .black.opacity(0.55), radius: 1.5)
-                    .offset(y: size * 0.03)
-            }
+    /// Rendered mini-athlete with a position-colored base tag.
+    private var renderedToken: some View {
+        VStack(spacing: 1) {
+            Color.clear
+                .frame(width: size * 1.05, height: size * 1.05)
+                .overlay {
+                    Image(tokenImageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .allowsHitTesting(false)
+                }
+            Text(position.rawValue)
+                .font(.system(size: size * 0.28, weight: .heavy).width(.condensed))
+                .foregroundStyle(Color.white.opacity(0.95))
+                .padding(.horizontal, size * 0.12)
+                .padding(.vertical, size * 0.02)
+                .background(Theme.positionAccent(position).opacity(0.92), in: .capsule)
+                .shadow(color: .black.opacity(0.55), radius: 1.5)
+                .offset(y: -size * 0.02)
+        }
+        .frame(width: size * 1.1, alignment: .top)
     }
 
     /// Vector fallback (original marker) used when the rendered art is unavailable.
@@ -97,8 +92,8 @@ struct FootballPlayerView: View {
                 .fill(
                     RadialGradient(
                         colors: isOffense
-                            ? [Color.white, Color(hex: 0xB9C0C7)]
-                            : [Color(hex: 0x9E3328), Color(hex: 0x42110D)],
+                            ? [Color(hex: 0x4A3F30), Color(hex: 0x0E0C09)]
+                            : [Color.white, Color(hex: 0xA9B0B7)],
                         center: UnitPoint(x: 0.35, y: 0.3),
                         startRadius: 1,
                         endRadius: size * 0.6
@@ -117,12 +112,12 @@ struct FootballPlayerView: View {
                 }
                 .clipShape(.circle)
                 .overlay {
-                    Circle().strokeBorder(isOffense ? Color(hex: 0x3B4A5C) : Color(hex: 0x2A0D0A), lineWidth: 1.2)
+                    Circle().strokeBorder(isOffense ? Theme.gold.opacity(0.85) : Color(hex: 0x3B4A5C), lineWidth: 1.2)
                 }
                 .offset(y: facesUp ? -size * 0.3 : size * 0.3)
             Text(position.rawValue)
                 .font(.system(size: size * 0.3, weight: .heavy).width(.condensed))
-                .foregroundStyle(isOffense ? Color(hex: 0x1E2A38) : Color.white.opacity(0.9))
+                .foregroundStyle(isOffense ? Theme.goldLight : Color(hex: 0x1E2A38))
                 .minimumScaleFactor(0.5)
                 .offset(y: facesUp ? size * 0.32 : -size * 0.32)
         }
@@ -132,7 +127,7 @@ struct FootballPlayerView: View {
     private var facesUp: Bool { isOffense }
 
     private var bodyColor: Color {
-        isOffense ? Color(hex: 0xE9ECEF) : Color(hex: 0x8E2B24)
+        isOffense ? Color(hex: 0x15120E) : Color(hex: 0xE9ECEF)
     }
 
     private var accessibilityText: String {

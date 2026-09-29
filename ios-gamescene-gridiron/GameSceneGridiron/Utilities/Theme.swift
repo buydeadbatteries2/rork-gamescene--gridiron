@@ -38,24 +38,10 @@ enum Theme {
     static let hard = Color(hex: 0x9A3A2C)
 
     // MARK: Notebook marker highlights (soft highlighter pastels on paper)
-    static let highlightNegative = Color(hex: 0xF0A0A0)   // rose — rule-outs ("not a cornerback")
-    static let highlightEvidence = Color(hex: 0xA8C6E8)   // blue — physical evidence
-    static let highlightDirection = Color(hex: 0xF2D06B)  // yellow — where on the field
-    static let highlightPosition = Color(hex: 0xF2B984)   // orange — who the clue is about
-    static let highlightTrait = Color(hex: 0xC9A6E8)      // purple — Fast / Power / Veteran flavor
-
-    // Numbered clue dots (1–5) cycling like the case-file playbook.
-    static let clueNumberColors: [Color] = [
-        Color(hex: 0xF2C230),  // yellow
-        Color(hex: 0x4E8FD9),  // blue
-        Color(hex: 0xC2412F),  // red
-        Color(hex: 0x63A86B),  // green
-        Color(hex: 0x9B76D8),  // purple
-    ]
-
-    static func clueNumberColor(_ index: Int) -> Color {
-        clueNumberColors[((index % clueNumberColors.count) + clueNumberColors.count) % clueNumberColors.count]
-    }
+    static let highlightEvidence = Color(hex: 0xF2B984)   // orange — physical evidence
+    static let highlightDirection = Color(hex: 0xA8C6E8)  // blue — where on the field
+    static let highlightPosition = Color(hex: 0xB7D6A5)   // green — who the clue is about
+    static let highlightTrait = Color(hex: 0xEFD79A)      // gold — Fast / Power / Veteran flavor
 
     static let goldGradient = LinearGradient(
         colors: [Color(hex: 0xF6E2A8), Color(hex: 0xD9B56E), Color(hex: 0x9C6B2C)],
