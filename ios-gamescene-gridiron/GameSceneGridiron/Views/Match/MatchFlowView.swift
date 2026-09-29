@@ -5,6 +5,10 @@ import SwiftUI
 struct MatchFlowView: View {
     @Environment(\.dismiss) private var dismiss
 
+    /// The two franchises in this matchup; colors the tokens and the result screen.
+    var userTeam: GameTeam?
+    var opponent: GameTeam?
+
     @State private var matchViewModel = MatchViewModel()
     @State private var quarterViewModel: GameViewModel?
 
@@ -25,7 +29,9 @@ struct MatchFlowView: View {
                         viewModel: quarterViewModel,
                         matchViewModel: matchViewModel,
                         onQuit: { dismiss() },
-                        onQuarterComplete: { matchViewModel.finishQuarter(with: $0) }
+                        onQuarterComplete: { matchViewModel.finishQuarter(with: $0) },
+                        userTeam: userTeam,
+                        opponent: opponent
                     )
                     .id(matchViewModel.match.currentQuarterIndex)
                     .transition(.opacity)
@@ -36,7 +42,9 @@ struct MatchFlowView: View {
                     QuarterResultView(
                         viewModel: quarterViewModel,
                         matchViewModel: matchViewModel,
-                        onContinue: { matchViewModel.continueFlow() }
+                        onContinue: { matchViewModel.continueFlow() },
+                        userTeam: userTeam,
+                        opponent: opponent
                     )
                     .transition(.opacity)
 
@@ -45,6 +53,8 @@ struct MatchFlowView: View {
             case .gameResult:
                 MatchResultView(
                     matchViewModel: matchViewModel,
+                    userTeam: userTeam,
+                    opponent: opponent,
                     onPlayAgain: playAgain,
                     onHome: { dismiss() }
                 )

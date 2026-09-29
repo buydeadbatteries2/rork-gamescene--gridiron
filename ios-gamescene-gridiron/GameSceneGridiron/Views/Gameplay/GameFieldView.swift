@@ -8,6 +8,19 @@ struct GameFieldView: View {
     let viewModel: GameViewModel
     /// When false the field is a static snapshot (used on the result screen).
     var isInteractive: Bool = true
+    /// Franchises wearing their colors: offense = user team, defense = opponent.
+    var userTeam: GameTeam?
+    var opponent: GameTeam?
+
+    private var kits: (user: TeamKit, opponent: TeamKit)? {
+        guard let userTeam, let opponent else { return nil }
+        return TeamKitResolver.kits(user: userTeam, opponent: opponent)
+    }
+
+    private func kit(for position: FootballPosition) -> TeamKit? {
+        guard let kits else { return nil }
+        return position.side == .offense ? kits.user : kits.opponent
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -23,7 +36,7 @@ struct GameFieldView: View {
                 }
 
                 ForEach(viewModel.puzzle.visiblePlayers) { player in
-                    FootballPlayerView(position: player.position, size: token)
+                    FootballPlayerView(position: player.position, size: token, kit: kit(for: player.position))
                         .position(x: size.width * player.x, y: size.height * player.y)
                         .allowsHitTesting(false)
                 }
@@ -33,7 +46,8 @@ struct GameFieldView: View {
                         position: placed.player.position,
                         size: token,
                         variant: placed.variant,
-                        isHighlighted: isInteractive && placed.id == viewModel.lastPlacedPlayerID
+                        isHighlighted: isInteractive && placed.id == viewModel.lastPlacedPlayerID,
+                        kit: kit(for: placed.player.position)
                     )
                     .position(x: size.width * placed.slot.x, y: size.height * placed.slot.y)
                     .transition(.scale(scale: 1.8).combined(with: .opacity))

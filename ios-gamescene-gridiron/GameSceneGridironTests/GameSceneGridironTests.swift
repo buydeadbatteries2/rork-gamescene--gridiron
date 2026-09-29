@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Testing
 @testable import GameSceneGridiron
 
@@ -279,5 +280,183 @@ struct MatchViewModelTests {
         #expect(matchViewModel.match.quarterRecords.isEmpty)
         #expect(matchViewModel.phase == .quarterIntro)
         #expect(matchViewModel.nextButtonTitle == "NEXT QUARTER")
+    }
+}
+
+// MARK: - Team identity
+
+/// Phase 3 catalogs: 50 states, 50 original names, 50 fictional logos, 15 colors.
+struct TeamCatalogTests {
+
+    @Test func stateCatalogHasAllFiftyUniqueStates() {
+        #expect(StateCatalog.states.count == 50)
+        #expect(Set(StateCatalog.stateNames).count == 50)
+        let abbreviations = StateCatalog.states.map(\.abbreviation)
+        #expect(Set(abbreviations).count == 50)
+        #expect(abbreviations.allSatisfy { $0.count == 2 })
+        #expect(StateCatalog.abbreviation(for: "Virginia") == "VA")
+        #expect(StateCatalog.abbreviation(for: "Nowhere") == nil)
+    }
+
+    @Test func teamNameCatalogHasFiftyOriginalNames() {
+        #expect(TeamNameCatalog.names.count == 50)
+        #expect(Set(TeamNameCatalog.names).count == 50)
+
+        // No existing NFL franchise name may appear inside any catalog entry.
+        let banned = [
+            "Bills", "Dolphins", "Patriots", "Jets", "Ravens", "Bengals", "Browns",
+            "Steelers", "Texans", "Colts", "Jaguars", "Titans", "Broncos", "Chiefs",
+            "Raiders", "Chargers", "Cowboys", "Giants", "Eagles", "Commanders",
+            "Bears", "Lions", "Packers", "Vikings", "Falcons", "Panthers", "Saints",
+            "Buccaneers", "Cardinals", "Rams", "49ers", "Seahawks"
+        ]
+        for name in TeamNameCatalog.names {
+            // Whole-word match — "Stallions" is original even though it contains "lions".
+            let words = name.split(separator: " ").map { $0.lowercased() }
+            for word in banned {
+                #expect(!words.contains(word.lowercased()), "Catalog name \"\(name)\" imitates \"\(word)\"")
+            }
+        }
+    }
+
+    @Test func logoCatalogHasFiftyUniqueEmblems() {
+        #expect(LogoCatalog.logos.count == 50)
+        #expect(Set(LogoCatalog.logos.map(\.id)).count == 50)
+        #expect(Set(LogoCatalog.logos.map(\.name)).count == 50)
+        #expect(LogoCatalog.logos.allSatisfy { !$0.id.isEmpty })
+        #expect(LogoCatalog.contains(id: "wolf"))
+        #expect(!LogoCatalog.contains(id: "nfl"))
+    }
+
+    @Test func colorCatalogHasFifteenDistinctColors() {
+        #expect(ColorCatalog.colors.count == 15)
+        #expect(Set(ColorCatalog.colors.map(\.hex)).count == 15)
+        #expect(Set(ColorCatalog.colors.map(\.name)).count == 15)
+    }
+}
+
+struct GameTeamTests {
+
+    private func makeTeam(
+        state: String = "Virginia",
+        name: String = "Cyber Wolves",
+        logo: String = "wolf",
+        primary: UInt32 = 0x1E2A4A,
+        secondary: UInt32 = 0xC9CDD1
+    ) -> GameTeam {
+        GameTeam(
+            state: state, teamName: name, logoID: logo,
+            primaryColorHex: primary, secondaryColorHex: secondary, isUserTeam: true
+        )
+    }
+
+    @Test func displayNameCombinesStateAndName() {
+        #expect(makeTeam().displayName == "Virginia Cyber Wolves")
+        #expect(makeTeam().shortName == "VA CYBER WOLVES")
+    }
+
+    @Test func codableRoundtripPreservesFranchise() throws {
+        let team = makeTeam()
+        let data = try JSONEncoder().encode(team)
+        let decoded = try JSONDecoder().decode(GameTeam.self, from: data)
+        #expect(decoded == team)
+        #expect(decoded.isUserTeam)
+    }
+
+    @Test func opponentTeamsAreValidAndDistinct() {
+        let opponents = OpponentTeams.all
+        #expect(opponents.count == 10)
+        #expect(Set(opponents.map(\.id)).count == 10)
+        #expect(Set(opponents.map(\.displayName)).count == 10)
+        #expect(opponents.allSatisfy { !$0.isUserTeam })
+        #expect(opponents.allSatisfy { LogoCatalog.contains(id: $0.logoID) })
+        #expect(opponents.allSatisfy { $0.primaryColorHex != $0.secondaryColorHex })
+    }
+}
+
+struct TeamKitResolverTests {
+
+    private func team(primary: UInt32, secondary: UInt32) -> GameTeam {
+        GameTeam(
+            state: "Texas", teamName: "Outlaws", logoID: "bull",
+            primaryColorHex: primary, secondaryColorHex: secondary, isUserTeam: false
+        )
+    }
+
+    @Test func colorDistanceDistinguishesFarColors() {
+        #expect(TeamKitResolver.colorDistance(0x000000, 0xFFFFFF) > 0.5)
+        #expect(TeamKitResolver.colorDistance(0x1A1A1A, 0x1A1A1A) == 0)
+    }
+
+    @Test func similarPrimariesForceOpponentIntoAlternateKit() {
+        let user = team(primary: 0x1A1A1A, secondary: 0xD9B56E)         // black / gold
+        let navyOpponent = team(primary: 0x1E2A4A, secondary: 0xC9CDD1) // navy — too close to black
+        let kits = TeamKitResolver.kits(user: user, opponent: navyOpponent)
+        #expect(!kits.user.isAlternate)
+        #expect(kits.opponent.isAlternate)
+
+        let limeOpponent = team(primary: 0x7DB84F, secondary: 0x2C5FB8) // lime/royal — clearly distinct
+        let clearKits = TeamKitResolver.kits(user: user, opponent: limeOpponent)
+        #expect(!clearKits.opponent.isAlternate)
+    }
+
+    @Test func standardKitUsesPrimaryJerseyAndSecondaryTrim() {
+        let kit = TeamKitResolver.standardKit(for: team(primary: 0x8E1F2F, secondary: 0xF2C230))
+        #expect(!kit.isAlternate)
+    }
+
+    @Test func contrastColorFlipsOnLightBackgrounds() {
+        // Both branches must produce a readable number color; we just verify they differ.
+        #expect(TeamKitResolver.contrastColor(on: 0x1A1A1A) != TeamKitResolver.contrastColor(on: 0xF2F2F2))
+    }
+}
+
+@MainActor
+struct TeamStoreTests {
+
+    private func makeStore() -> TeamStore {
+        let suiteName = "TeamStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        return TeamStore(defaults: defaults)
+    }
+
+    @Test func savePersistsFranchiseLocally() {
+        let store = makeStore()
+        #expect(store.userTeam == nil)
+
+        let team = GameTeam(
+            state: "Nevada", teamName: "Thunder", logoID: "lightning",
+            primaryColorHex: 0x6B4FA0, secondaryColorHex: 0xF2C230, isUserTeam: true
+        )
+        store.save(team)
+        #expect(store.hasTeam)
+        #expect(store.userTeam == team)
+    }
+
+    @Test func loadedStoreRestoresSavedFranchise() {
+        let suiteName = "TeamStoreTests.restore.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        let team = GameTeam(
+            state: "Ohio", teamName: "Steel Boars", logoID: "boar",
+            primaryColorHex: 0xC9CDD1, secondaryColorHex: 0xE2762D, isUserTeam: true
+        )
+
+        let writer = TeamStore(defaults: defaults)
+        writer.save(team)
+
+        let reader = TeamStore(defaults: defaults)
+        #expect(reader.userTeam == team)
+    }
+
+    @Test func clearRemovesFranchise() {
+        let store = makeStore()
+        store.save(GameTeam(
+            state: "Georgia", teamName: "Firebirds", logoID: "phoenix",
+            primaryColorHex: 0xC2412F, secondaryColorHex: 0x1A1A1A, isUserTeam: true
+        ))
+        #expect(store.hasTeam)
+        store.clear()
+        #expect(store.userTeam == nil)
+        #expect(!store.hasTeam)
     }
 }

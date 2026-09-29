@@ -1,22 +1,43 @@
 import SwiftUI
 import UIKit
 
-/// Compact football-player piece. Uses the rendered mini-athlete busts (offense
-/// black/gold, defense white/navy — plain logo-free kits, dark opaque visor, no face)
-/// with a position-colored base badge; falls back to the vector marker if the art is
-/// missing. Offense reads dark, defense reads white at a glance.
+/// Compact football-player piece. With no kit supplied it uses the rendered
+/// mini-athlete busts (offense black/gold, defense white/navy — plain logo-free
+/// kits, dark opaque visor, no face) with a position-colored base badge; when a
+/// `TeamKit` is supplied it renders a team-colored vector token so franchises
+/// wear their own colors on the field. Falls back to the vector marker if the
+/// art is missing. Offense reads dark, defense reads white at a glance.
 struct FootballPlayerView: View {
     let position: FootballPosition
     var size: CGFloat = 24
     var variant: PlayerVariant?
     var isHighlighted: Bool = false
+    /// Team uniform colors; nil keeps the default house kit.
+    var kit: TeamKit?
 
     private var isOffense: Bool { position.side == .offense }
     private var tokenImageName: String { isOffense ? "football_player_figure" : "football_player_figure_2" }
-    private var usesRenderedToken: Bool { UIImage(named: tokenImageName) != nil }
+    private var usesRenderedToken: Bool { kit == nil && UIImage(named: tokenImageName) != nil }
     private var arch: HelmetArch { HelmetArch(position: position) }
     private var helmetDiameter: CGFloat { size * 0.64 * arch.helmetScale }
     private var facemaskColor: Color { isOffense ? Color(hex: 0xC9A25A) : Color(hex: 0x8B97A3) }
+
+    private var shellColors: (outer: Color, inner: Color) {
+        if let kit {
+            return (kit.helmet.lightened(0.3), kit.helmet.darkened(0.3))
+        }
+        return isOffense
+            ? (Color(hex: 0x4A3F30), Color(hex: 0x0E0C09))
+            : (Color.white, Color(hex: 0xA9B0B7))
+    }
+
+    private var rimColor: Color {
+        kit?.trim.opacity(0.9) ?? (isOffense ? Theme.gold.opacity(0.85) : Color(hex: 0x3B4A5C))
+    }
+
+    private var labelColor: Color {
+        kit?.number ?? (isOffense ? Theme.goldLight : Color(hex: 0x1E2A38))
+    }
 
     var body: some View {
         ZStack {
@@ -84,6 +105,7 @@ struct FootballPlayerView: View {
                 .frame(width: size * 1.04 * arch.shoulderScale, height: size * 0.44)
                 .offset(y: facesUp ? size * 0.18 : -size * 0.18)
                 .shadow(color: .black.opacity(0.55), radius: 2, x: 1, y: 1)
+            kitTrim
             Capsule()
                 .fill(bodyColor)
                 .frame(width: size * 0.7 * min(arch.shoulderScale, 1.1), height: size * 0.6)
@@ -91,9 +113,7 @@ struct FootballPlayerView: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: isOffense
-                            ? [Color(hex: 0x4A3F30), Color(hex: 0x0E0C09)]
-                            : [Color.white, Color(hex: 0xA9B0B7)],
+                        colors: [shellColors.outer, shellColors.inner],
                         center: UnitPoint(x: 0.35, y: 0.3),
                         startRadius: 1,
                         endRadius: size * 0.6
@@ -112,12 +132,12 @@ struct FootballPlayerView: View {
                 }
                 .clipShape(.circle)
                 .overlay {
-                    Circle().strokeBorder(isOffense ? Theme.gold.opacity(0.85) : Color(hex: 0x3B4A5C), lineWidth: 1.2)
+                    Circle().strokeBorder(rimColor, lineWidth: 1.2)
                 }
                 .offset(y: facesUp ? -size * 0.3 : size * 0.3)
             Text(position.rawValue)
                 .font(.system(size: size * 0.3, weight: .heavy).width(.condensed))
-                .foregroundStyle(isOffense ? Theme.goldLight : Color(hex: 0x1E2A38))
+                .foregroundStyle(labelColor)
                 .minimumScaleFactor(0.5)
                 .offset(y: facesUp ? size * 0.32 : -size * 0.32)
         }
@@ -127,7 +147,18 @@ struct FootballPlayerView: View {
     private var facesUp: Bool { isOffense }
 
     private var bodyColor: Color {
-        isOffense ? Color(hex: 0x15120E) : Color(hex: 0xE9ECEF)
+        kit?.jersey ?? (isOffense ? Color(hex: 0x15120E) : Color(hex: 0xE9ECEF))
+    }
+
+    /// Secondary jersey trim stripe across the shoulders for team kits.
+    @ViewBuilder
+    private var kitTrim: some View {
+        if let kit {
+            Capsule()
+                .fill(kit.trim)
+                .frame(width: size * 0.86 * arch.shoulderScale, height: max(1, size * 0.07))
+                .offset(y: facesUp ? size * 0.06 : -size * 0.06)
+        }
     }
 
     private var accessibilityText: String {

@@ -2,14 +2,15 @@ import SwiftUI
 
 /// Top-level surface: brand, cinematic stadium photo, the investigation CTA and locked future modes.
 struct HomeView: View {
+    @State private var teamStore = TeamStore.shared
     @State private var isPlaying: Bool = false
+    @State private var isEditingTeam: Bool = false
     @State private var lockedMessage: String?
     @State private var hasAppeared: Bool = false
     @State private var glow: Bool = false
 
     private let lockedModes: [(title: String, symbol: String)] = [
         ("DYNASTY", "trophy"),
-        ("TEAM", "person.3"),
         ("RECORDS", "chart.bar"),
         ("SETTINGS", "gearshape")
     ]
@@ -48,6 +49,23 @@ struct HomeView: View {
                     .accessibilityHint("Opens the first quarter mystery")
 
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 18) {
+                        if let team = teamStore.userTeam {
+                            Button {
+                                Haptics.tick()
+                                isEditingTeam = true
+                            } label: {
+                                MyTeamFolderTile(team: team)
+                            }
+                            .buttonStyle(PressableButtonStyle(scale: 0.97))
+                        } else {
+                            Button {
+                                Haptics.warning()
+                                withAnimation(.snappy) { lockedMessage = "Create your franchise first — tap START INVESTIGATION." }
+                            } label: {
+                                LockedFolderTile(title: "TEAM", symbol: "person.3")
+                            }
+                            .buttonStyle(PressableButtonStyle(scale: 0.97))
+                        }
                         ForEach(lockedModes, id: \.title) { mode in
                             Button {
                                 Haptics.warning()
@@ -89,7 +107,16 @@ struct HomeView: View {
             withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { glow = true }
         }
         .fullScreenCover(isPresented: $isPlaying) {
-            MatchFlowView()
+            MatchLaunchView()
+        }
+        .fullScreenCover(isPresented: $isEditingTeam) {
+            if let team = teamStore.userTeam {
+                TeamCreationView(existingTeam: team) { _ in
+                    isEditingTeam = false
+                } onClose: {
+                    isEditingTeam = false
+                }
+            }
         }
     }
 

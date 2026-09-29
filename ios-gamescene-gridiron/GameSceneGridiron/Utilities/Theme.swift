@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Central design tokens for GameScene: Gridiron. See `.rork/DESIGN.md`.
-enum Theme {
+/// Nonisolated: pure constants/functions, safe from any actor (team models use them).
+nonisolated enum Theme {
     // MARK: Surfaces
     static let ink = Color(hex: 0x0E0C09)
     static let charcoal = Color(hex: 0x17140F)
@@ -97,7 +98,7 @@ enum Theme {
 }
 
 extension Color {
-    init(hex: UInt32, opacity: Double = 1) {
+    nonisolated init(hex: UInt32, opacity: Double = 1) {
         let r = Double((hex >> 16) & 0xFF) / 255
         let g = Double((hex >> 8) & 0xFF) / 255
         let b = Double(hex & 0xFF) / 255

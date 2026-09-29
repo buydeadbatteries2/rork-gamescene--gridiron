@@ -10,17 +10,24 @@ struct GameplayView: View {
     var matchViewModel: MatchViewModel?
     let onQuit: () -> Void
     let onQuarterComplete: (GameViewModel) -> Void
+    /// Franchises coloring the field tokens: offense = user team, defense = opponent.
+    let userTeam: GameTeam?
+    let opponent: GameTeam?
 
     init(
         viewModel: GameViewModel,
         matchViewModel: MatchViewModel? = nil,
         onQuit: @escaping () -> Void = {},
-        onQuarterComplete: @escaping (GameViewModel) -> Void = { _ in }
+        onQuarterComplete: @escaping (GameViewModel) -> Void = { _ in },
+        userTeam: GameTeam? = nil,
+        opponent: GameTeam? = nil
     ) {
         self.viewModel = viewModel
         self.matchViewModel = matchViewModel
         self.onQuit = onQuit
         self.onQuarterComplete = onQuarterComplete
+        self.userTeam = userTeam
+        self.opponent = opponent
     }
 
     var body: some View {
@@ -34,7 +41,7 @@ struct GameplayView: View {
             .padding(.horizontal, 16)
             .padding(.top, 6)
 
-            GameFieldView(viewModel: viewModel)
+            GameFieldView(viewModel: viewModel, userTeam: userTeam, opponent: opponent)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .frame(minHeight: 220)
                 .padding(.horizontal, 6)

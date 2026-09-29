@@ -4,6 +4,8 @@ import SwiftUI
 /// score line and the lightweight match statistics. Offers Play Again / Home.
 struct MatchResultView: View {
     let matchViewModel: MatchViewModel
+    var userTeam: GameTeam?
+    var opponent: GameTeam?
     let onPlayAgain: () -> Void
     let onHome: () -> Void
 
@@ -29,6 +31,11 @@ struct MatchResultView: View {
                         .scaleEffect(stampIn ? 1 : 1.9)
                         .opacity(stampIn ? 1 : 0)
                         .rotationEffect(.degrees(stampIn ? -2 : -9))
+
+                    if let userTeam, let opponent {
+                        matchupRow(userTeam: userTeam, opponent: opponent)
+                            .opacity(detailsIn ? 1 : 0)
+                    }
 
                     scoreLine
                         .opacity(detailsIn ? 1 : 0)
@@ -88,6 +95,32 @@ struct MatchResultView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    // MARK: Matchup
+
+    /// Both franchises with their emblems above the score line.
+    private func matchupRow(userTeam: GameTeam, opponent: GameTeam) -> some View {
+        HStack(spacing: 14) {
+            TeamLockupView(team: userTeam, emblemSize: 42, nameSize: 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text("VS")
+                .font(.system(size: 15, weight: .black).width(.compressed))
+                .tracking(1)
+                .foregroundStyle(Theme.gold)
+            TeamLockupView(team: opponent, emblemSize: 42, nameSize: 14)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(Color.black.opacity(0.55), in: .rect(cornerRadius: 6))
+        .overlay {
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(Theme.gold.opacity(0.3), lineWidth: 1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(userTeam.displayName) versus \(opponent.displayName)")
     }
 
     // MARK: Score

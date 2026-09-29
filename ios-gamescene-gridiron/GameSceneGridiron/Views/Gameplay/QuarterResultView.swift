@@ -6,6 +6,9 @@ struct QuarterResultView: View {
     let viewModel: GameViewModel
     let matchViewModel: MatchViewModel
     let onContinue: () -> Void
+    /// Franchises coloring the field photo: offense = user team, defense = opponent.
+    var userTeam: GameTeam?
+    var opponent: GameTeam?
 
     @State private var stampIn: Bool = false
     @State private var photoIn: Bool = false
@@ -140,7 +143,7 @@ struct QuarterResultView: View {
 
     private var fieldPhoto: some View {
         VStack(spacing: 0) {
-            GameFieldView(viewModel: viewModel, isInteractive: false)
+            GameFieldView(viewModel: viewModel, isInteractive: false, userTeam: userTeam, opponent: opponent)
                 .aspectRatio(0.96, contentMode: .fit)
                 .saturation(isWin ? 1 : 0.35)
                 .overlay {
