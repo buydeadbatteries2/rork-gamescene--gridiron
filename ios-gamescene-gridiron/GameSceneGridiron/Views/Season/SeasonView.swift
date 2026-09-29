@@ -70,6 +70,9 @@ private struct SeasonHubView: View {
             case .calendar:
                 SeasonCalendarView(
                     userTeam: userTeam,
+                    onStartSeason: {
+                        seasonManager.startNewSeason(userTeam: userTeam)
+                    },
                     onClose: onClose,
                     onEditTeam: { isEditingTeam = true },
                     onOpenStandings: { switchDestination(.standings) },
@@ -116,6 +119,9 @@ private struct SeasonHubView: View {
                 } else {
                     SeasonCalendarView(
                         userTeam: userTeam,
+                        onStartSeason: {
+                            seasonManager.startNewSeason(userTeam: userTeam)
+                        },
                         onClose: onClose,
                         onEditTeam: { isEditingTeam = true },
                         onOpenStandings: { switchDestination(.standings) },

@@ -137,7 +137,31 @@ final class SeasonManager {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        season = Self.load(from: defaults)
+        let loaded = Self.load(from: defaults)
+        if let repaired = loaded.map(Self.repairCorruptedSeason) {
+            season = repaired
+            if repaired != loaded {
+                // Persist the repair immediately so it survives restarts.
+                persist()
+            }
+        } else {
+            season = nil
+        }
+    }
+
+    /// Repairs corrupted development seasons — e.g. one persisted with a
+    /// missing/short schedule while postseason was already enabled at 0–0.
+    /// Such a season is rebuilt as a fresh Week 1 regular season with zeroed
+    /// records. Seasons with any played game or standings progress are
+    /// legitimate and left untouched.
+    private static func repairCorruptedSeason(_ season: Season) -> Season {
+        let hasProgress = season.games.contains { $0.isPlayed }
+            || season.standings.contains { $0.gamesPlayed > 0 }
+        let looksCorrupted = !season.hasValidSchedule
+            || season.phase != .regularSeason
+            || season.bracket != nil
+        guard !hasProgress, looksCorrupted else { return season }
+        return generateSeason(userTeamID: season.userTeamID, seasonNumber: season.seasonNumber)
     }
 
     // MARK: Persistence

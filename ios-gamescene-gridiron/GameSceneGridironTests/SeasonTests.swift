@@ -302,4 +302,55 @@ struct SeasonTests {
         // A fresh schedule: same opponents, potentially different order.
         #expect(Set(secondSeason.games.map(\.opponentID)) == Set(OpponentTeams.all.map(\.id)))
     }
+
+    // MARK: Postseason guards & repair
+
+    @Test("Empty or short schedule never counts as a completed regular season")
+    func emptyScheduleNeverCompletes() {
+        var season = SeasonManager.generateSeason(userTeamID: userTeam.id, seasonNumber: 1)
+        #expect(season.hasValidSchedule)
+        #expect(!season.isRegularSeasonComplete)
+
+        season.games = []
+        #expect(!season.hasValidSchedule)
+        #expect(!season.isRegularSeasonComplete)
+
+        season = SeasonManager.generateSeason(userTeamID: userTeam.id, seasonNumber: 1)
+        season.games = Array(season.games.prefix(9))
+        #expect(!season.hasValidSchedule)
+        #expect(!season.isRegularSeasonComplete)
+    }
+
+    @Test("Corrupted 0–0 postseason season is repaired automatically on load")
+    func corruptedSeasonIsRepaired() {
+        var corrupted = SeasonManager.generateSeason(userTeamID: userTeam.id, seasonNumber: 1)
+        corrupted.games = []
+        corrupted.standings = []
+        corrupted.phase = .postseason
+        let data = try! JSONEncoder().encode(corrupted)
+        defaults.set(data, forKey: SeasonManager.storageKey)
+
+        let reloaded = SeasonManager(defaults: defaults)
+        let repaired = try! #require(reloaded.season)
+        #expect(repaired.hasValidSchedule)
+        #expect(repaired.games.count == 10)
+        #expect(Set(repaired.games.map(\.opponentID)) == Set(OpponentTeams.all.map(\.id)))
+        #expect(repaired.phase == .regularSeason)
+        #expect(repaired.bracket == nil)
+        #expect(repaired.currentGame?.week == 1)
+        #expect(repaired.userStanding?.recordLine == "0–0")
+        #expect(reloaded.currentWeek == 1)
+    }
+
+    @Test("Legitimate in-progress season is not touched by the repair")
+    func legitimateSeasonSurvivesReload() {
+        manager.startNewSeason(userTeam: userTeam)
+        #expect(manager.recordUserResult(isWin: true, userScore: 3, opponentScore: 1, wentToOT: false))
+        let before = manager.season
+
+        let reloaded = SeasonManager(defaults: defaults)
+        #expect(reloaded.season == before)
+        #expect(reloaded.season?.phase == .regularSeason)
+        #expect(reloaded.currentWeek == 2)
+    }
 }

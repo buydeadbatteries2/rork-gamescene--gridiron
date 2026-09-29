@@ -6,6 +6,8 @@ import SwiftUI
 /// on completed games.
 struct SeasonCalendarView: View {
     let userTeam: GameTeam
+    /// Starts a brand-new season when no valid one exists (START SEASON card).
+    let onStartSeason: () -> Void
     let onClose: () -> Void
     let onEditTeam: () -> Void
     let onOpenStandings: () -> Void
@@ -20,17 +22,30 @@ struct SeasonCalendarView: View {
 
     private var season: Season? { seasonManager.season }
 
+    /// The season only counts once a real 10-game schedule exists. A brand-new
+    /// 0–0 franchise (or corrupted saved data) must never reach postseason UI.
+    private var activeSeason: Season? {
+        guard let season = seasonManager.season, season.hasValidSchedule else { return nil }
+        return season
+    }
+
     var body: some View {
         ZStack {
             DeskBackground()
 
             ScrollView {
-                calendarSheet
-                    .padding(.horizontal, 18)
-                    .padding(.top, 14)
-                    .padding(.bottom, 30)
-                    .opacity(hasAppeared ? 1 : 0)
-                    .offset(y: hasAppeared ? 0 : 18)
+                Group {
+                    if activeSeason != nil {
+                        calendarSheet
+                    } else {
+                        seasonStartCard
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 14)
+                .padding(.bottom, 30)
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(y: hasAppeared ? 0 : 18)
             }
             .scrollIndicators(.hidden)
         }
@@ -43,15 +58,86 @@ struct SeasonCalendarView: View {
         }
     }
 
+    // MARK: - Season start
+
+    /// START SEASON entry shown when there is no valid season yet.
+    private var seasonStartCard: some View {
+        VStack(spacing: 18) {
+            TeamEmblemView(team: userTeam, size: 96)
+                .shadow(color: userTeam.primaryColor.opacity(0.6), radius: 20)
+
+            VStack(spacing: 6) {
+                Text("NEW SEASON")
+                    .font(.system(size: 28, weight: .black).width(.compressed))
+                    .tracking(2)
+                    .foregroundStyle(Theme.goldGradient)
+                Text(userTeam.displayName.uppercased())
+                    .font(.system(size: 17, weight: .black).width(.compressed))
+                    .tracking(1)
+                    .foregroundStyle(Theme.paperInk)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
+                Text("TEN GAMES. EVERY RIVAL ONCE.\nTHE CASE OPENS AT WEEK 1.")
+                    .font(Theme.typewriter(12, relativeTo: .caption))
+                    .tracking(0.8)
+                    .foregroundStyle(Theme.paperInkSoft)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+            }
+
+            Button {
+                Haptics.pickUp()
+                AudioManager.shared.play(.profileSelect)
+                onStartSeason()
+            } label: {
+                HStack {
+                    Spacer()
+                    Text("START SEASON")
+                    Spacer()
+                    Image(systemName: "sportscourt.fill")
+                        .font(.system(size: 16, weight: .bold))
+                }
+                .padding(.horizontal, 26)
+            }
+            .buttonStyle(GoldCapsuleButtonStyle())
+            .accessibilityHint("Creates a 10-game schedule and unlocks Week 1")
+
+            Text("POSTSEASON WAITS FOR WEEK 10")
+                .font(.system(size: 9, weight: .heavy).width(.condensed))
+                .tracking(1.6)
+                .foregroundStyle(Theme.paperInkSoft.opacity(0.7))
+        }
+        .padding(.vertical, 26)
+        .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity)
+        .background {
+            PaperSurface(cornerRadius: 8, darkness: 0.04)
+                .shadow(color: .black.opacity(0.6), radius: 16, y: 10)
+        }
+        .overlay(alignment: .top) {
+            PushPin(size: 20).offset(y: -9)
+        }
+        .rotationEffect(.degrees(-0.7))
+        .accessibilityElement(children: .contain)
+    }
+
     // MARK: - Sheet
 
     private var calendarSheet: some View {
         VStack(spacing: 16) {
             header
             recordStrip
+            if let season = activeSeason,
+               season.phase == .regularSeason,
+               let currentGame = seasonManager.currentGame {
+                currentMatchupCard(currentGame)
+            }
             monthNavigation
             monthPages
-            if season?.phase != .regularSeason {
+            if let season = activeSeason,
+               season.isRegularSeasonComplete,
+               season.phase != .regularSeason {
                 postseasonBanner
             }
         }
@@ -84,6 +170,79 @@ struct SeasonCalendarView: View {
                 .allowsHitTesting(false)
         }
         .rotationEffect(.degrees(-0.7))
+    }
+
+    /// The primary action during Weeks 1–10: the current matchup with a big
+    /// PLAY WEEK N button. Never shown once the regular season is complete.
+    private func currentMatchupCard(_ game: ScheduledGame) -> some View {
+        let opponent = OpponentTeams.team(with: game.opponentID)
+        return VStack(spacing: 12) {
+            Text("WEEK \(game.week)")
+                .font(.system(size: 11, weight: .heavy).width(.condensed))
+                .tracking(2.5)
+                .foregroundStyle(Theme.goldLight)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(Color.black.opacity(0.55), in: .capsule)
+
+            HStack(spacing: 12) {
+                TeamEmblemView(team: userTeam, size: 50)
+                    .shadow(color: userTeam.primaryColor.opacity(0.55), radius: 10)
+                VStack(spacing: 3) {
+                    Text("VS")
+                        .font(.system(size: 17, weight: .black).width(.compressed))
+                        .foregroundStyle(Theme.gold)
+                    Text(game.isHome ? "HOME" : "AWAY")
+                        .font(.system(size: 8, weight: .heavy).width(.condensed))
+                        .tracking(1.5)
+                        .foregroundStyle(Theme.paperInkSoft)
+                }
+                if let opponent {
+                    TeamEmblemView(team: opponent, size: 50)
+                        .shadow(color: opponent.primaryColor.opacity(0.55), radius: 10)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(opponent.displayName.uppercased())
+                            .font(.system(size: 15, weight: .black).width(.compressed))
+                            .tracking(0.6)
+                            .foregroundStyle(Theme.paperInk)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                        Text(Self.kickoffFormatter.string(from: game.date))
+                            .font(Theme.typewriter(11, relativeTo: .caption))
+                            .foregroundStyle(Theme.paperInkSoft)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                }
+            }
+
+            Button {
+                Haptics.pickUp()
+                AudioManager.shared.play(.profileSelect)
+                onPlayGame(game)
+            } label: {
+                HStack {
+                    Spacer()
+                    Text("PLAY WEEK \(game.week)")
+                    Spacer()
+                    Image(systemName: "sportscourt.fill")
+                        .font(.system(size: 16, weight: .bold))
+                }
+                .padding(.horizontal, 24)
+            }
+            .buttonStyle(GoldCapsuleButtonStyle())
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity)
+        .background(Color.black.opacity(0.4), in: .rect(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Theme.goldGradient, lineWidth: 1.6)
+        }
+        .shadow(color: Theme.gold.opacity(0.25), radius: 12, y: 4)
+        .rotationEffect(.degrees(0.4))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Week \(game.week), versus \(opponent?.displayName ?? "unknown"). Playable.")
     }
 
     private var header: some View {
@@ -216,6 +375,13 @@ struct SeasonCalendarView: View {
 
     private static let monthFormatter: DateFormatter = {
         let formatter = DateFormatter()
+        return formatter
+    }()
+
+    private static let kickoffFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
         return formatter
     }()
 

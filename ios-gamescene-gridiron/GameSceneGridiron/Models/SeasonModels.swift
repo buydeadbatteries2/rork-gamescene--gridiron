@@ -163,7 +163,15 @@ nonisolated struct Season: Codable, Hashable, Sendable {
 
     var currentWeek: Int? { currentGame?.week }
 
-    var isRegularSeasonComplete: Bool { games.allSatisfy(\.isPlayed) }
+    /// The schedule actually exists as the expected 10-game slate. An empty
+    /// or corrupted schedule must NEVER evaluate as a finished season.
+    var hasValidSchedule: Bool { games.count == 10 }
+
+    /// Regular season is only complete with a valid 10-game schedule where
+    /// every game has a result.
+    var isRegularSeasonComplete: Bool {
+        hasValidSchedule && games.allSatisfy(\.isPlayed)
+    }
 
     func standing(for teamID: UUID) -> LeagueStanding? {
         standings.first { $0.teamID == teamID }

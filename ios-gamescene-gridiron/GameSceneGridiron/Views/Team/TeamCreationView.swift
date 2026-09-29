@@ -40,7 +40,7 @@ struct TeamCreationView: View {
         case .state: state != nil
         case .name: teamName != nil
         case .logo: logoID != nil
-        case .colors: true
+        case .colors: primaryIndex != secondaryIndex
         case .franchise: draftTeam != nil
         }
     }
@@ -199,44 +199,14 @@ struct TeamCreationView: View {
     }
 
     private var logoPicker: some View {
-        PickerSection(title: "TEAM LOGO", hint: "Original fictional emblems only") {
-            let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 4)
-            LazyVGrid(columns: columns, spacing: 10) {
+        PickerSection(title: "TEAM LOGO", hint: "Inspect the artwork — your colors come later") {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
                 ForEach(LogoCatalog.logos) { logo in
-                    let team = GameTeam(
-                        state: state ?? "State",
-                        teamName: teamName ?? "Team",
-                        logoID: logo.id,
-                        primaryColorHex: ColorCatalog.colors[primaryIndex].hex,
-                        secondaryColorHex: ColorCatalog.colors[secondaryIndex].hex,
-                        isUserTeam: true
-                    )
-                    Button {
+                    LogoTile(logo: logo, isSelected: logoID == logo.id) {
                         Haptics.tick()
                         AudioManager.shared.play(.cardSelect)
                         withAnimation(.snappy) { logoID = logo.id }
-                    } label: {
-                        VStack(spacing: 5) {
-                            TeamEmblemView(team: team, size: 58)
-                            Text(logo.name)
-                                .font(.system(size: 9, weight: .heavy).width(.condensed))
-                                .tracking(0.6)
-                                .foregroundStyle(Theme.paperInk.opacity(0.85))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
-                        .background {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(logoID == logo.id ? Theme.gold.opacity(0.22) : Theme.paper.opacity(0.1))
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .strokeBorder(logoID == logo.id ? Theme.gold : Theme.gold.opacity(0.16), lineWidth: logoID == logo.id ? 2 : 1)
-                        }
                     }
-                    .buttonStyle(PressableButtonStyle(scale: 0.94))
                     .accessibilityLabel("Logo \(logo.name)")
                     .accessibilityAddTraits(logoID == logo.id ? .isSelected : [])
                 }
@@ -246,17 +216,25 @@ struct TeamCreationView: View {
 
     private var colorPickers: some View {
         PickerSection(title: "TEAM COLORS", hint: "Primary and secondary — they must differ") {
-            swatchRow(title: "PRIMARY", selectedIndex: primaryIndex) { index in
+            colorSection(
+                title: "PRIMARY COLOR",
+                selectedIndex: primaryIndex,
+                disabledIndex: nil
+            ) { index in
                 primaryIndex = index
             }
-            swatchRow(title: "SECONDARY", selectedIndex: secondaryIndex) { index in
+            colorSection(
+                title: "SECONDARY COLOR",
+                selectedIndex: secondaryIndex,
+                disabledIndex: primaryIndex
+            ) { index in
                 secondaryIndex = index
             }
             if primaryIndex == secondaryIndex {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 11, weight: .bold))
-                    Text("Primary and secondary cannot be the same color.")
+                    Text("Choose a different secondary color — it cannot match the primary.")
                         .font(Theme.typewriter(12, relativeTo: .caption))
                 }
                 .foregroundStyle(Theme.danger)
@@ -265,50 +243,34 @@ struct TeamCreationView: View {
         }
     }
 
-    private func swatchRow(title: String, selectedIndex: Int, onSelect: @escaping (Int) -> Void) -> some View {
+    /// One compact 5-column swatch grid — all 15 colors visible at once,
+    /// nothing extends past the safe area.
+    private func colorSection(
+        title: String,
+        selectedIndex: Int,
+        disabledIndex: Int?,
+        onSelect: @escaping (Int) -> Void
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 11, weight: .heavy).width(.condensed))
+                .font(.system(size: 12, weight: .heavy).width(.condensed))
                 .tracking(2)
-                .foregroundStyle(Theme.paperInkSoft)
-            HStack(spacing: 8) {
+                .foregroundStyle(Theme.paperInk)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
                 ForEach(Array(ColorCatalog.colors.enumerated()), id: \.element.id) { index, option in
                     let isSelected = selectedIndex == index
-                    Button {
+                    let isDisabled = disabledIndex == index
+                    ColorSwatch(option: option, isSelected: isSelected, isDisabled: isDisabled) {
                         Haptics.tick()
                         AudioManager.shared.play(.cardSelect)
                         withAnimation(.snappy) { onSelect(index) }
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(
-                                    RadialGradient(
-                                        colors: [Color(hex: option.hex).lightened(0.25), Color(hex: option.hex)],
-                                        center: UnitPoint(x: 0.35, y: 0.3),
-                                        startRadius: 2,
-                                        endRadius: 22
-                                    )
-                                )
-                                .overlay {
-                                    Circle().strokeBorder(Color.black.opacity(0.4), lineWidth: 1)
-                                }
-                            if isSelected {
-                                Circle()
-                                    .strokeBorder(Theme.gold, lineWidth: 2.5)
-                                    .frame(width: 38, height: 38)
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 11, weight: .black))
-                                    .foregroundStyle(TeamKitResolver.contrastColor(on: option.hex))
-                            }
-                        }
-                        .frame(width: 44, height: 44)
-                        .contentShape(.circle)
                     }
-                    .buttonStyle(PressableButtonStyle(scale: 0.88))
                     .accessibilityLabel("\(title) color \(option.name)")
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
+
             Text(ColorCatalog.colors[selectedIndex].name.uppercased())
                 .font(.system(size: 10, weight: .heavy).width(.condensed))
                 .tracking(1.5)
@@ -578,6 +540,120 @@ struct SelectableChip: View {
         }
         .buttonStyle(PressableButtonStyle(scale: 0.95))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+// MARK: - Logo tile
+
+/// A high-contrast neutral logo tile: the raw vector emblem in bright ink on a
+/// dark charcoal card, so the artwork itself is what the player evaluates.
+/// Team colors are applied later in the live preview and franchise presentation.
+private struct LogoTile: View {
+    let logo: TeamLogoOption
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                TeamLogoGlyph(
+                    logoID: logo.id,
+                    primary: Color(hex: 0xF2ECDC),
+                    secondary: Theme.gold
+                )
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 66)
+                .frame(maxWidth: .infinity)
+
+                Text(logo.name.uppercased())
+                    .font(.system(size: 9, weight: .heavy).width(.condensed))
+                    .tracking(0.7)
+                    .foregroundStyle(isSelected ? Theme.goldLight : Theme.paperInkSoft)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [isSelected ? Theme.gold.opacity(0.22) : Color(hex: 0x2A2620), Color(hex: 0x191612)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? AnyShapeStyle(Theme.goldGradient) : AnyShapeStyle(Theme.gold.opacity(0.18)),
+                        lineWidth: isSelected ? 2 : 1
+                    )
+            }
+            .shadow(color: isSelected ? Theme.gold.opacity(0.45) : .black.opacity(0.35), radius: isSelected ? 9 : 4, y: 2)
+            .overlay(alignment: .topTrailing) {
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .black))
+                        .foregroundStyle(Color.black)
+                        .frame(width: 18, height: 18)
+                        .background(Theme.gold, in: .circle)
+                        .overlay { Circle().strokeBorder(Color.black.opacity(0.5), lineWidth: 1) }
+                        .offset(x: 5, y: -5)
+                }
+            }
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.94))
+    }
+}
+
+// MARK: - Color swatch
+
+/// One uniform color swatch in the compact 5-column grid. The selected swatch
+/// gets a gold outline, a checkmark and a soft glow; the disabled swatch (the
+/// primary color inside the secondary grid) cannot be tapped.
+private struct ColorSwatch: View {
+    let option: TeamColorOption
+    let isSelected: Bool
+    let isDisabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(
+                        RadialGradient(
+                            colors: [Color(hex: option.hex).lightened(0.25), Color(hex: option.hex)],
+                            center: UnitPoint(x: 0.35, y: 0.3),
+                            startRadius: 2,
+                            endRadius: 26
+                        )
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .strokeBorder(Color.black.opacity(0.45), lineWidth: 1)
+                    }
+
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .strokeBorder(Theme.goldGradient, lineWidth: 2.5)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .black))
+                        .foregroundStyle(TeamKitResolver.contrastColor(on: option.hex))
+                        .shadow(color: .black.opacity(0.4), radius: 2)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+            .contentShape(.rect(cornerRadius: 11))
+            .shadow(color: isSelected ? Theme.gold.opacity(0.5) : .clear, radius: 8, y: 2)
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.9))
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.3 : 1)
     }
 }
 
