@@ -3,6 +3,7 @@ import SwiftUI
 /// Top-level surface: brand, cinematic stadium photo, the investigation CTA and locked future modes.
 struct HomeView: View {
     @State private var teamStore = TeamStore.shared
+    @State private var seasonManager = SeasonManager.shared
     @State private var isPlaying: Bool = false
     @State private var isEditingTeam: Bool = false
     @State private var lockedMessage: String?
@@ -30,14 +31,20 @@ struct HomeView: View {
                         .opacity(hasAppeared ? 1 : 0)
                         .scaleEffect(hasAppeared ? 1 : 0.96)
 
+                    if let team = teamStore.userTeam {
+                        seasonCard(team)
+                            .opacity(hasAppeared ? 1 : 0)
+                            .offset(y: hasAppeared ? 0 : 18)
+                    }
+
                     Button {
                         Haptics.pickUp()
                         isPlaying = true
                     } label: {
                         HStack(spacing: 14) {
-                            Image(systemName: "magnifyingglass")
+                            Image(systemName: teamStore.hasTeam ? "sportscourt" : "magnifyingglass")
                                 .font(.system(size: 22, weight: .semibold))
-                            Text("START INVESTIGATION")
+                            Text(ctaTitle)
                             Spacer(minLength: 0)
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 15, weight: .bold))
@@ -46,7 +53,7 @@ struct HomeView: View {
                     }
                     .buttonStyle(GoldCapsuleButtonStyle())
                     .shadow(color: Theme.gold.opacity(glow ? 0.35 : 0.1), radius: glow ? 22 : 10)
-                    .accessibilityHint("Opens the first quarter mystery")
+                    .accessibilityHint(teamStore.hasTeam ? "Opens your season" : "Opens the investigation")
 
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 18) {
                         if let team = teamStore.userTeam {
@@ -107,7 +114,7 @@ struct HomeView: View {
             withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { glow = true }
         }
         .fullScreenCover(isPresented: $isPlaying) {
-            MatchLaunchView()
+            SeasonView()
         }
         .fullScreenCover(isPresented: $isEditingTeam) {
             if let team = teamStore.userTeam {
@@ -118,6 +125,62 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    /// CONTINUE SEASON with an active season, START SEASON without one,
+    /// CREATE YOUR TEAM for a fresh detective.
+    private var ctaTitle: String {
+        guard teamStore.hasTeam else { return "CREATE YOUR TEAM" }
+        return seasonManager.hasActiveSeason ? "CONTINUE SEASON" : "START SEASON"
+    }
+
+    /// Pinned season dossier: franchise, record, current week and next case.
+    private func seasonCard(_ team: GameTeam) -> some View {
+        HStack(spacing: 12) {
+            TeamLockupView(team: team, emblemSize: 46, nameSize: 16)
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(seasonManager.userRecordLine ?? "0–0")
+                    .font(.system(size: 28, weight: .black).width(.compressed))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.paperInk)
+                Text(statusLine)
+                    .font(.system(size: 10, weight: .heavy).width(.condensed))
+                    .tracking(1.2)
+                    .foregroundStyle(Theme.goldLight)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+        .padding(12)
+        .paperCard(cornerRadius: 6)
+        .rotationEffect(.degrees(-0.8))
+        .overlay(alignment: .top) { PushPin(size: 18).offset(y: -8) }
+        .padding(.top, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var statusLine: String {
+        guard seasonManager.hasActiveSeason else { return "NO ACTIVE SEASON" }
+        guard let week = seasonManager.currentWeek else {
+            return seasonManager.season?.phase == .complete ? "SEASON COMPLETE" : "POSTSEASON"
+        }
+        if let next = seasonManager.nextOpponent {
+            return "WEEK \(week) · NEXT: \(next.teamName.uppercased())"
+        }
+        return "WEEK \(week)"
+    }
+
+    private var accessibilitySummary: String {
+        guard seasonManager.hasActiveSeason else {
+            return "\(teamStore.userTeam?.displayName ?? "Your team"), no active season. Start a season to play."
+        }
+        var parts = ["Season \(seasonManager.season?.seasonNumber ?? 1)"
+        ]
+        parts.append("record \(seasonManager.userRecordLine ?? "0–0")")
+        parts.append(statusLine.lowercased())
+        return parts.joined(separator: ", ")
     }
 
     private var heroPhoto: some View {

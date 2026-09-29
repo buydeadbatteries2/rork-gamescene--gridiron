@@ -1,16 +1,36 @@
 import SwiftUI
 
 /// Owns one full game: quarter intro → live quarter → quarter result → …
-/// → optional overtime → final verdict. The Home screen presents this full screen.
+/// → optional overtime → final verdict. Presented full screen from the season
+/// flow (regular season, semifinal or championship) or standalone.
 struct MatchFlowView: View {
     @Environment(\.dismiss) private var dismiss
 
     /// The two franchises in this matchup; colors the tokens and the result screen.
     var userTeam: GameTeam?
     var opponent: GameTeam?
+    /// Postseason pressure: same rules, slightly tighter resources.
+    var isPlayoff: Bool = false
+    /// Called exactly once when a season game finishes. When set, the replay
+    /// option is hidden — completed season games are never replayed.
+    var onSeasonResult: ((GameMatch) -> Void)?
 
-    @State private var matchViewModel = MatchViewModel()
+    @State private var matchViewModel: MatchViewModel
     @State private var quarterViewModel: GameViewModel?
+    @State private var reportedSeasonResult = false
+
+    init(
+        userTeam: GameTeam? = nil,
+        opponent: GameTeam? = nil,
+        isPlayoff: Bool = false,
+        onSeasonResult: ((GameMatch) -> Void)? = nil
+    ) {
+        self.userTeam = userTeam
+        self.opponent = opponent
+        self.isPlayoff = isPlayoff
+        self.onSeasonResult = onSeasonResult
+        _matchViewModel = State(initialValue: MatchViewModel(isPlayoff: isPlayoff))
+    }
 
     var body: some View {
         ZStack {
@@ -55,6 +75,8 @@ struct MatchFlowView: View {
                     matchViewModel: matchViewModel,
                     userTeam: userTeam,
                     opponent: opponent,
+                    allowsReplay: onSeasonResult == nil,
+                    continueLabel: onSeasonResult == nil ? "HOME" : "CONTINUE",
                     onPlayAgain: playAgain,
                     onHome: { dismiss() }
                 )
@@ -62,6 +84,11 @@ struct MatchFlowView: View {
             }
         }
         .animation(.easeInOut(duration: 0.35), value: matchViewModel.phase)
+        .onChange(of: matchViewModel.phase) { _, phase in
+            guard phase == .gameResult, let onSeasonResult, !reportedSeasonResult else { return }
+            reportedSeasonResult = true
+            onSeasonResult(matchViewModel.match)
+        }
     }
 
     private func beginQuarter() {

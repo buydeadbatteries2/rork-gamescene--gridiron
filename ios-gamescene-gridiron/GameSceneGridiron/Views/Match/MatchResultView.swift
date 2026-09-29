@@ -6,6 +6,9 @@ struct MatchResultView: View {
     let matchViewModel: MatchViewModel
     var userTeam: GameTeam?
     var opponent: GameTeam?
+    /// False for season games — completed season games are never replayed.
+    var allowsReplay: Bool = true
+    var continueLabel: String = "HOME"
     let onPlayAgain: () -> Void
     let onHome: () -> Void
 
@@ -244,23 +247,25 @@ struct MatchResultView: View {
 
     private var buttons: some View {
         VStack(spacing: 12) {
-            Button {
-                Haptics.pickUp()
-                onPlayAgain()
-            } label: {
-                HStack {
-                    Spacer()
-                    Text("PLAY AGAIN")
-                    Spacer()
-                    Image(systemName: "arrow.counterclockwise").font(.system(size: 15, weight: .bold))
+            if allowsReplay {
+                Button {
+                    Haptics.pickUp()
+                    onPlayAgain()
+                } label: {
+                    HStack {
+                        Spacer()
+                        Text("PLAY AGAIN")
+                        Spacer()
+                        Image(systemName: "arrow.counterclockwise").font(.system(size: 15, weight: .bold))
+                    }
+                    .padding(.horizontal, 26)
                 }
-                .padding(.horizontal, 26)
+                .buttonStyle(GoldCapsuleButtonStyle())
+                .accessibilityHint("Resets all results and starts a new game at Quarter 1")
             }
-            .buttonStyle(GoldCapsuleButtonStyle())
-            .accessibilityHint("Resets all results and starts a new game at Quarter 1")
 
             Button(action: onHome) {
-                Text("HOME")
+                Text(continueLabel)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.paperInk)
                     .frame(maxWidth: .infinity, minHeight: 44)

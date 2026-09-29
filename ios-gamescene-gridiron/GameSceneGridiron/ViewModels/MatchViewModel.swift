@@ -15,12 +15,45 @@ final class MatchViewModel {
     private(set) var match: GameMatch = .fresh()
     private(set) var phase: Phase = .quarterIntro
 
-    /// Registry of all puzzles for this game, indexed the same way as `GameMatch`.
-    nonisolated static let regulationPuzzles: [QuarterPuzzle] = MatchPuzzles.regulation
-    nonisolated static let overtimePuzzle: QuarterPuzzle = MatchPuzzles.overtime
+    /// Puzzle registry for this game, indexed the same way as `GameMatch`.
+    private let regulationPuzzles: [QuarterPuzzle]
+    private let overtimePuzzle: QuarterPuzzle
+
+    /// Playoff games reuse the handcrafted quarters under postseason pressure:
+    /// one less life and one less hint per quarter (floors 2 / 1). The puzzle
+    /// logic itself never changes.
+    init(isPlayoff: Bool = false) {
+        if isPlayoff {
+            regulationPuzzles = MatchPuzzles.regulation.map(Self.intensified)
+            overtimePuzzle = Self.intensified(MatchPuzzles.overtime)
+        } else {
+            regulationPuzzles = MatchPuzzles.regulation
+            overtimePuzzle = MatchPuzzles.overtime
+        }
+    }
+
+    nonisolated static func intensified(_ puzzle: QuarterPuzzle) -> QuarterPuzzle {
+        QuarterPuzzle(
+            id: puzzle.id,
+            index: puzzle.index,
+            quarterLabel: puzzle.quarterLabel,
+            title: puzzle.title,
+            introHeading: puzzle.introHeading,
+            introBody: puzzle.introBody,
+            startingLives: max(2, puzzle.startingLives - 1),
+            startingHints: max(1, puzzle.startingHints - 1),
+            visiblePlayers: puzzle.visiblePlayers,
+            missingPlayers: puzzle.missingPlayers,
+            evidence: puzzle.evidence,
+            slots: puzzle.slots,
+            clues: puzzle.clues,
+            hints: puzzle.hints,
+            solutions: puzzle.solutions
+        )
+    }
 
     var currentPuzzle: QuarterPuzzle {
-        match.isOvertime ? Self.overtimePuzzle : Self.regulationPuzzles[match.currentQuarterIndex]
+        match.isOvertime ? overtimePuzzle : regulationPuzzles[match.currentQuarterIndex]
     }
 
     var currentQuarterNumber: Int { match.currentQuarterIndex + 1 }
