@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// Spiral-bound case-file card showing one clue at a time. Swipe or tap arrows to page.
+/// Spiral-bound case-file card showing one clue at a time, styled like the physical
+/// football detective notebook: manila texture, generous margins, marker-highlighted
+/// clue copy. Swipe or tap arrows to page.
 struct ClueNotebookView: View {
     let viewModel: GameViewModel
     let onOpenCaseFile: () -> Void
@@ -11,21 +13,21 @@ struct ClueNotebookView: View {
 
         HStack(alignment: .top, spacing: 0) {
             SpiralBinding()
-                .frame(width: 16)
-                .padding(.vertical, 10)
+                .frame(width: 18)
+                .padding(.vertical, 12)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline) {
                     Button(action: onOpenCaseFile) {
                         HStack(spacing: 5) {
                             Text("CASE FILE")
-                                .font(Theme.typewriterBold(13, relativeTo: .caption))
-                                .tracking(1.2)
+                                .font(Theme.typewriterBold(14, relativeTo: .caption))
+                                .tracking(1.4)
                             Image(systemName: "arrow.up.left.and.arrow.down.right")
                                 .font(.system(size: 9, weight: .bold))
                         }
                         .foregroundStyle(Theme.paperInk)
-                        .frame(minHeight: 28)
+                        .frame(minHeight: 30)
                         .contentShape(.rect)
                     }
                     .accessibilityLabel("Open full case file")
@@ -37,7 +39,7 @@ struct ClueNotebookView: View {
                     Spacer(minLength: 4)
 
                     Button { viewModel.previousClue(); Haptics.tick() } label: {
-                        Image(systemName: "chevron.left").frame(width: 30, height: 28).contentShape(.rect)
+                        Image(systemName: "chevron.left").frame(width: 30, height: 30).contentShape(.rect)
                     }
                     .accessibilityLabel("Previous clue")
 
@@ -46,54 +48,49 @@ struct ClueNotebookView: View {
                         .monospacedDigit()
 
                     Button { viewModel.nextClue(); Haptics.tick() } label: {
-                        Image(systemName: "chevron.right").frame(width: 30, height: 28).contentShape(.rect)
+                        Image(systemName: "chevron.right").frame(width: 30, height: 30).contentShape(.rect)
                     }
                     .accessibilityLabel("Next clue")
                 }
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(Theme.paperInk)
 
-                Rectangle().fill(Theme.paperInk.opacity(0.3)).frame(height: 1)
+                // Case-file rule: short bronze accent over the full divider
+                ZStack(alignment: .leading) {
+                    Rectangle().fill(Theme.paperInk.opacity(0.3)).frame(height: 1)
+                    Rectangle().fill(Theme.bronze).frame(width: 30, height: 2)
+                }
 
                 if let clue {
-                    let isSolved = viewModel.isClueSolved(clue)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(clue.text)
-                            .font(Theme.typewriter(14.5, relativeTo: .callout))
-                            .foregroundStyle(Theme.paperInk.opacity(isSolved ? 0.45 : 1))
-                            .lineSpacing(2)
-                            .minimumScaleFactor(0.72)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-
-                        if let hint = viewModel.usedHint(for: clue), !isSolved {
-                            Label(hint.text, systemImage: "lightbulb.fill")
-                                .font(.system(size: 11.5, weight: .medium))
-                                .foregroundStyle(Theme.bronzeDeep)
-                                .lineLimit(2)
-                                .minimumScaleFactor(0.8)
-                        }
-                    }
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .overlay(alignment: .bottomTrailing) {
-                        if isSolved { SolvedStamp().padding(.trailing, 4) }
-                    }
-                    .id(clue.id)
-                    .transition(.asymmetric(insertion: .opacity.combined(with: .offset(x: 16)), removal: .opacity))
+                    clueBody(clue)
+                        .id(clue.id)
+                        .transition(.asymmetric(insertion: .opacity.combined(with: .offset(x: 16)), removal: .opacity))
                 }
             }
-            .padding(.leading, 8)
-            .padding(.trailing, 12)
-            .padding(.vertical, 8)
+            .padding(.leading, 10)
+            .padding(.trailing, 14)
+            .padding(.vertical, 10)
         }
-        .frame(height: 138)
-        .paperCard(cornerRadius: 4)
+        .frame(height: 162)
+        .paperCard(cornerRadius: 6)
         .overlay(alignment: .bottomTrailing) {
             ChalkDiagram()
                 .frame(width: 58, height: 40)
                 .padding(10)
-                .opacity(0.25)
+                .opacity(0.22)
                 .allowsHitTesting(false)
         }
+        .overlay {
+            // Manila paper grain for a physical notebook feel.
+            Image("manila_paper_texture")
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .opacity(0.14)
+                .blendMode(.multiply)
+                .allowsHitTesting(false)
+        }
+        .clipShape(.rect(cornerRadius: 6, style: .continuous))
+        .shadow(color: .black.opacity(0.5), radius: 10, y: 5)
         .animation(.easeOut(duration: 0.22), value: viewModel.currentClueIndex)
         .gesture(
             DragGesture(minimumDistance: 24)
@@ -103,6 +100,37 @@ struct ClueNotebookView: View {
                     if value.translation.width < 0 { viewModel.nextClue() } else { viewModel.previousClue() }
                 }
         )
+    }
+
+    @ViewBuilder
+    private func clueBody(_ clue: PuzzleClue) -> some View {
+        let isSolved = viewModel.isClueSolved(clue)
+        VStack(alignment: .leading, spacing: 7) {
+            Text(ClueHighlighter.highlighted(clue.text))
+                .font(Theme.typewriter(15.5, relativeTo: .callout))
+                .foregroundStyle(Theme.paperInk.opacity(isSolved ? 0.45 : 1))
+                .lineSpacing(3.5)
+                .minimumScaleFactor(0.68)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+
+            if let hint = viewModel.usedHint(for: clue), !isSolved {
+                Label {
+                    Text(ClueHighlighter.highlighted(hint.text))
+                        .font(.system(size: 12, weight: .medium))
+                        .lineSpacing(2)
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.8)
+                } icon: {
+                    Image(systemName: "lightbulb.fill")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .foregroundStyle(Theme.bronzeDeep)
+            }
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .overlay(alignment: .bottomTrailing) {
+            if isSolved { SolvedStamp().padding(.trailing, 4) }
+        }
     }
 }
 

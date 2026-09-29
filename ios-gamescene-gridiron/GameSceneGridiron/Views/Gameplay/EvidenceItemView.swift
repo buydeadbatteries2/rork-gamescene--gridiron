@@ -1,18 +1,32 @@
 import SwiftUI
 
-/// Simple SwiftUI illustrations of the physical evidence left on the field.
+/// SwiftUI illustrations of the physical evidence left on the field, with a soft
+/// gold halo backing so each object reads as a clue on the photoreal turf.
 struct EvidenceItemView: View {
     let kind: EvidenceItem.Kind
     var size: CGFloat = 26
 
     var body: some View {
-        Group {
-            switch kind {
-            case .orangeTowel: towel
-            case .droppedGlove: glove
-            case .waterBottle: bottle
-            case .muddyFootprints: footprints
-            case .looseFootball: football
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Theme.gold.opacity(0.18), .clear],
+                        center: .center,
+                        startRadius: 1,
+                        endRadius: size * 0.75
+                    )
+                )
+                .frame(width: size * 1.5, height: size * 1.5)
+
+            Group {
+                switch kind {
+                case .orangeTowel: towel
+                case .droppedGlove: glove
+                case .waterBottle: bottle
+                case .muddyFootprints: footprints
+                case .looseFootball: football
+                }
             }
         }
         .frame(width: size * 1.3, height: size * 1.3)

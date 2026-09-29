@@ -11,13 +11,13 @@ struct GameplayView: View {
     var body: some View {
         @Bindable var viewModel = viewModel
 
-        VStack(spacing: 12) {
+        VStack(spacing: 14) {
             GameHUDView(viewModel: viewModel) {
                 Haptics.tick()
                 withAnimation(.easeOut(duration: 0.2)) { viewModel.isPaused = true }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 4)
+            .padding(.top, 6)
 
             GameFieldView(viewModel: viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -32,11 +32,11 @@ struct GameplayView: View {
             .padding(.horizontal, 16)
 
             RosterTrayView(viewModel: viewModel)
-                .frame(height: 196, alignment: .bottom)
+                .frame(height: 200, alignment: .bottom)
 
             AdBannerPlaceholder()
                 .padding(.horizontal, 16)
-                .padding(.bottom, 4)
+                .padding(.bottom, 6)
         }
         .coordinateSpace(.named(Self.coordinateSpace))
         .overlay(alignment: .topLeading) {

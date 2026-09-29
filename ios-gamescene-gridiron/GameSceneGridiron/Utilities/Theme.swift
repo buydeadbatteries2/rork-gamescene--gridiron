@@ -37,6 +37,12 @@ enum Theme {
     static let medium = Color(hex: 0xA87A1E)
     static let hard = Color(hex: 0x9A3A2C)
 
+    // MARK: Notebook marker highlights (soft highlighter pastels on paper)
+    static let highlightEvidence = Color(hex: 0xF2B984)   // orange — physical evidence
+    static let highlightDirection = Color(hex: 0xA8C6E8)  // blue — where on the field
+    static let highlightPosition = Color(hex: 0xB7D6A5)   // green — who the clue is about
+    static let highlightTrait = Color(hex: 0xEFD79A)      // gold — Fast / Power / Veteran flavor
+
     static let goldGradient = LinearGradient(
         colors: [Color(hex: 0xF6E2A8), Color(hex: 0xD9B56E), Color(hex: 0x9C6B2C)],
         startPoint: .top,
@@ -64,6 +70,29 @@ enum Theme {
 
     static func condensed(_ size: CGFloat, weight: Font.Weight = .heavy) -> Font {
         .system(size: size, weight: weight).width(.condensed)
+    }
+
+    // MARK: Position accents
+    // Color-code roster cards and field tokens by position group (logo-free, purely
+    // functional styling — see DESIGN.md). QB stays a neutral premium accent.
+    static func positionAccent(_ position: FootballPosition) -> Color {
+        switch position {
+        case .wr, .cb: Color(hex: 0x4E8FD9)      // blue — skill corners/receivers
+        case .rb: Color(hex: 0xE0B23F)           // gold — running backs
+        case .te, .lb: Color(hex: 0x63A86B)      // green — hybrids and backers
+        case .fs, .ss: Color(hex: 0x9B76D8)      // purple — deep coverage
+        case .dl, .ol: Color(hex: 0xC77B3C)      // bronze-orange — trench
+        case .qb: Color(hex: 0xC9CDD1)           // silver — neutral
+        }
+    }
+
+    static func positionAccentGradient(_ position: FootballPosition) -> LinearGradient {
+        let color = positionAccent(position)
+        return LinearGradient(
+            colors: [color, color.opacity(0.45)],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
     }
 }
 

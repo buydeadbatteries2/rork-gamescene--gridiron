@@ -1,8 +1,9 @@
 import SwiftUI
+import UIKit
 
 /// The VERTICAL tactical field: offense at the bottom, defense up top, yard lines
 /// running horizontally, sidelines on the left and right. Evidence, solved placements
-/// and (while dragging) mystery zones are drawn on top.
+/// and (while dragging) mystery zones are drawn on top of a photoreal stadium turf.
 struct GameFieldView: View {
     let viewModel: GameViewModel
     /// When false the field is a static snapshot (used on the result screen).
@@ -11,7 +12,7 @@ struct GameFieldView: View {
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
-            let token = min(max(size.width * 0.066, 18), 26)
+            let token = min(max(size.width * 0.075, 20), 30)
 
             ZStack(alignment: .topLeading) {
                 FieldTurf()
@@ -58,11 +59,19 @@ struct GameFieldView: View {
             }
             .animation(.easeInOut(duration: 0.2), value: viewModel.isDragging)
         }
-        .clipShape(.rect(cornerRadius: 4))
+        .clipShape(.rect(cornerRadius: 10, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 4)
-                .strokeBorder(Color.black.opacity(0.6), lineWidth: 2)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [Theme.gold.opacity(0.55), Theme.bronzeDeep.opacity(0.45)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1.5
+                )
         }
+        .shadow(color: .black.opacity(0.55), radius: 14, y: 8)
         .overlay(alignment: .bottom) {
             if isInteractive, viewModel.isDragging {
                 Text("DROP WHERE THE EVIDENCE POINTS")
@@ -91,9 +100,9 @@ struct GameFieldView: View {
         Button {
             viewModel.inspect(item)
         } label: {
-            EvidenceItemView(kind: item.kind, size: token * 0.95)
+            EvidenceItemView(kind: item.kind, size: token)
                 .rotationEffect(.degrees(item.rotation))
-                .frame(width: 44, height: 44)
+                .frame(width: 48, height: 48)
                 .contentShape(.rect)
         }
         .buttonStyle(PressableButtonStyle(scale: 0.9))
@@ -115,30 +124,63 @@ struct GameFieldView: View {
     }
 }
 
-/// Vertical field: depth runs from the bottom (offense backfield) to the top (deep
-/// defense). Sidelines are the vertical chalk rails; yard lines stretch horizontally.
+/// The field surface. Uses the photoreal night-stadium render when bundled, and falls
+/// back to the original painted turf so the puzzle board always works.
 struct FieldTurf: View {
-    /// Yard labels from top row (deepest) to bottom row, LOS ≈ 38-yard line at y 0.52.
-    private let yardLabels = ["40", "45", "50", "45", "40", "35", "30", "25", "20"]
+    private static let usesRenderedTurf = UIImage(named: "football_field_night") != nil
 
     var body: some View {
+        if Self.usesRenderedTurf {
+            renderedTurf
+        } else {
+            paintedTurf
+        }
+    }
+
+    /// Photo-real stadium field + chalk markings + broadcast lighting.
+    private var renderedTurf: some View {
+        Theme.turfDark
+            .overlay {
+                Image("football_field_night")
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .allowsHitTesting(false)
+            }
+            .overlay { FieldMarkings().allowsHitTesting(false) }
+            .overlay {
+                // Floodlight from the top fading into a darkened backfield foot.
+                LinearGradient(
+                    colors: [Color.white.opacity(0.08), .clear, .black.opacity(0.38)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .allowsHitTesting(false)
+            }
+            .overlay {
+                // Darker perimeter edges keep the tactical board premium.
+                RadialGradient(colors: [.clear, .black.opacity(0.38)], center: .center, startRadius: 70, endRadius: 420)
+                    .allowsHitTesting(false)
+            }
+            .clipped()
+            .accessibilityHidden(true)
+    }
+
+    /// Painted fallback: mowing stripes, chalk lines, same markings.
+    private var paintedTurf: some View {
         Canvas { context, size in
             let w = size.width
             let h = size.height
 
-            // Mowing stripes — horizontal bands across the depth of the field
             let stripes = 12
             for i in 0..<stripes {
                 let rect = CGRect(x: 0, y: h * CGFloat(i) / CGFloat(stripes), width: w, height: h / CGFloat(stripes) + 0.5)
                 context.fill(Path(rect), with: .color(i.isMultiple(of: 2) ? Theme.turf : Color(hex: 0x28502A)))
             }
 
-            // End-zone hatch hints beyond the top and bottom of the visible slice
             for band in [CGRect(x: 0, y: 0, width: w, height: 5), CGRect(x: 0, y: h - 5, width: w, height: 5)] {
                 context.fill(Path(band), with: .color(Theme.chalk.opacity(0.16)))
             }
 
-            // Sidelines — vertical chalk rails on the left and right
             for x in [w * 0.025, w * 0.975] {
                 var rail = Path()
                 rail.move(to: CGPoint(x: x, y: 0))
@@ -146,7 +188,6 @@ struct FieldTurf: View {
                 context.stroke(rail, with: .color(Theme.chalk.opacity(0.8)), lineWidth: 2)
             }
 
-            // Yard lines every 10 "yards" — horizontal, spanning the whole width
             for i in 1...9 {
                 let y = h * CGFloat(i) / 10
                 var line = Path()
@@ -154,7 +195,6 @@ struct FieldTurf: View {
                 line.addLine(to: CGPoint(x: w, y: y))
                 context.stroke(line, with: .color(Theme.chalk.opacity(0.7)), lineWidth: 1.4)
 
-                // Hash marks: short vertical ticks either side of center
                 for hx in [0.36, 0.64] {
                     var tick = Path()
                     tick.move(to: CGPoint(x: w * hx, y: y - 3.5))
@@ -162,7 +202,6 @@ struct FieldTurf: View {
                     context.stroke(tick, with: .color(Theme.chalk.opacity(0.45)), lineWidth: 0.9)
                 }
 
-                // 5-yard minor line
                 let yMinor = h * (CGFloat(i) - 0.5) / 10
                 var minor = Path()
                 minor.move(to: CGPoint(x: 0, y: yMinor))
@@ -170,50 +209,9 @@ struct FieldTurf: View {
                 context.stroke(minor, with: .color(Theme.chalk.opacity(0.25)), lineWidth: 0.8)
             }
 
-            // Line of scrimmage — horizontal dashed gold line
-            var los = Path()
-            los.move(to: CGPoint(x: 0, y: h * 0.52))
-            los.addLine(to: CGPoint(x: w, y: h * 0.52))
-            context.stroke(los, with: .color(Theme.gold.opacity(0.4)), style: StrokeStyle(lineWidth: 1.2, dash: [6, 4]))
+            FieldMarkings.drawLineOfScrimmage(context: context, width: w, height: h)
+            FieldMarkings.drawLabels(context: context, width: w, height: h)
 
-            // Yard numbers along both sidelines
-            for (index, label) in yardLabels.enumerated() {
-                let y = h * CGFloat(index + 1) / 10
-                let text = Text(label)
-                    .font(.system(size: max(9, w * 0.038), weight: .bold, design: .serif))
-                    .foregroundColor(Theme.chalk.opacity(0.5))
-                context.draw(context.resolve(text), at: CGPoint(x: w * 0.095, y: y))
-                context.draw(context.resolve(text), at: CGPoint(x: w * 0.905, y: y))
-            }
-
-            // Depth cues: chalk arrows showing that deeper = toward the top
-            var upArrow = Path()
-            upArrow.move(to: CGPoint(x: w * 0.095, y: h * 0.115))
-            upArrow.addLine(to: CGPoint(x: w * 0.095, y: h * 0.075))
-            upArrow.move(to: CGPoint(x: w * 0.095, y: h * 0.075))
-            upArrow.addLine(to: CGPoint(x: w * 0.075, y: h * 0.095))
-            upArrow.move(to: CGPoint(x: w * 0.095, y: h * 0.075))
-            upArrow.addLine(to: CGPoint(x: w * 0.115, y: h * 0.095))
-            context.stroke(upArrow, with: .color(Theme.chalk.opacity(0.5)), lineWidth: 1.2)
-            let deep = Text("DEEP")
-                .font(.system(size: max(7, w * 0.028), weight: .bold, design: .monospaced))
-                .foregroundColor(Theme.chalk.opacity(0.5))
-            context.draw(context.resolve(deep), at: CGPoint(x: w * 0.095, y: h * 0.145))
-
-            var downArrow = Path()
-            downArrow.move(to: CGPoint(x: w * 0.095, y: h * 0.855))
-            downArrow.addLine(to: CGPoint(x: w * 0.095, y: h * 0.895))
-            downArrow.move(to: CGPoint(x: w * 0.095, y: h * 0.895))
-            downArrow.addLine(to: CGPoint(x: w * 0.075, y: h * 0.875))
-            downArrow.move(to: CGPoint(x: w * 0.095, y: h * 0.895))
-            downArrow.addLine(to: CGPoint(x: w * 0.115, y: h * 0.875))
-            context.stroke(downArrow, with: .color(Theme.chalk.opacity(0.5)), lineWidth: 1.2)
-            let back = Text("BACKFIELD")
-                .font(.system(size: max(6, w * 0.024), weight: .bold, design: .monospaced))
-                .foregroundColor(Theme.chalk.opacity(0.5))
-            context.draw(context.resolve(back), at: CGPoint(x: w * 0.11, y: h * 0.83))
-
-            // Faint chalk play diagram (decorative) — a deep route running upward
             var route = Path()
             route.move(to: CGPoint(x: w * 0.3, y: h * 0.62))
             route.addQuadCurve(to: CGPoint(x: w * 0.42, y: h * 0.18), control: CGPoint(x: w * 0.28, y: h * 0.4))
@@ -227,5 +225,64 @@ struct FieldTurf: View {
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// Chalk markings shared by both turf paths: gold line-of-scrimmage, yard numbers
+/// along both sidelines and DEEP / BACKFIELD depth arrows.
+struct FieldMarkings: View {
+    private let yardLabels = ["40", "45", "50", "45", "40", "35", "30", "25", "20"]
+
+    var body: some View {
+        Canvas { context, size in
+            Self.drawLineOfScrimmage(context: context, width: size.width, height: size.height)
+            Self.drawLabels(context: context, width: size.width, height: size.height)
+        }
+    }
+
+    static func drawLineOfScrimmage(context: GraphicsContext, width: CGFloat, height: CGFloat) {
+        var los = Path()
+        los.move(to: CGPoint(x: 0, y: height * 0.52))
+        los.addLine(to: CGPoint(x: width, y: height * 0.52))
+        context.stroke(los, with: .color(Theme.gold.opacity(0.45)), style: StrokeStyle(lineWidth: 1.2, dash: [6, 4]))
+    }
+
+    static func drawLabels(context: GraphicsContext, width: CGFloat, height: CGFloat) {
+        let yardLabels = ["40", "45", "50", "45", "40", "35", "30", "25", "20"]
+        for (index, label) in yardLabels.enumerated() {
+            let y = height * CGFloat(index + 1) / 10
+            let text = Text(label)
+                .font(.system(size: max(9, width * 0.038), weight: .bold, design: .serif))
+                .foregroundColor(Theme.chalk.opacity(0.55))
+            context.draw(context.resolve(text), at: CGPoint(x: width * 0.095, y: y))
+            context.draw(context.resolve(text), at: CGPoint(x: width * 0.905, y: y))
+        }
+
+        // Depth cues: chalk arrows showing that deeper = toward the top
+        var upArrow = Path()
+        upArrow.move(to: CGPoint(x: width * 0.095, y: height * 0.115))
+        upArrow.addLine(to: CGPoint(x: width * 0.095, y: height * 0.075))
+        upArrow.move(to: CGPoint(x: width * 0.095, y: height * 0.075))
+        upArrow.addLine(to: CGPoint(x: width * 0.075, y: height * 0.095))
+        upArrow.move(to: CGPoint(x: width * 0.095, y: height * 0.075))
+        upArrow.addLine(to: CGPoint(x: width * 0.115, y: height * 0.095))
+        context.stroke(upArrow, with: .color(Theme.chalk.opacity(0.55)), lineWidth: 1.2)
+        let deep = Text("DEEP")
+            .font(.system(size: max(7, width * 0.028), weight: .bold, design: .monospaced))
+            .foregroundColor(Theme.chalk.opacity(0.55))
+        context.draw(context.resolve(deep), at: CGPoint(x: width * 0.095, y: height * 0.145))
+
+        var downArrow = Path()
+        downArrow.move(to: CGPoint(x: width * 0.095, y: height * 0.855))
+        downArrow.addLine(to: CGPoint(x: width * 0.095, y: height * 0.895))
+        downArrow.move(to: CGPoint(x: width * 0.095, y: height * 0.895))
+        downArrow.addLine(to: CGPoint(x: width * 0.075, y: height * 0.875))
+        downArrow.move(to: CGPoint(x: width * 0.095, y: height * 0.895))
+        downArrow.addLine(to: CGPoint(x: width * 0.115, y: height * 0.875))
+        context.stroke(downArrow, with: .color(Theme.chalk.opacity(0.55)), lineWidth: 1.2)
+        let back = Text("BACKFIELD")
+            .font(.system(size: max(6, width * 0.024), weight: .bold, design: .monospaced))
+            .foregroundColor(Theme.chalk.opacity(0.55))
+        context.draw(context.resolve(back), at: CGPoint(x: width * 0.11, y: height * 0.83))
     }
 }
