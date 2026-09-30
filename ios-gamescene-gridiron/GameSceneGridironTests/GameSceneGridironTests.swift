@@ -235,7 +235,7 @@ struct MatchViewModelTests {
         let matchViewModel = MatchViewModel()
         #expect(matchViewModel.match.currentQuarterIndex == 0)
         #expect(matchViewModel.phase == .quarterIntro)
-        #expect(matchViewModel.currentPuzzle.id == MatchPuzzles.regulation[0].id)
+        #expect(matchViewModel.currentPuzzle.id.hasPrefix("case_"), "quarters must draw from the case library")
     }
 
     @Test func solvedQuarterIsRecordedAndMatchAdvancesToNextQuarter() async {

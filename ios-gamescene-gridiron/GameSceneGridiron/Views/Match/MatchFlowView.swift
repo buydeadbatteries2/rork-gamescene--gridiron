@@ -11,6 +11,9 @@ struct MatchFlowView: View {
     var opponent: GameTeam?
     /// Postseason pressure: same rules, slightly tighter resources.
     var isPlayoff: Bool = false
+    /// Season context for the case scheduler (nil = standalone quick game).
+    var seasonNumber: Int?
+    var week: Int?
     /// Called exactly once when a season game finishes. When set, the replay
     /// option is hidden — completed season games are never replayed.
     var onSeasonResult: ((GameMatch) -> Void)?
@@ -23,13 +26,21 @@ struct MatchFlowView: View {
         userTeam: GameTeam? = nil,
         opponent: GameTeam? = nil,
         isPlayoff: Bool = false,
+        seasonNumber: Int? = nil,
+        week: Int? = nil,
         onSeasonResult: ((GameMatch) -> Void)? = nil
     ) {
         self.userTeam = userTeam
         self.opponent = opponent
         self.isPlayoff = isPlayoff
+        self.seasonNumber = seasonNumber
+        self.week = week
         self.onSeasonResult = onSeasonResult
-        _matchViewModel = State(initialValue: MatchViewModel(isPlayoff: isPlayoff))
+        _matchViewModel = State(initialValue: MatchViewModel(
+            isPlayoff: isPlayoff,
+            seasonNumber: seasonNumber ?? 0,
+            week: week ?? 1
+        ))
     }
 
     var body: some View {

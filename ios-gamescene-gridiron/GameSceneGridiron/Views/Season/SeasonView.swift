@@ -62,6 +62,16 @@ private struct SeasonHubView: View {
             case .semifinal, .championship: true
             }
         }
+
+        /// Case-scheduler week: the regular-season week number, or 11/12 for
+        /// the postseason so playoff games draw their own case rotation.
+        var caseWeek: Int {
+            switch self {
+            case .week(let game): game.week
+            case .semifinal: 11
+            case .championship: 12
+            }
+        }
     }
 
     var body: some View {
@@ -141,6 +151,8 @@ private struct SeasonHubView: View {
                 userTeam: userTeam,
                 opponent: opponentTeam(for: match),
                 isPlayoff: match.isPlayoff,
+                seasonNumber: seasonManager.season?.seasonNumber,
+                week: match.caseWeek,
                 onSeasonResult: { gameMatch in
                     record(match, gameMatch)
                 }

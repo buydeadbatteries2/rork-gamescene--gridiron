@@ -139,14 +139,28 @@ final class SeasonManager {
         self.defaults = defaults
         let loaded = Self.load(from: defaults)
         if let repaired = loaded.map(Self.repairCorruptedSeason) {
-            season = repaired
-            if repaired != loaded {
-                // Persist the repair immediately so it survives restarts.
+            let scheduled = Self.withCaseSchedule(repaired)
+            season = scheduled
+            if scheduled != loaded {
+                // Persist the repair/schedule immediately so it survives restarts.
                 persist()
             }
         } else {
             season = nil
         }
+    }
+
+    /// Backfills the persisted case schedule (and overtime ledger) on saves
+    /// and generated seasons that predate the case library.
+    static func withCaseSchedule(_ season: Season) -> Season {
+        var updated = season
+        if updated.scheduledCaseIDs?.count != 40 {
+            updated.scheduledCaseIDs = CaseScheduler.seasonSchedule(seasonNumber: season.seasonNumber)
+        }
+        if updated.usedOvertimeCaseIDs == nil {
+            updated.usedOvertimeCaseIDs = []
+        }
+        return updated
     }
 
     /// Repairs corrupted development seasons — e.g. one persisted with a
@@ -227,7 +241,9 @@ final class SeasonManager {
         let teams = [userTeamID] + OpponentTeams.all.map(\.id)
         let standings = teams.map { LeagueStanding(teamID: $0) }
 
-        return Season(seasonNumber: seasonNumber, userTeamID: userTeamID, games: games, standings: standings)
+        return withCaseSchedule(
+            Season(seasonNumber: seasonNumber, userTeamID: userTeamID, games: games, standings: standings)
+        )
     }
 
     // MARK: Lookups

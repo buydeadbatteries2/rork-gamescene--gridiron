@@ -155,6 +155,12 @@ nonisolated struct Season: Codable, Hashable, Sendable {
     var games: [ScheduledGame]
     var standings: [LeagueStanding]
     var bracket: PlayoffBracket?
+    /// Case-file ids for the 40 regulation quarters (weeks 1–10 × Q1–Q4),
+    /// persisted so a reopening season never reshuffles already-scheduled
+    /// content. nil on saves from before the case library existed.
+    var scheduledCaseIDs: [String]?
+    /// Overtime case ids already consumed this season.
+    var usedOvertimeCaseIDs: [String]?
 
     // MARK: Queries
 
