@@ -70,7 +70,7 @@ nonisolated enum CasePack5 {
                  evidence: ["cone"])
             ],
             hints: [
-                (player: "qb", text: "Dead center of the gun — the muddy footprints mark the spot."),
+                (player: "qb", text: "Four yards deep in the gun, dead center — the muddy footprints are the tell."),
                 (player: "wr1", text: "Far right numbers — by the water bottle. The sideline specialist."),
                 (player: "wr2", text: "Inside right, off the tackle's shoulder — where the wristband was tossed."),
                 (player: "de", text: "Right edge, wide of the tackle — where the broken helmet strap lies."),
