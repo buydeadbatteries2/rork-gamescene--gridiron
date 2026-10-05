@@ -108,20 +108,28 @@ struct PlayerAssetAndPuzzleUniquenessTests {
 
     // MARK: Hint isolation
 
-    @Test func hintProgressionIsIsolatedPerQuarter() {
+    @Test @MainActor func hintProgressionIsIsolatedPerQuarter() {
+        // Hints now live in the persistent wallet: a new quarter continues
+        // the same balance instead of resetting to the puzzle's starting hints.
+        let wallet = PlayerWallet(defaults: UserDefaults(suiteName: "hints-\(UUID().uuidString)")!)
+        wallet.addHints(5)
+
         // Using a hint inside Q1 only ever surfaces a Q1 hint.
-        let q1 = GameViewModel(puzzle: MatchPuzzles.regulation[0])
+        let q1 = GameViewModel(puzzle: MatchPuzzles.regulation[0], wallet: wallet)
         #expect(q1.canUseHint)
         q1.useHint()
         #expect(!q1.usedHints.isEmpty)
         let q1HintTexts = Set(MatchPuzzles.regulation[0].hints.map(\.text))
         #expect(q1.usedHints.allSatisfy { q1HintTexts.contains($0.text) })
 
-        // Starting the next quarter resets the sequence and loads Q2's own set.
-        let q2 = GameViewModel(puzzle: MatchPuzzles.regulation[1])
+        // Starting the next quarter resets the used-hint sequence but keeps
+        // the wallet balance — hints persist across quarters.
+        let balanceAfterQ1 = wallet.hints
+        let q2 = GameViewModel(puzzle: MatchPuzzles.regulation[1], wallet: wallet)
         #expect(q2.usedHints.isEmpty)
-        #expect(q2.hintsRemaining == MatchPuzzles.regulation[1].startingHints)
+        #expect(q2.hintsRemaining == balanceAfterQ1)
         q2.useHint()
+        #expect(wallet.hints == balanceAfterQ1 - 1)
         let q2HintTexts = Set(MatchPuzzles.regulation[1].hints.map(\.text))
         #expect(q2.usedHints.allSatisfy { q2HintTexts.contains($0.text) })
 

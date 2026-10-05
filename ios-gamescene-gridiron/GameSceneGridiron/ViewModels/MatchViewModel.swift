@@ -26,13 +26,25 @@ final class MatchViewModel {
     /// overtime): case player key → the stat that scenario produced.
     private let statEventMaps: [[String: PlayerStat]]
 
+    /// Whether this game belongs to the postseason (playoff/championship bonuses).
+    private let isPlayoff: Bool
+    /// True only for the championship final — adds the championship bonus.
+    private let isChampionship: Bool
+    /// Stable identity for this game's reward transaction. A fresh game (replay)
+    /// gets a new id, so its reward can be claimed exactly once.
+    private(set) var matchID = UUID()
+    /// The game's Game Ball reward, granted once when the match completes.
+    private(set) var rewardBreakdown: MatchRewardBreakdown?
+
     /// Draws the game's case files from the local puzzle library via the
     /// deterministic scheduler: no case repeats within a game, and across a
     /// 10-week regular season all 40 regulation cases are different.
     /// - Parameters:
     ///   - seasonNumber: 0 for a standalone/quick game.
     ///   - week: 1–10 in the regular season; 11+ resolves playoff rotations.
-    init(isPlayoff: Bool = false, seasonNumber: Int = 0, week: Int = 1) {
+    init(isPlayoff: Bool = false, isChampionship: Bool = false, seasonNumber: Int = 0, week: Int = 1) {
+        self.isPlayoff = isPlayoff
+        self.isChampionship = isChampionship
         let ids = CaseScheduler.gameCaseIDs(seasonNumber: seasonNumber, week: week)
         var maps: [[String: RosterIdentity]] = []
         var statMaps: [[String: PlayerStat]] = []
@@ -108,6 +120,12 @@ final class MatchViewModel {
         match.isComplete ? "VIEW GAME RESULT" : "NEXT QUARTER"
     }
 
+    /// Last Chance (rewarded life) ledger key for the quarter about to be
+    /// played — unique per match and quarter, persisted in the wallet.
+    var currentLastChanceKey: String {
+        "\(matchID.uuidString)-q\(match.currentQuarterIndex)"
+    }
+
     // MARK: Game leaders
 
     /// Aggregated box line leaders for this game's solved cases, ranked by
@@ -131,6 +149,8 @@ final class MatchViewModel {
 
     func startGame() {
         match = .fresh()
+        matchID = UUID()
+        rewardBreakdown = nil
         phase = .quarterIntro
     }
 
@@ -163,9 +183,26 @@ final class MatchViewModel {
             statEvents: events,
             appearedFranchiseIDs: Set(map.values.map(\.franchisePlayerID))
         )
+        if match.isComplete {
+            grantMatchReward()
+        }
         withAnimation(.easeInOut(duration: 0.3)) {
             phase = match.isComplete ? .gameResult : .quarterResult
         }
+    }
+
+    /// Grants the game's Game Ball reward exactly once — losing never
+    /// subtracts anything, and the wallet's transaction ledger makes a double
+    /// claim impossible.
+    private func grantMatchReward() {
+        let breakdown = MatchRewardBreakdown.forMatch(
+            match,
+            isPlayoff: isPlayoff,
+            isChampionship: isChampionship,
+            transactionID: "match-\(matchID.uuidString)"
+        )
+        rewardBreakdown = breakdown
+        PlayerWallet.shared.claimMatchReward(breakdown)
     }
 
     /// From the quarter-result screen: either the next quarter intro or the verdict.

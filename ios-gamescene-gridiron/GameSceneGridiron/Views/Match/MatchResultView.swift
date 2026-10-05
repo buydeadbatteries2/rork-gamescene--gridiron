@@ -14,6 +14,9 @@ struct MatchResultView: View {
 
     @State private var stampIn: Bool = false
     @State private var detailsIn: Bool = false
+    @State private var isDoubling: Bool = false
+
+    private let wallet = PlayerWallet.shared
 
     private var match: GameMatch { matchViewModel.match }
     private var result: MatchResult { match.result ?? .defeat }
@@ -59,6 +62,12 @@ struct MatchResultView: View {
 
                     if !match.statEvents.isEmpty {
                         leadersCard
+                            .opacity(detailsIn ? 1 : 0)
+                            .offset(y: detailsIn ? 0 : 22)
+                    }
+
+                    if let breakdown = matchViewModel.rewardBreakdown {
+                        rewardCard(breakdown)
                             .opacity(detailsIn ? 1 : 0)
                             .offset(y: detailsIn ? 0 : 22)
                     }
@@ -395,6 +404,7 @@ struct MatchResultView: View {
                 Button {
                     Haptics.pickUp()
                     onPlayAgain()
+                    AdManager.shared.maybeShowInterstitial()
                 } label: {
                     HStack {
                         Spacer()
@@ -408,7 +418,7 @@ struct MatchResultView: View {
                 .accessibilityHint("Resets all results and starts a new game at Quarter 1")
             }
 
-            Button(action: onHome) {
+            Button(action: leave) {
                 Text(continueLabel)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.paperInk)
@@ -418,6 +428,140 @@ struct MatchResultView: View {
             }
             .buttonStyle(PressableButtonStyle(playsPressSound: true))
         }
+    }
+
+    /// Leaving the finished game is a natural break — the forced interstitial
+    /// runs its frequency gate here (never during play, and never immediately
+    /// after a rewarded video).
+    private func leave() {
+        onHome()
+        AdManager.shared.maybeShowInterstitial()
+    }
+
+    // MARK: Case Reward
+
+    /// The game's Game Ball payout: solved quarters, victory bonuses and the
+    /// optional once-per-game 2× offer. The wallet was credited exactly once
+    /// when the match completed; the card animates the balance filling up.
+    private func rewardCard(_ breakdown: MatchRewardBreakdown) -> some View {
+        let isDoubled = wallet.hasDoubledMatchReward(transactionID: breakdown.transactionID)
+        let total = isDoubled ? breakdown.total * 2 : breakdown.total
+        let balance = wallet.gameBalls
+        return VStack(spacing: 4) {
+            Text("CASE REWARD")
+                .font(.system(size: 11, weight: .heavy).width(.condensed))
+                .tracking(2)
+                .foregroundStyle(Theme.paperInkSoft)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            ForEach(breakdown.lines) { line in
+                rewardRow(label: line.label, amount: line.amount)
+            }
+            if isDoubled {
+                rewardRow(label: "Reward Doubled", amount: breakdown.total, tint: Theme.gold)
+            }
+
+            HStack {
+                Text("TOTAL EARNED")
+                    .font(.system(size: 12, weight: .heavy).width(.condensed))
+                    .tracking(1.5)
+                    .foregroundStyle(Theme.paperInk)
+                Spacer()
+                HStack(spacing: 6) {
+                    CountUpNumber(from: 0, to: total, size: 26)
+                    GameBallIcon(size: 14)
+                }
+            }
+            .padding(.top, 4)
+
+            HStack {
+                Text("WALLET")
+                    .font(Theme.typewriter(12, relativeTo: .caption))
+                    .foregroundStyle(Theme.paperInkSoft)
+                Spacer()
+                HStack(spacing: 6) {
+                    CountUpNumber(from: balance - total, to: balance, size: 18)
+                    GameBallIcon(size: 11)
+                }
+            }
+            .padding(.top, 2)
+
+            if !isDoubled, breakdown.total > 0 {
+                doubleRewardOffer(breakdown)
+            }
+        }
+        .padding(16)
+        .paperCard(cornerRadius: 6)
+        .rotationEffect(.degrees(-0.5))
+        .onAppear {
+            AudioManager.shared.play(.gameballDeposit)
+            Haptics.success()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Case reward: earned \(total) game balls. Wallet balance \(balance).")
+    }
+
+    private func rewardRow(label: String, amount: Int, tint: Color? = nil) -> some View {
+        HStack {
+            Text(label)
+                .font(Theme.typewriter(14, relativeTo: .subheadline))
+                .foregroundStyle(Theme.paperInk)
+            Spacer()
+            HStack(spacing: 5) {
+                Text("+\(amount)")
+                    .font(.system(size: 17, weight: .heavy).width(.condensed))
+                    .monospacedDigit()
+                    .foregroundStyle(tint ?? Theme.goldLight)
+                GameBallIcon(size: 11)
+            }
+        }
+        .padding(.vertical, 7)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.paperInk.opacity(0.12)).frame(height: 1)
+        }
+    }
+
+    /// Completely optional, once per game: watching a video doubles only this
+    /// game's earned reward — never the existing wallet balance. Closing the
+    /// video early grants nothing and the offer stays available.
+    private func doubleRewardOffer(_ breakdown: MatchRewardBreakdown) -> some View {
+        Button {
+            guard !isDoubling else { return }
+            Haptics.pickUp()
+            isDoubling = true
+            Task { @MainActor in
+                let result = await AdManager.shared.showRewarded(.doubleReward)
+                isDoubling = false
+                guard result == .granted else { return }
+                if wallet.doubleMatchReward(breakdown) {
+                    AudioManager.shared.play(.gameballDeposit)
+                    Haptics.success()
+                }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                if isDoubling {
+                    ProgressView()
+                        .tint(Theme.goldLight)
+                } else {
+                    Image(systemName: "play.rectangle.fill")
+                        .font(.system(size: 16, weight: .bold))
+                }
+                Text(isDoubling ? "WATCHING…" : "WATCH VIDEO — 2× REWARD (+\(breakdown.total) GAME BALLS)")
+                    .font(.system(size: 13, weight: .heavy).width(.condensed))
+                    .tracking(0.8)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(Theme.goldLight)
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .overlay { Capsule().strokeBorder(Theme.goldGradient, lineWidth: 2) }
+            .contentShape(.capsule)
+        }
+        .buttonStyle(PressableButtonStyle(playsPressSound: true))
+        .padding(.top, 10)
+        .accessibilityHint("Doubles this game's earned reward by watching a video")
     }
 }
 

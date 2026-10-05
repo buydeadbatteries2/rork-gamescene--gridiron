@@ -15,7 +15,19 @@ final class GameViewModel {
     var puzzleIndex: Int { puzzle.index }
 
     private(set) var lives: Int
+    /// Mirror of the persistent hint balance — hints live in the shared
+    /// `PlayerWallet` and survive quarters, games and restarts.
     private(set) var hintsRemaining: Int
+    /// The wallet this quarter draws hints from; tests inject isolated ones.
+    private let wallet: PlayerWallet
+    /// Offered when the player presses Hint with nothing left in the wallet.
+    var isHintOfferPresented = false
+    /// Uniquely identifies this quarter for the Last Chance ledger:
+    /// "\(matchID)-q\(quarterIndex)" during a match, standalone otherwise.
+    var lastChanceKey: String = "standalone-quarter"
+    /// True while the final heart is gone but the Last Chance offer is up —
+    /// the quarter verdict waits for the player's choice.
+    private(set) var isLastChancePending = false
     private(set) var usedHints: [UsedHint] = []
     private(set) var placements: [PlacedPlayer] = []
     private(set) var selectedVariants: [String: PlayerVariant] = [:]
@@ -44,10 +56,11 @@ final class GameViewModel {
     private var blockedDragPlayerID: String?
     private var feedbackTask: Task<Void, Never>?
 
-    init(puzzle: QuarterPuzzle = SampleQuarter.puzzle) {
+    init(puzzle: QuarterPuzzle = SampleQuarter.puzzle, wallet: PlayerWallet = .shared) {
         self.puzzle = puzzle
+        self.wallet = wallet
         self.lives = puzzle.startingLives
-        self.hintsRemaining = puzzle.startingHints
+        self.hintsRemaining = wallet.hints
     }
 
     // MARK: Derived state
@@ -224,7 +237,7 @@ final class GameViewModel {
             }
 
             if lives == 0 {
-                finish(with: .lost)
+                offerLastChanceOrFinish()
             }
         }
     }
@@ -253,7 +266,7 @@ final class GameViewModel {
         }
     }
 
-    // MARK: Hints
+    // MARK: Hints (persistent economy)
 
     var canUseHint: Bool {
         hintsRemaining > 0 && result == .inProgress && nextHint != nil
@@ -267,17 +280,25 @@ final class GameViewModel {
             .min { (order.firstIndex(of: $0.playerID) ?? 0) < (order.firstIndex(of: $1.playerID) ?? 0) }
     }
 
+    /// Consumes one persistent hint and reveals the next lead. With an empty
+    /// wallet this opens the NEED A HINT? offer instead of a dead-end warning.
     func useHint() {
         guard hintsRemaining > 0 else {
             Haptics.warning()
-            show(FeedbackMessage(title: "NO HINTS LEFT", detail: "Trust the evidence.", tone: .info))
+            withAnimation(.easeOut(duration: 0.2)) { isHintOfferPresented = true }
             return
         }
-        guard let hint = nextHint, result == .inProgress else {
+        guard nextHint != nil, result == .inProgress else {
             show(FeedbackMessage(title: "NO NEW LEADS", detail: nil, tone: .info))
             return
         }
-        hintsRemaining -= 1
+        guard wallet.consumeHint() else { return }
+        hintsRemaining = wallet.hints
+        revealNextHint()
+    }
+
+    private func revealNextHint() {
+        guard let hint = nextHint, result == .inProgress else { return }
         usedHintIDs.insert(hint.id)
         usedHints.append(UsedHint(id: hint.id, playerID: hint.playerID, text: hint.text, date: .now))
         if let index = puzzle.clues.firstIndex(where: { $0.playerID == hint.playerID }) {
@@ -286,6 +307,52 @@ final class GameViewModel {
         Haptics.soft()
         AudioManager.shared.play(.hintUsed)
         show(FeedbackMessage(title: "NEW LEAD", detail: hint.text, tone: .lead), duration: 4.2)
+    }
+
+    /// Grants exactly one rewarded-ad hint and immediately reveals the lead —
+    /// only ever called after the ad's reward callback fired.
+    func grantRewardedHint() {
+        guard wallet.addHints(1) else { return }
+        hintsRemaining = wallet.hints
+        revealNextHint()
+    }
+
+    /// Called after a Game Ball hint purchase in the offer sheet.
+    func hintPurchased() {
+        hintsRemaining = wallet.hints
+        withAnimation(.easeOut(duration: 0.2)) { isHintOfferPresented = false }
+        revealNextHint()
+    }
+
+    func dismissHintOffer() {
+        withAnimation(.easeOut(duration: 0.2)) { isHintOfferPresented = false }
+    }
+
+    // MARK: Last Chance (rewarded life)
+
+    /// The final heart is gone. Each quarter may offer exactly one rewarded
+    /// extra life; otherwise the verdict lands immediately.
+    private func offerLastChanceOrFinish() {
+        if wallet.markLastChanceUsed(for: lastChanceKey) {
+            withAnimation(.easeInOut(duration: 0.3)) { isLastChancePending = true }
+        } else {
+            finish(with: .lost)
+        }
+    }
+
+    /// Only ever called after the rewarded ad's reward callback fired.
+    func grantLastChanceLife() {
+        guard isLastChancePending else { return }
+        isLastChancePending = false
+        lives = 1
+        Haptics.success()
+        AudioManager.shared.play(.placementCorrect)
+        show(FeedbackMessage(title: "SECOND CHANCE", detail: "One more attempt. Make it count.", tone: .lead), duration: 2.4)
+    }
+
+    func acceptLastChanceLoss() {
+        isLastChancePending = false
+        finish(with: .lost)
     }
 
     // MARK: Evidence
@@ -310,7 +377,10 @@ final class GameViewModel {
         feedbackTask?.cancel()
         withAnimation(.easeInOut) {
             lives = puzzle.startingLives
-            hintsRemaining = puzzle.startingHints
+            // Hints persist across restarts — the wallet is never refilled.
+            hintsRemaining = wallet.hints
+            isHintOfferPresented = false
+            isLastChancePending = false
             usedHints = []
             usedHintIDs = []
             placements = []

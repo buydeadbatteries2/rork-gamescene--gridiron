@@ -56,7 +56,9 @@ struct GameplayView: View {
             RosterTrayView(viewModel: viewModel, tint: userTeam?.primaryColor)
                 .frame(height: 200, alignment: .bottom)
 
-            AdBannerPlaceholder()
+            // Absolute bottom banner slot, always its own row — never over
+            // gameplay content. Ad-Free owners get the space back entirely.
+            GameBannerAdView()
                 .padding(.horizontal, 16)
                 .padding(.bottom, 6)
         }
@@ -94,6 +96,28 @@ struct GameplayView: View {
                 .transition(.opacity)
             }
         }
+        .overlay {
+            // Rewarded-video offers. Nothing is granted unless the ad's reward
+            // callback fires (`.granted`); an early close just returns here.
+            if viewModel.isLastChancePending {
+                LastChanceOverlay(
+                    isWatching: isWatchingAd,
+                    onWatch: { watchRewarded(.lastChanceLife) { viewModel.grantLastChanceLife() } },
+                    onAccept: { viewModel.acceptLastChanceLoss() }
+                )
+                .transition(.opacity)
+            } else if viewModel.isHintOfferPresented {
+                HintOfferOverlay(
+                    isWatching: isWatchingAd,
+                    canAffordHint: PlayerWallet.shared.canAffordHint,
+                    hintCost: EconomyConfig.standard.hintCost,
+                    onWatch: { watchRewarded(.hint) { viewModel.grantRewardedHint() } },
+                    onBuy: { buyHintFromOffer() },
+                    onCancel: { withAnimation(.easeOut(duration: 0.2)) { viewModel.isHintOfferPresented = false } }
+                )
+                .transition(.opacity)
+            }
+        }
         .sheet(isPresented: $viewModel.isNotebookPresented) {
             CaseFileSheet(viewModel: viewModel)
         }
@@ -122,6 +146,37 @@ struct GameplayView: View {
         .onDisappear {
             AudioManager.shared.stopMusic(fadeOutDuration: 0.6)
         }
+    }
+
+    // MARK: Rewarded offers
+
+    @State private var isWatchingAd = false
+
+    /// Runs one rewarded-ad presentation. Grants `onGranted` only when the
+    /// reward callback fired — a dismissed ad grants nothing and the offer
+    /// stays up for another choice.
+    private func watchRewarded(_ placement: RewardedAdPlacement, onGranted: @escaping () -> Void) {
+        guard !isWatchingAd else { return }
+        isWatchingAd = true
+        Task { @MainActor in
+            let result = await AdManager.shared.showRewarded(placement)
+            isWatchingAd = false
+            if result == .granted {
+                onGranted()
+            }
+        }
+    }
+
+    /// Game Ball shortcut inside the hint offer — the sheet itself is the
+    /// "Use 50 Game Balls to add 1 Hint?" confirmation.
+    private func buyHintFromOffer() {
+        guard PlayerWallet.shared.buyHint() else {
+            Haptics.warning()
+            return
+        }
+        AudioManager.shared.play(.hintPurchaseConfirm)
+        Haptics.success()
+        viewModel.hintPurchased()
     }
 
     private var gameplayBackground: some View {

@@ -15,4 +15,7 @@ enum SoundEffect: String, CaseIterable {
     case quarterWon = "synth_rock_fanfare_victory"
     case quarterLost = "descending_synth_sting"
     case caseSolved = "case_closed_sting"
+    // Phase 6 economy cues.
+    case gameballDeposit = "synth_coin_deposit"
+    case hintPurchaseConfirm = "synth_brass_confirmation_chime"
 }

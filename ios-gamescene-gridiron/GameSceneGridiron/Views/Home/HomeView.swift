@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Top-level surface: brand, cinematic stadium photo, the investigation CTA and locked future modes.
+/// Top-level surface: brand, cinematic stadium photo, the investigation CTA, the
+/// persistent wallet strip and locked future modes.
 struct HomeView: View {
     @State private var teamStore = TeamStore.shared
     @State private var seasonManager = SeasonManager.shared
@@ -8,6 +9,7 @@ struct HomeView: View {
     @State private var isEditingTeam: Bool = false
     @State private var isShowingTeamRoster: Bool = false
     @State private var isShowingRecords: Bool = false
+    @State private var isShowingShop: Bool = false
     @State private var lockedMessage: String?
     @State private var hasAppeared: Bool = false
     @State private var glow: Bool = false
@@ -56,6 +58,10 @@ struct HomeView: View {
                     .shadow(color: Theme.gold.opacity(glow ? 0.35 : 0.1), radius: glow ? 22 : 10)
                     .accessibilityHint(teamStore.hasTeam ? "Opens your season" : "Opens the investigation")
 
+                    walletStrip
+                        .opacity(hasAppeared ? 1 : 0)
+                        .offset(y: hasAppeared ? 0 : 16)
+
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 18) {
                         if let team = teamStore.userTeam {
                             Button {
@@ -90,6 +96,15 @@ struct HomeView: View {
                             }
                             .buttonStyle(PressableButtonStyle(scale: 0.97))
                         }
+
+                        Button {
+                            Haptics.tick()
+                            isShowingShop = true
+                        } label: {
+                            UnlockedFolderTile(title: "SHOP", symbol: "bag")
+                        }
+                        .buttonStyle(PressableButtonStyle(scale: 0.97))
+
                         ForEach(lockedModes, id: \.title) { mode in
                             Button {
                                 Haptics.warning()
@@ -143,6 +158,9 @@ struct HomeView: View {
                 RecordsView(userTeam: team)
             }
         }
+        .fullScreenCover(isPresented: $isShowingShop) {
+            ShopView()
+        }
         .fullScreenCover(isPresented: $isEditingTeam) {
             if let team = teamStore.userTeam {
                 TeamCreationView(existingTeam: team) { _ in
@@ -159,6 +177,15 @@ struct HomeView: View {
     private var ctaTitle: String {
         guard teamStore.hasTeam else { return "CREATE YOUR TEAM" }
         return seasonManager.hasActiveSeason ? "CONTINUE SEASON" : "START SEASON"
+    }
+
+    /// Persistent wallet strip: Game Balls and hints both survive restarts,
+    /// games and seasons.
+    private var walletStrip: some View {
+        HStack(spacing: 12) {
+            WalletPill(amount: PlayerWallet.shared.gameBalls)
+            HintPill(count: PlayerWallet.shared.hints)
+        }
     }
 
     /// Pinned season dossier: franchise, record, current week and next case.
