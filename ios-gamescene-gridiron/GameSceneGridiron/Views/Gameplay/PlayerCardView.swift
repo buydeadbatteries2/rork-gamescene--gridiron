@@ -51,7 +51,7 @@ struct PlayerCardView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(
-                    isExpanded ? AnyShapeStyle(accent) : AnyShapeStyle(Color.white.opacity(0.14)),
+                    isExpanded ? AnyShapeStyle(Theme.goldGradient) : AnyShapeStyle(Color.white.opacity(0.14)),
                     lineWidth: isExpanded ? 1.6 : 1
                 )
         }
@@ -147,23 +147,18 @@ struct PlayerCardView: View {
         HStack(spacing: 5) {
             ForEach(PlayerVariant.allCases) { variant in
                 let isSelected = selectedVariant == variant
-                let accent = Theme.variantColor(variant)
                 Button { onSelectVariant(variant) } label: {
                     Text(variant.title.uppercased())
                         .font(.system(size: 10.5, weight: .bold).width(.condensed))
                         .tracking(0.6)
-                        .foregroundStyle(
-                            isSelected
-                                ? (variant == .veteran ? Theme.ink : Color.white)
-                                : Color.white.opacity(0.75)
-                        )
+                        .foregroundStyle(isSelected ? Theme.ink : Color.white.opacity(0.75))
                         .frame(maxWidth: .infinity)
                         .frame(height: 30)
                         .background {
-                            Capsule().fill(isSelected ? AnyShapeStyle(accent) : AnyShapeStyle(Color.white.opacity(0.08)))
+                            Capsule().fill(isSelected ? AnyShapeStyle(Theme.goldGradient) : AnyShapeStyle(Color.white.opacity(0.08)))
                         }
                         .overlay {
-                            Capsule().strokeBorder(isSelected ? Color.clear : accent.opacity(0.55), lineWidth: 1)
+                            Capsule().strokeBorder(isSelected ? Color.clear : Color.white.opacity(0.18), lineWidth: 1)
                         }
                         .contentShape(.capsule)
                 }

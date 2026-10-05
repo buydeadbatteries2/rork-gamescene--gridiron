@@ -138,50 +138,17 @@ struct GameFieldView: View {
     }
 }
 
-/// The field surface. Vivid grass texture + chalk markings when bundled, then
-/// the photoreal night-stadium render, then a painted fallback so the puzzle
-/// board always works.
+/// The field surface. Uses the photoreal night-stadium render when bundled, and falls
+/// back to the original painted turf so the puzzle board always works.
 struct FieldTurf: View {
-    private static let usesGrassTexture = UIImage(named: "grass_field_texture") != nil
     private static let usesRenderedTurf = UIImage(named: "football_field_night") != nil
 
     var body: some View {
-        if Self.usesGrassTexture {
-            grassTurf
-        } else if Self.usesRenderedTurf {
+        if Self.usesRenderedTurf {
             renderedTurf
         } else {
             paintedTurf
         }
-    }
-
-    /// Premium vivid turf: photoreal grass with baked mowing stripes, chalk
-    /// markings, floodlight and a darkened board edge for depth.
-    private var grassTurf: some View {
-        Theme.turfDark
-            .overlay {
-                Image("grass_field_texture")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .allowsHitTesting(false)
-            }
-            .overlay { FieldMarkings().allowsHitTesting(false) }
-            .overlay {
-                // Floodlight from the top fading into a darkened backfield foot.
-                LinearGradient(
-                    colors: [Color.white.opacity(0.10), .clear, .black.opacity(0.34)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .allowsHitTesting(false)
-            }
-            .overlay {
-                // Darker perimeter edges keep the tactical board premium.
-                RadialGradient(colors: [.clear, .black.opacity(0.34)], center: .center, startRadius: 70, endRadius: 420)
-                    .allowsHitTesting(false)
-            }
-            .clipped()
-            .accessibilityHidden(true)
     }
 
     /// Photo-real stadium field + chalk markings + broadcast lighting.
@@ -257,8 +224,6 @@ struct FieldTurf: View {
             }
 
             FieldMarkings.drawLineOfScrimmage(context: context, width: w, height: h)
-            FieldMarkings.drawEndZones(context: context, width: w, height: h)
-            FieldMarkings.drawHashMarks(context: context, width: w, height: h)
             FieldMarkings.drawLabels(context: context, width: w, height: h)
 
             var route = Path()
@@ -284,41 +249,8 @@ struct FieldMarkings: View {
 
     var body: some View {
         Canvas { context, size in
-            Self.drawEndZones(context: context, width: size.width, height: size.height)
             Self.drawLineOfScrimmage(context: context, width: size.width, height: size.height)
-            Self.drawHashMarks(context: context, width: size.width, height: size.height)
             Self.drawLabels(context: context, width: size.width, height: size.height)
-        }
-    }
-
-    /// Shaded end zones with chalk goal lines at the top and bottom of the board.
-    static func drawEndZones(context: GraphicsContext, width: CGFloat, height: CGFloat) {
-        let zones = [
-            CGRect(x: 0, y: 0, width: width, height: height * 0.05),
-            CGRect(x: 0, y: height * 0.95, width: width, height: height * 0.05)
-        ]
-        for zone in zones {
-            context.fill(Path(zone), with: .color(Color.black.opacity(0.22)))
-        }
-        for y in [height * 0.05, height * 0.95] {
-            var goal = Path()
-            goal.move(to: CGPoint(x: 0, y: y))
-            goal.addLine(to: CGPoint(x: width, y: y))
-            context.stroke(goal, with: .color(Theme.chalk.opacity(0.55)), lineWidth: 1.6)
-        }
-    }
-
-    /// Short hash dashes between the yard lines, both hash columns.
-    static func drawHashMarks(context: GraphicsContext, width: CGFloat, height: CGFloat) {
-        for i in 0..<20 {
-            let y = height * CGFloat(i) / 20
-            guard i % 2 == 1 else { continue }
-            for hx in [0.34, 0.66] {
-                var hash = Path()
-                hash.move(to: CGPoint(x: width * hx - 3, y: y))
-                hash.addLine(to: CGPoint(x: width * hx + 3, y: y))
-                context.stroke(hash, with: .color(Theme.chalk.opacity(0.3)), lineWidth: 1)
-            }
         }
     }
 
