@@ -97,6 +97,14 @@ nonisolated enum CaseLibrary {
         all.first { $0.id == id }
     }
 
+    /// The case's explicitly authored stat events: playerKey → the stat that
+    /// occurred in this scenario. The player's profile never decides this —
+    /// the case file does. Players without an entry fall back to the engine's
+    /// position-neutral base stat.
+    static func statEvents(forCaseID caseID: String) -> [String: PlayerStat] {
+        CaseStatEvents.table[caseID] ?? [:]
+    }
+
     // MARK: Authoring helper
 
     /// Compact authoring entry point used by the case packs. Tuple labels keep

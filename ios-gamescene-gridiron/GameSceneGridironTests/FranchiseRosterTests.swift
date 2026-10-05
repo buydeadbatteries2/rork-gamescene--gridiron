@@ -180,10 +180,11 @@ struct FranchiseRosterTests {
 
     // MARK: Stat award engine
 
-    private func makeIdentity(_ franchise: Franchise, slot: RosterSlot) -> RosterIdentity? {
+    private func makeIdentity(_ franchise: Franchise, slot: RosterSlot, playerKey: String = "p") -> RosterIdentity? {
         guard let player = franchise.allPlayers.first(where: { $0.slot == slot }) else { return nil }
         return RosterIdentity(
             franchisePlayerID: player.id,
+            playerKey: playerKey,
             fullName: player.fullName,
             shortName: player.displayName,
             position: player.position,
@@ -191,53 +192,116 @@ struct FranchiseRosterTests {
         )
     }
 
-    @Test func statEngineAwardsByVariant() {
+    @Test func statEngineAwardsCaseSpecifiedEvents() {
         let (manager, _) = makeManagerWithRoster()
         let franchise = manager.franchise!
-        let rb = makeIdentity(franchise, slot: .rb)
-        let cb = makeIdentity(franchise, slot: .cb)
-        let qb = makeIdentity(franchise, slot: .qb)
-
-        guard let rb, let cb, let qb else {
-            Issue.record("roster identities missing")
+        guard let rb = makeIdentity(franchise, slot: .rb, playerKey: "rb") else {
+            Issue.record("roster identity missing")
             return
         }
+        let puzzlePlayer = FootballPlayer(
+            id: "p-\(rb.franchisePlayerID.uuidString)",
+            name: rb.fullName,
+            position: rb.position,
+            cardAsset: rb.bodyAssetID
+        )
+        let placement = PlacedPlayer(
+            player: puzzlePlayer,
+            variant: .fast,
+            slot: PlacementSlot(id: "s1", x: 0.5, y: 0.5)
+        )
 
-        func puzzlePlayer(_ identity: RosterIdentity) -> FootballPlayer {
-            FootballPlayer(id: "p-\(identity.franchisePlayerID.uuidString)", name: identity.fullName, position: identity.position, cardAsset: identity.bodyAssetID)
+        // The case file decides WHAT happened: this scenario was a screen that
+        // asked the back to sell the block.
+        let screenCase = StatAwardEngine.events(
+            from: [placement],
+            identities: [placement.player.id: rb],
+            caseStats: ["rb": .keyBlocks]
+        )
+        #expect(screenCase.map(\.stat) == [.keyBlocks])
+
+        // A different case scenario with the SAME player and the SAME profile
+        // demanded run production — the case metadata, not the profile, rules.
+        let runCase = StatAwardEngine.events(
+            from: [placement],
+            identities: [placement.player.id: rb],
+            caseStats: ["rb": .successfulRuns]
+        )
+        #expect(runCase.map(\.stat) == [.successfulRuns])
+
+        // Same position, same profile, third scenario: power through contact.
+        let powerCase = StatAwardEngine.events(
+            from: [placement],
+            identities: [placement.player.id: rb],
+            caseStats: ["rb": .brokenTackles]
+        )
+        #expect(powerCase.map(\.stat) == [.brokenTackles])
+
+        // Without case metadata the engine falls back to a position-neutral
+        // base stat — never to a profile-derived award.
+        let fallback = StatAwardEngine.events(
+            from: [placement],
+            identities: [placement.player.id: rb]
+        )
+        #expect(fallback.map(\.stat) == [.successfulRuns])
+        #expect(fallback == StatAwardEngine.events(
+            from: [PlacedPlayer(player: puzzlePlayer, variant: .veteran, slot: placement.slot)],
+            identities: [placement.player.id: rb]
+        ))
+    }
+
+    @Test func caseStatEventTableCoversEveryLibraryCase() {
+        var failures: [String] = []
+        let caseIDs = Set(CaseLibrary.all.map(\.id))
+        for (caseID, playerStats) in CaseStatEvents.table {
+            guard let puzzleCase = CaseLibrary.caseByID(caseID) else {
+                failures.append("\(caseID): not in the library")
+                continue
+            }
+            for (playerKey, stat) in playerStats {
+                guard let entry = puzzleCase.player(withKey: playerKey) else {
+                    failures.append("\(caseID): player key \(playerKey) is not a missing player")
+                    continue
+                }
+                if !PlayerStat.relevant(for: entry.position).contains(stat) {
+                    failures.append("\(caseID): \(stat.rawValue) is not relevant for \(playerKey) (\(entry.position.rawValue))")
+                }
+            }
+        }
+        let missingCases = caseIDs.subtracting(CaseStatEvents.table.keys)
+        for caseID in missingCases {
+            failures.append("\(caseID): library case has no stat-event metadata")
+        }
+        #expect(failures.isEmpty, "\(failures.joined(separator: "\n"))")
+    }
+
+    @Test func samePositionAndProfileCanAwardDifferentEventsAcrossCases() {
+        // Group every authored (position, variant) demand across the library by
+        // the case-specified stat it awards. If the profile ever decided the
+        // stat, every (position, variant) pair would map to exactly one stat.
+        var statsByDemand: [String: Set<PlayerStat>] = [:]
+        for puzzleCase in CaseLibrary.all {
+            let caseStats = CaseStatEvents.table[puzzleCase.id] ?? [:]
+            let variantByKey = Dictionary(
+                uniqueKeysWithValues: puzzleCase.solution.map { ($0.playerKey, $0.variant) }
+            )
+            let positionByKey = Dictionary(
+                uniqueKeysWithValues: puzzleCase.missing.map { ($0.key, $0.position) }
+            )
+            for (playerKey, stat) in caseStats {
+                guard let variant = variantByKey[playerKey], let position = positionByKey[playerKey] else { continue }
+                statsByDemand["\(position.rawValue)-\(variant.rawValue)", default: []].insert(stat)
+            }
         }
 
-        // Same RB, three different situations → three different stat shapes.
-        let fastRB = StatAwardEngine.events(
-            from: [PlacedPlayer(player: puzzlePlayer(rb), variant: .fast, slot: PlacementSlot(id: "s1", x: 0.5, y: 0.5))],
-            identities: ["p-\(rb.franchisePlayerID.uuidString)": rb]
-        )
-        #expect(fastRB.map(\.stat).sorted { $0.rawValue < $1.rawValue } == [.successfulRuns, .successfulRuns])
-
-        let powerRB = StatAwardEngine.events(
-            from: [PlacedPlayer(player: puzzlePlayer(rb), variant: .power, slot: PlacementSlot(id: "s1", x: 0.5, y: 0.5))],
-            identities: ["p-\(rb.franchisePlayerID.uuidString)": rb]
-        )
-        #expect(Set(powerRB.map(\.stat)) == [.successfulRuns, .brokenTackles])
-
-        let veteranRB = StatAwardEngine.events(
-            from: [PlacedPlayer(player: puzzlePlayer(rb), variant: .veteran, slot: PlacementSlot(id: "s1", x: 0.5, y: 0.5))],
-            identities: ["p-\(rb.franchisePlayerID.uuidString)": rb]
-        )
-        #expect(Set(veteranRB.map(\.stat)) == [.successfulRuns, .keyBlocks])
-
-        // A Veteran CB coverage case earns an interception; a Fast QB read earns a scramble.
-        let veteranCB = StatAwardEngine.events(
-            from: [PlacedPlayer(player: puzzlePlayer(cb), variant: .veteran, slot: PlacementSlot(id: "s2", x: 0.4, y: 0.3))],
-            identities: ["p-\(cb.franchisePlayerID.uuidString)": cb]
-        )
-        #expect(Set(veteranCB.map(\.stat)) == [.tackles, .interceptions])
-
-        let fastQB = StatAwardEngine.events(
-            from: [PlacedPlayer(player: puzzlePlayer(qb), variant: .fast, slot: PlacementSlot(id: "s3", x: 0.5, y: 0.6))],
-            identities: ["p-\(qb.franchisePlayerID.uuidString)": qb]
-        )
-        #expect(Set(fastQB.map(\.stat)) == [.successfulReads, .scrambleOpportunities])
+        var conflicts: [String] = []
+        for (demand, stats) in statsByDemand where stats.count > 1 {
+            conflicts.append("\(demand): \(stats.map(\.rawValue).sorted().joined(separator: ", "))")
+        }
+        // The correction's core guarantee: at least one shared position+profile
+        // demand exists that produces different stat events per case scenario.
+        #expect(!conflicts.isEmpty, "no shared position+profile awards different events across cases")
+        #expect(conflicts.joined(separator: "\n").lowercased().contains("rb-fast"), "expected the documented Fast RB example to differ across cases")
     }
 
     @Test func statEngineIgnoresPlayersWithoutRosterIdentity() {
@@ -249,7 +313,7 @@ struct FranchiseRosterTests {
             )
         ]
         #expect(StatAwardEngine.events(from: placements, identities: [:]).isEmpty)
-        #expect(StatAwardEngine.events(from: [], identities: ["unknown": RosterIdentity(franchisePlayerID: UUID(), fullName: "X Y", shortName: "X. Y", position: .lb, bodyAssetID: "football_player_linebacker")]).isEmpty)
+        #expect(StatAwardEngine.events(from: [], identities: ["unknown": RosterIdentity(franchisePlayerID: UUID(), playerKey: "lb", fullName: "X Y", shortName: "X. Y", position: .lb, bodyAssetID: "football_player_linebacker")]).isEmpty)
     }
 
     @Test func playerOfTheGameIsHighestWeightedScore() {

@@ -79,6 +79,7 @@ final class RosterManager {
             queues[entry.position] = queue
             assigned["\(caseID)-\(entry.key)"] = RosterIdentity(
                 franchisePlayerID: player.id,
+                playerKey: entry.key,
                 fullName: player.fullName,
                 shortName: player.displayName,
                 position: entry.position,

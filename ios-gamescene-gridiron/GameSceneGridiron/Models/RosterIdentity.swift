@@ -7,6 +7,9 @@ import Foundation
 /// that quarter. Pure data — the runtime engine keeps its own ids.
 nonisolated struct RosterIdentity: Hashable, Sendable {
     let franchisePlayerID: UUID
+    /// The case-file authoring key this puzzle player came from ("rb", "wr2"),
+    /// used to look up the case's explicitly authored stat event.
+    let playerKey: String
     /// Full fictional name, e.g. "Marcus Reed".
     let fullName: String
     /// Display name, e.g. "M. Reed".

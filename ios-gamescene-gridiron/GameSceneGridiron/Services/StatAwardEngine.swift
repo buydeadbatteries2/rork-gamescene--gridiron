@@ -22,28 +22,28 @@ nonisolated struct StatLeader: Identifiable, Hashable, Sendable {
 nonisolated enum StatAwardEngine {
 
     /// Stat events for one solved quarter. Every correctly placed franchise
-    /// player earns a position-appropriate base stat plus one variant-shaped
-    /// accomplishment: the SAME player can earn different stats depending on
-    /// the profile the case demanded.
-    static func events(from placements: [PlacedPlayer], identities: [String: RosterIdentity]) -> [PlayerStatEvent] {
+    /// player earns exactly the stat the case file says occurred in that
+    /// scenario (`caseStats`, keyed by the case's player key). The profile a
+    /// case demanded describes WHY the player fit — it never decides WHAT
+    /// statistically happened, so the same player answering Fast in one case
+    /// and Power in another can earn different or identical events purely per
+    /// case scenario. Placements whose case has no authored event fall back to
+    /// a position-neutral base stat.
+    static func events(
+        from placements: [PlacedPlayer],
+        identities: [String: RosterIdentity],
+        caseStats: [String: PlayerStat] = [:]
+    ) -> [PlayerStatEvent] {
         var events: [PlayerStatEvent] = []
         for placement in placements {
             guard let identity = identities[placement.player.id] else { continue }
-            let base = PlayerStatEvent(
+            let stat = caseStats[identity.playerKey] ?? baseStat(position: identity.position)
+            events.append(PlayerStatEvent(
                 franchisePlayerID: identity.franchisePlayerID,
                 playerName: identity.shortName,
                 position: identity.position,
-                stat: baseStat(position: identity.position)
-            )
-            events.append(base)
-            if let bonus = variantStat(position: identity.position, variant: placement.variant) {
-                events.append(PlayerStatEvent(
-                    franchisePlayerID: identity.franchisePlayerID,
-                    playerName: identity.shortName,
-                    position: identity.position,
-                    stat: bonus
-                ))
-            }
+                stat: stat
+            ))
         }
         return events
     }
@@ -58,54 +58,6 @@ nonisolated enum StatAwardEngine {
         case .dl: .tackles
         case .lb: .tackles
         case .cb, .fs, .ss: .tackles
-        }
-    }
-
-    /// Profile-shaped bonus stat: the football situation decides the stat, not
-    /// the player — so no roster member is locked into one kind of production.
-    private static func variantStat(position: FootballPosition, variant: PlayerVariant) -> PlayerStat? {
-        switch position {
-        case .qb:
-            switch variant {
-            case .fast: .scrambleOpportunities
-            case .power, .veteran: .drivesSecured
-            }
-        case .rb:
-            switch variant {
-            case .fast: .successfulRuns
-            case .power: .brokenTackles
-            case .veteran: .keyBlocks
-            }
-        case .wr, .te:
-            switch variant {
-            case .fast: .bigPlays
-            case .power: .receptions
-            case .veteran: .successfulAssignments
-            }
-        case .ol:
-            switch variant {
-            case .fast: .protectionWins
-            case .power: .blocks
-            case .veteran: .protectionWins
-            }
-        case .dl:
-            switch variant {
-            case .fast: .sacks
-            case .power: .stops
-            case .veteran: .pressures
-            }
-        case .lb:
-            switch variant {
-            case .fast: .sacks
-            case .power: .stops
-            case .veteran: .coverageWins
-            }
-        case .cb, .fs, .ss:
-            switch variant {
-            case .fast: .passBreakups
-            case .power: .coverageWins
-            case .veteran: .interceptions
-            }
         }
     }
 

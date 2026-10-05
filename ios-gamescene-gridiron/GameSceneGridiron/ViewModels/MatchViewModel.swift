@@ -22,6 +22,9 @@ final class MatchViewModel {
     /// id → the user's actual franchise player. Variety of cases is untouched;
     /// only names and body assets adopt the persistent roster.
     private let identityMaps: [[String: RosterIdentity]]
+    /// The case files' explicitly authored stat events per quarter (index 4 =
+    /// overtime): case player key → the stat that scenario produced.
+    private let statEventMaps: [[String: PlayerStat]]
 
     /// Draws the game's case files from the local puzzle library via the
     /// deterministic scheduler: no case repeats within a game, and across a
@@ -32,28 +35,34 @@ final class MatchViewModel {
     init(isPlayoff: Bool = false, seasonNumber: Int = 0, week: Int = 1) {
         let ids = CaseScheduler.gameCaseIDs(seasonNumber: seasonNumber, week: week)
         var maps: [[String: RosterIdentity]] = []
+        var statMaps: [[String: PlayerStat]] = []
         if isPlayoff {
             regulationPuzzles = (0..<4).map {
                 let (puzzle, map) = Self.resolveWithRoster(ids.regulation[$0], quarterIndex: $0)
                 maps.append(map)
+                statMaps.append(CaseLibrary.statEvents(forCaseID: ids.regulation[$0]))
                 return Self.intensified(puzzle)
             }
             let (overtime, overtimeMap) = Self.resolveWithRoster(ids.overtime, quarterIndex: 4)
             maps.append(overtimeMap)
+            statMaps.append(CaseLibrary.statEvents(forCaseID: ids.overtime))
             overtimePuzzle = Self.intensified(overtime)
         } else {
             var regulation: [QuarterPuzzle] = []
             for index in 0..<4 {
                 let (puzzle, map) = Self.resolveWithRoster(ids.regulation[index], quarterIndex: index)
                 maps.append(map)
+                statMaps.append(CaseLibrary.statEvents(forCaseID: ids.regulation[index]))
                 regulation.append(puzzle)
             }
             regulationPuzzles = regulation
             let (overtime, overtimeMap) = Self.resolveWithRoster(ids.overtime, quarterIndex: 4)
             maps.append(overtimeMap)
+            statMaps.append(CaseLibrary.statEvents(forCaseID: ids.overtime))
             overtimePuzzle = overtime
         }
         identityMaps = maps
+        statEventMaps = statMaps
     }
 
     /// Resolves a scheduled case id and dresses its missing players in the
@@ -138,8 +147,9 @@ final class MatchViewModel {
         guard viewModel.result != .inProgress else { return }
         let outcome: QuarterOutcome = viewModel.result == .won ? .solved : .failed
         let map = identityMaps[min(viewModel.puzzleIndex, identityMaps.count - 1)]
+        let caseStats = statEventMaps[min(viewModel.puzzleIndex, statEventMaps.count - 1)]
         let events = outcome == .solved
-            ? StatAwardEngine.events(from: viewModel.placements, identities: map)
+            ? StatAwardEngine.events(from: viewModel.placements, identities: map, caseStats: caseStats)
             : []
         match.recordQuarter(
             index: viewModel.puzzleIndex,
