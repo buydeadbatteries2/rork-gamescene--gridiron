@@ -55,19 +55,45 @@ struct GameFieldView: View {
                 }
 
                 if isInteractive {
-                    ForEach(viewModel.openSlots) { slot in
+                    // Only zones the dragged player could actually line up in —
+                    // irrelevant landmarks for other positions stay hidden so
+                    // the board never crowds with overlapping mystery targets.
+                    let zoneDiameter = max(token * 1.2, 24)
+                    let dragSlots = viewModel.candidateSlots
+                    // Display-only de-overlap: markers may shift a few points
+                    // so no two zones (or "?") ever stack. Snapping and solved
+                    // placements always use the true field coordinates.
+                    let markerPoints = PlacementZoneLayout.displayPositions(
+                        slots: dragSlots,
+                        fieldSize: size,
+                        visibleDiameter: zoneDiameter
+                    )
+                    ForEach(dragSlots) { slot in
+                        let isHovered = viewModel.hoveredSlotID == slot.id
                         let isRejected = viewModel.rejectedSlotID == slot.id
                         if viewModel.isDragging || isRejected {
                             PlacementZoneView(
-                                isHovered: viewModel.hoveredSlotID == slot.id,
+                                isHovered: isHovered,
                                 isRejected: isRejected,
-                                size: token * 1.7
+                                isDimmed: viewModel.hoveredSlotID != nil && !isHovered,
+                                size: zoneDiameter
                             )
                             .modifier(ShakeEffect(animatableData: isRejected ? CGFloat(viewModel.rejectionCount) : 0))
                             .animation(.linear(duration: 0.45), value: viewModel.rejectionCount)
-                            .position(x: size.width * slot.x, y: size.height * slot.y)
+                            .position(markerPoints[slot.id] ?? CGPoint(x: size.width * slot.x, y: size.height * slot.y))
                             .transition(.opacity.combined(with: .scale(scale: 0.6)))
                         }
+                    }
+
+                    // Snap preview ring at the TRUE target point — the display
+                    // marker may be nudged for readability, but the player
+                    // magnetizes toward and snaps onto this exact spot.
+                    if viewModel.isDragging, let hovered = viewModel.hoveredSlotID,
+                       let slot = viewModel.puzzle.slot(id: hovered) {
+                        SnapPreviewRing(tint: Theme.success)
+                            .frame(width: zoneDiameter * 1.15, height: zoneDiameter * 1.15)
+                            .position(x: size.width * slot.x, y: size.height * slot.y)
+                            .transition(.opacity.combined(with: .scale(scale: 0.7)))
                     }
                 }
             }

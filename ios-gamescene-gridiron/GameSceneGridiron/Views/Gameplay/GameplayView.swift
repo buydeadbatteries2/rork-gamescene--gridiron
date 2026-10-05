@@ -71,7 +71,7 @@ struct GameplayView: View {
                     isOverSlot: viewModel.hoveredSlotID != nil,
                     tint: userTeam?.primaryColor
                 )
-                .position(x: viewModel.dragLocation.x, y: viewModel.dragLocation.y - GameViewModel.dragLift)
+                .position(draggedTokenPosition(for: viewModel))
                 .transition(.scale(scale: 0.5).combined(with: .opacity))
             }
         }
@@ -146,6 +146,25 @@ struct GameplayView: View {
         .onDisappear {
             AudioManager.shared.stopMusic(fadeOutDuration: 0.6)
         }
+    }
+
+    // MARK: Snap preview
+
+    /// Magnetic bias, display-only: while a valid target is hovered the drawn
+    /// token leans toward the target's true field point so the spot the player
+    /// is about to drop into is unmistakable. Release still resolves the real
+    /// drop location against the nearest candidate — nothing auto-completes.
+    private func draggedTokenPosition(for viewModel: GameViewModel) -> CGPoint {
+        let base = CGPoint(
+            x: viewModel.dragLocation.x,
+            y: viewModel.dragLocation.y - GameViewModel.dragLift
+        )
+        guard let target = viewModel.hoveredSlotPoint else { return base }
+        let pull: CGFloat = 0.35
+        return CGPoint(
+            x: base.x + (target.x - base.x) * pull,
+            y: base.y + (target.y - base.y) * pull
+        )
     }
 
     // MARK: Rewarded offers

@@ -36,7 +36,7 @@ nonisolated enum SampleQuarter {
         solutions: [
             "p-rb": PlacementSolution(slotID: "s-backfield", variant: .fast),
             "p-fs": PlacementSolution(slotID: "s-deep-middle", variant: .veteran),
-            "p-te": PlacementSolution(slotID: "s-right-edge", variant: .power),
+            "p-te": PlacementSolution(slotID: "s-right-te", variant: .power),
             "p-wr": PlacementSolution(slotID: "s-right-wide", variant: .veteran),
             "p-cb": PlacementSolution(slotID: "s-right-corner", variant: .power),
             "p-lb": PlacementSolution(slotID: "s-right-backer", variant: .fast)
@@ -88,7 +88,7 @@ nonisolated enum SampleQuarter {
     private static let slots: [PlacementSlot] = [
         PlacementSlot(id: "s-backfield", x: 0.50, y: 0.78),        // RB (correct)
         PlacementSlot(id: "s-left-backfield", x: 0.34, y: 0.70),   // decoy
-        PlacementSlot(id: "s-right-edge", x: 0.775, y: 0.565),     // TE (correct)
+        PlacementSlot(id: "s-right-te", x: 0.775, y: 0.565),       // TE (correct)
         PlacementSlot(id: "s-right-wide", x: 0.925, y: 0.535),     // WR (correct)
         PlacementSlot(id: "s-right-corner", x: 0.925, y: 0.435),   // CB (correct)
         PlacementSlot(id: "s-right-backer", x: 0.63, y: 0.365),    // LB (correct)

@@ -75,6 +75,23 @@ final class GameViewModel {
         return puzzle.slots.filter { !filled.contains($0.id) }
     }
 
+    /// Open slots that are valid candidates for the dragged player's position —
+    /// while dragging, mystery zones for other positions' landmarks stay hidden
+    /// so the field never crowds with spots the ball carrier can't occupy.
+    /// (When nothing is dragged this is every open slot, which keeps rejection
+    /// flashes working after a release.)
+    var candidateSlots: [PlacementSlot] {
+        candidateSlots(for: draggingPlayerID)
+    }
+
+    func candidateSlots(for playerID: String?) -> [PlacementSlot] {
+        guard let playerID, let player = puzzle.player(id: playerID) else { return openSlots }
+        let filled = Set(placements.map(\.slot.id))
+        return puzzle.slots.filter {
+            !filled.contains($0.id) && SlotRole.accepts(player.position, slotID: $0.id)
+        }
+    }
+
     var solvedPlayerIDs: Set<String> { Set(placements.map(\.player.id)) }
 
     var isDragging: Bool { draggingPlayerID != nil }
@@ -169,26 +186,41 @@ final class GameViewModel {
         guard isDragging else { return }
         dragLocation = location
         let tokenPoint = CGPoint(x: location.x, y: location.y - Self.dragLift)
-        let nearest = openSlots
-            .map { slot in (slot, distance(point(x: slot.x, y: slot.y), tokenPoint)) }
-            .filter { $0.1 <= Self.snapRadius }
-            .min { $0.1 < $1.1 }
-        let newHover = nearest?.0.id
+        let newHover = dropTarget(near: tokenPoint)?.id
         if newHover != hoveredSlotID {
             hoveredSlotID = newHover
             if newHover != nil { Haptics.soft() }
         }
     }
 
+    /// Nearest valid candidate within the snap radius. Zones never resolve a
+    /// release ambiguously: whatever the geometry, a drop resolves to this
+    /// single nearest target — or to nothing when no candidate is in range.
+    private func dropTarget(near tokenPoint: CGPoint) -> PlacementSlot? {
+        candidateSlots
+            .map { slot in (slot, distance(point(x: slot.x, y: slot.y), tokenPoint)) }
+            .filter { $0.1 <= Self.snapRadius }
+            .min { $0.1 < $1.1 }?.0
+    }
+
+    /// The hovered target's true field point in gameplay coordinates. The
+    /// displayed marker may be nudged a few points for readability, but the
+    /// snap preview, magnetism and the drop all resolve to this point.
+    var hoveredSlotPoint: CGPoint? {
+        hoveredSlotID.flatMap { puzzle.slot(id: $0) }.map { point(x: $0.x, y: $0.y) }
+    }
+
     func endDrag() {
         blockedDragPlayerID = nil
         guard let playerID = draggingPlayerID else { return }
-        let slotID = hoveredSlotID
+        // Re-resolve at release against the real drop point: the verdict is
+        // always the nearest candidate within the snap radius, independent of
+        // any hover bookkeeping.
+        let slot = dropTarget(near: CGPoint(x: dragLocation.x, y: dragLocation.y - Self.dragLift))
         draggingPlayerID = nil
         hoveredSlotID = nil
 
-        guard let slotID,
-              let slot = puzzle.slot(id: slotID),
+        guard let slot,
               let player = puzzle.player(id: playerID),
               let variant = selectedVariants[playerID] else {
             return
