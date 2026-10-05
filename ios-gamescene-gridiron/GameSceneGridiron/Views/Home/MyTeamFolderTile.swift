@@ -25,7 +25,7 @@ struct MyTeamFolderTile: View {
                     .foregroundStyle(Theme.paperInk)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                Text("\(team.state.uppercased()) — TAP TO REDESIGN")
+                Text("\(team.state.uppercased()) — TAP TO OPEN ROSTER")
                     .font(.system(size: 9, weight: .heavy).width(.condensed))
                     .tracking(1.2)
                     .foregroundStyle(Theme.bronzeDeep)
@@ -51,6 +51,6 @@ struct MyTeamFolderTile: View {
         .clipShape(FolderShape())
         .frame(height: 118)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Your team \(team.displayName), tap to redesign")
+        .accessibilityLabel("Your team \(team.displayName), tap to open the roster")
     }
 }

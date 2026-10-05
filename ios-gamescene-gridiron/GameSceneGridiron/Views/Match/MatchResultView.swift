@@ -51,6 +51,18 @@ struct MatchResultView: View {
                         .opacity(detailsIn ? 1 : 0)
                         .offset(y: detailsIn ? 0 : 22)
 
+                    if let playerOfTheGame = matchViewModel.playerOfTheGame {
+                        playerOfTheGameCard(playerOfTheGame)
+                            .opacity(detailsIn ? 1 : 0)
+                            .offset(y: detailsIn ? 0 : 22)
+                    }
+
+                    if !match.statEvents.isEmpty {
+                        leadersCard
+                            .opacity(detailsIn ? 1 : 0)
+                            .offset(y: detailsIn ? 0 : 22)
+                    }
+
                     buttons
                         .opacity(detailsIn ? 1 : 0)
                         .padding(.bottom, 30)
@@ -241,6 +253,138 @@ struct MatchResultView: View {
             StatRow(label: "Lives lost", value: match.totalLivesLost, tint: nil),
             StatRow(label: "Hints used", value: match.totalHintsUsed, tint: nil)
         ]
+    }
+
+    // MARK: Player of the Game
+
+    /// The game's top contributor from the solved cases — cinematic, gold,
+    /// wearing the franchise colors.
+    private func playerOfTheGameCard(_ leader: StatLeader) -> some View {
+        Color(hex: 0x14110D)
+            .frame(height: 190)
+            .overlay {
+                RadialGradient(
+                    colors: [Theme.gold.opacity(0.32), .clear],
+                    center: UnitPoint(x: 0.5, y: 0.3),
+                    startRadius: 2,
+                    endRadius: 220
+                )
+                .allowsHitTesting(false)
+            }
+            .overlay {
+                if let asset = leader.bodyAssetID {
+                    Image(asset)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .colorMultiply(userTeam?.primaryColor ?? .white)
+                        .allowsHitTesting(false)
+                }
+            }
+            .overlay {
+                LinearGradient(
+                    colors: [.clear, .clear, Color(hex: 0x14110D)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .allowsHitTesting(false)
+            }
+            .clipped()
+            .overlay(alignment: .top) {
+                Text("PLAYER OF THE GAME")
+                    .font(.system(size: 12, weight: .heavy).width(.condensed))
+                    .tracking(3)
+                    .foregroundStyle(Theme.ink)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 5)
+                    .background(Theme.goldGradient, in: .capsule)
+                    .padding(.top, 10)
+            }
+            .overlay(alignment: .bottom) {
+                VStack(spacing: 4) {
+                    Text(leader.name.uppercased())
+                        .font(.system(size: 26, weight: .black).width(.compressed))
+                        .tracking(1)
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Text("\(leader.position.rawValue) — \(leader.line.topSummary(limit: 3) ?? "")")
+                        .font(Theme.typewriter(11, relativeTo: .caption))
+                        .foregroundStyle(Theme.goldLight)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 10)
+            }
+            .clipShape(.rect(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Theme.goldGradient, lineWidth: 2)
+            }
+            .shadow(color: Theme.gold.opacity(0.3), radius: 14, y: 6)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Player of the game: \(leader.name), \(leader.position.rawValue), \(leader.line.topSummary() ?? "")")
+    }
+
+    // MARK: Game leaders
+
+    private var leadersCard: some View {
+        VStack(spacing: 4) {
+            Text("GAME LEADERS")
+                .font(.system(size: 11, weight: .heavy).width(.condensed))
+                .tracking(2)
+                .foregroundStyle(Theme.paperInkSoft)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            ForEach(Array(matchViewModel.gameLeaders.prefix(3).enumerated()), id: \.element.id) { _, leader in
+                HStack(spacing: 10) {
+                    Group {
+                        if let asset = leader.bodyAssetID {
+                            Image(asset)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .colorMultiply(userTeam?.primaryColor ?? .white)
+                        } else {
+                            Color.clear
+                        }
+                    }
+                    .frame(width: 34, height: 44)
+                    .clipped()
+                    .clipShape(.rect(cornerRadius: 4))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(leader.name)
+                            .font(.system(size: 15, weight: .heavy).width(.condensed))
+                            .foregroundStyle(Theme.paperInk)
+                            .lineLimit(1)
+                        Text(leader.position.rawValue)
+                            .font(.system(size: 10, weight: .heavy).width(.condensed))
+                            .tracking(1)
+                            .foregroundStyle(.white.opacity(0.95))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1.5)
+                            .background(Theme.positionAccent(leader.position).opacity(0.9), in: .rect(cornerRadius: 3))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text(leader.line.topSummary(limit: 3) ?? "—")
+                        .font(Theme.typewriter(10, relativeTo: .caption2))
+                        .foregroundStyle(Theme.bronzeDeep)
+                        .multilineTextAlignment(.trailing)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                }
+                .padding(.vertical, 7)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(Theme.paperInk.opacity(0.12)).frame(height: 1)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(leader.name), \(leader.position.rawValue), \(leader.line.topSummary() ?? "")")
+            }
+        }
+        .padding(16)
+        .paperCard(cornerRadius: 6)
+        .rotationEffect(.degrees(0.5))
     }
 
     // MARK: Actions

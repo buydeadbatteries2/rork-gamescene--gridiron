@@ -18,6 +18,10 @@ final class MatchViewModel {
     /// Puzzle registry for this game, indexed the same way as `GameMatch`.
     private let regulationPuzzles: [QuarterPuzzle]
     private let overtimePuzzle: QuarterPuzzle
+    /// Roster identity maps per quarter (index 4 = overtime): puzzle player
+    /// id → the user's actual franchise player. Variety of cases is untouched;
+    /// only names and body assets adopt the persistent roster.
+    private let identityMaps: [[String: RosterIdentity]]
 
     /// Draws the game's case files from the local puzzle library via the
     /// deterministic scheduler: no case repeats within a game, and across a
@@ -27,22 +31,39 @@ final class MatchViewModel {
     ///   - week: 1–10 in the regular season; 11+ resolves playoff rotations.
     init(isPlayoff: Bool = false, seasonNumber: Int = 0, week: Int = 1) {
         let ids = CaseScheduler.gameCaseIDs(seasonNumber: seasonNumber, week: week)
+        var maps: [[String: RosterIdentity]] = []
         if isPlayoff {
             regulationPuzzles = (0..<4).map {
-                Self.intensified(Self.resolve(ids.regulation[$0], quarterIndex: $0))
+                let (puzzle, map) = Self.resolveWithRoster(ids.regulation[$0], quarterIndex: $0)
+                maps.append(map)
+                return Self.intensified(puzzle)
             }
-            overtimePuzzle = Self.intensified(Self.resolve(ids.overtime, quarterIndex: 4))
+            let (overtime, overtimeMap) = Self.resolveWithRoster(ids.overtime, quarterIndex: 4)
+            maps.append(overtimeMap)
+            overtimePuzzle = Self.intensified(overtime)
         } else {
-            regulationPuzzles = (0..<4).map { Self.resolve(ids.regulation[$0], quarterIndex: $0) }
-            overtimePuzzle = Self.resolve(ids.overtime, quarterIndex: 4)
+            var regulation: [QuarterPuzzle] = []
+            for index in 0..<4 {
+                let (puzzle, map) = Self.resolveWithRoster(ids.regulation[index], quarterIndex: index)
+                maps.append(map)
+                regulation.append(puzzle)
+            }
+            regulationPuzzles = regulation
+            let (overtime, overtimeMap) = Self.resolveWithRoster(ids.overtime, quarterIndex: 4)
+            maps.append(overtimeMap)
+            overtimePuzzle = overtime
         }
+        identityMaps = maps
     }
 
-    /// Resolves a scheduled case id; falls back to the first library case if
+    /// Resolves a scheduled case id and dresses its missing players in the
+    /// franchise roster's identities; falls back to the first library case if
     /// the id cannot be found (never expected — covered by tests).
-    private static func resolve(_ id: String, quarterIndex: Int) -> QuarterPuzzle {
-        CaseLibrary.puzzle(id: id, quarterIndex: quarterIndex)
+    private static func resolveWithRoster(_ id: String, quarterIndex: Int) -> (QuarterPuzzle, [String: RosterIdentity]) {
+        let map = RosterManager.shared.identityAssignments(forCaseID: id)
+        let puzzle = CaseLibrary.puzzle(id: id, quarterIndex: quarterIndex)
             ?? CaseLibrary.puzzle(for: CaseLibrary.all[0], quarterIndex: quarterIndex)
+        return (puzzle.withRosterIdentities(map), map)
     }
 
     nonisolated static func intensified(_ puzzle: QuarterPuzzle) -> QuarterPuzzle {
@@ -78,6 +99,25 @@ final class MatchViewModel {
         match.isComplete ? "VIEW GAME RESULT" : "NEXT QUARTER"
     }
 
+    // MARK: Game leaders
+
+    /// Aggregated box line leaders for this game's solved cases, ranked by
+    /// weighted impact. Portraits are decorated from the roster.
+    var gameLeaders: [StatLeader] {
+        StatAwardEngine.leaderBoard(from: match.statEvents).map { leader in
+            var decorated = leader
+            decorated.bodyAssetID = RosterManager.shared.player(withID: leader.id)?.bodyAssetID
+            return decorated
+        }
+    }
+
+    /// The game's Player of the Game — same ranking the roster records use,
+    /// so the result screen and the player's resume always agree.
+    var playerOfTheGame: StatLeader? {
+        guard let id = StatAwardEngine.playerOfTheGameID(from: match.statEvents) else { return nil }
+        return gameLeaders.first { $0.id == id }
+    }
+
     // MARK: Flow
 
     func startGame() {
@@ -91,10 +131,16 @@ final class MatchViewModel {
     }
 
     /// Called when `GameViewModel` reaches a verdict. Reads the finished quarter's
-    /// stats from the puzzle view model and stores them at match level.
+    /// stats from the puzzle view model and stores them at match level. Stat
+    /// events are only produced for solved quarters — wrong answers never
+    /// touch player statistics.
     func finishQuarter(with viewModel: GameViewModel) {
         guard viewModel.result != .inProgress else { return }
         let outcome: QuarterOutcome = viewModel.result == .won ? .solved : .failed
+        let map = identityMaps[min(viewModel.puzzleIndex, identityMaps.count - 1)]
+        let events = outcome == .solved
+            ? StatAwardEngine.events(from: viewModel.placements, identities: map)
+            : []
         match.recordQuarter(
             index: viewModel.puzzleIndex,
             label: viewModel.puzzle.quarterLabel,
@@ -103,7 +149,9 @@ final class MatchViewModel {
             correctPlacements: viewModel.placements.count,
             wrongPlacements: viewModel.rejectionCount,
             livesLost: viewModel.puzzle.startingLives - viewModel.lives,
-            hintsUsed: viewModel.usedHints.count
+            hintsUsed: viewModel.usedHints.count,
+            statEvents: events,
+            appearedFranchiseIDs: Set(map.values.map(\.franchisePlayerID))
         )
         withAnimation(.easeInOut(duration: 0.3)) {
             phase = match.isComplete ? .gameResult : .quarterResult

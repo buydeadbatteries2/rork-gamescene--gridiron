@@ -7,7 +7,7 @@ nonisolated enum TeamSide: String, Hashable, Sendable {
 }
 
 /// Football positions used by puzzles. Visible players may use line positions too.
-nonisolated enum FootballPosition: String, Hashable, Sendable, CaseIterable {
+nonisolated enum FootballPosition: String, Codable, Hashable, Sendable, CaseIterable {
     case qb = "QB"
     case rb = "RB"
     case wr = "WR"

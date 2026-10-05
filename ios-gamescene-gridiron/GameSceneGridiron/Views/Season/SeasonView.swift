@@ -234,19 +234,37 @@ private struct SeasonHubView: View {
     }
 
     private func record(_ match: ActiveMatch, _ gameMatch: GameMatch) {
+        let stage: FranchiseGameStage
         switch match {
         case .week(let game):
             guard let opponent = OpponentTeams.team(with: game.opponentID) else { return }
             seasonManager.recordUserMatch(gameMatch, opponent: opponent)
+            stage = .regularSeason
         case .semifinal(let matchup):
             guard let opponent = OpponentTeams.team(with: opponentID(in: matchup)) else { return }
             seasonManager.recordUserPlayoffMatch(gameMatch, opponent: opponent)
+            stage = .semifinal
         case .championship(let matchup):
             guard let opponent = OpponentTeams.team(with: opponentID(in: matchup)) else { return }
             seasonManager.recordUserPlayoffMatch(gameMatch, opponent: opponent)
+            stage = .championship
             if seasonManager.season?.bracket?.championID == userTeam.id {
                 celebrationPending = true
             }
+        }
+
+        // Franchise ledger: solved-case stats, game logs, Player of the Game,
+        // records and dynasty history — one entry point, once per game.
+        if let opponent = opponentTeam(for: match) {
+            RosterManager.shared.recordGame(
+                stage: stage,
+                seasonNumber: seasonManager.season?.seasonNumber ?? 1,
+                week: match.caseWeek,
+                opponentName: opponent.displayName,
+                teamWon: gameMatch.result?.isWin ?? false,
+                events: gameMatch.statEvents,
+                appearedIDs: gameMatch.appearedFranchiseIDs
+            )
         }
     }
 

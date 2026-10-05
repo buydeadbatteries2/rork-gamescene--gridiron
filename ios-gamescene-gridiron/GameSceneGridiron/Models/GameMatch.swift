@@ -64,6 +64,11 @@ nonisolated struct GameMatch: Hashable, Sendable {
     private(set) var totalWrongPlacements = 0
     private(set) var totalLivesLost = 0
     private(set) var totalHintsUsed = 0
+    /// Positive stat awards accumulated from the solved quarters — the raw
+    /// material for the game leaders, Player of the Game and roster stats.
+    private(set) var statEvents: [PlayerStatEvent] = []
+    /// Franchise roster members who appeared in any quarter of this game.
+    private(set) var appearedFranchiseIDs: Set<UUID> = []
 
     /// Index of the quarter about to be played: 0...3 in regulation, 4 in overtime.
     var currentQuarterIndex: Int { quarterRecords.count }
@@ -121,7 +126,9 @@ nonisolated struct GameMatch: Hashable, Sendable {
         correctPlacements: Int,
         wrongPlacements: Int,
         livesLost: Int,
-        hintsUsed: Int
+        hintsUsed: Int,
+        statEvents: [PlayerStatEvent] = [],
+        appearedFranchiseIDs: Set<UUID> = []
     ) {
         let record = QuarterRecord(
             id: index,
@@ -142,6 +149,11 @@ nonisolated struct GameMatch: Hashable, Sendable {
         totalWrongPlacements += wrongPlacements
         totalLivesLost += livesLost
         totalHintsUsed += hintsUsed
+        // Stats only ever come from solved cases; appearing is neutral.
+        if outcome == .solved {
+            self.statEvents.append(contentsOf: statEvents)
+        }
+        self.appearedFranchiseIDs.formUnion(appearedFranchiseIDs)
     }
 
     /// Fresh state for a new game.

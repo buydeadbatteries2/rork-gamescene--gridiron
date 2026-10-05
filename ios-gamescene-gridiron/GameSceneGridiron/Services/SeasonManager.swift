@@ -200,8 +200,12 @@ final class SeasonManager {
     var hasActiveSeason: Bool { season != nil }
 
     /// Starts a new season (or advances to the next one). The user's franchise
-    /// identity is never touched — only competition data resets.
+    /// identity is never touched — only competition data resets. The finished
+    /// season's player stats roll into career totals via the roster manager.
     func startNewSeason(userTeam: GameTeam) {
+        if let finished = season {
+            RosterManager.shared.completeSeason(finishedSeasonNumber: finished.seasonNumber)
+        }
         let nextNumber = (season?.seasonNumber ?? 0) + 1
         season = Self.generateSeason(userTeamID: userTeam.id, seasonNumber: nextNumber)
         persist()

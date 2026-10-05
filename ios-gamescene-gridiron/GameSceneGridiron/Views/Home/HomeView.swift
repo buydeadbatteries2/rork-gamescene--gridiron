@@ -6,13 +6,14 @@ struct HomeView: View {
     @State private var seasonManager = SeasonManager.shared
     @State private var isPlaying: Bool = false
     @State private var isEditingTeam: Bool = false
+    @State private var isShowingTeamRoster: Bool = false
+    @State private var isShowingRecords: Bool = false
     @State private var lockedMessage: String?
     @State private var hasAppeared: Bool = false
     @State private var glow: Bool = false
 
     private let lockedModes: [(title: String, symbol: String)] = [
         ("DYNASTY", "trophy"),
-        ("RECORDS", "chart.bar"),
         ("SETTINGS", "gearshape")
     ]
 
@@ -59,9 +60,17 @@ struct HomeView: View {
                         if let team = teamStore.userTeam {
                             Button {
                                 Haptics.tick()
-                                isEditingTeam = true
+                                isShowingTeamRoster = true
                             } label: {
                                 MyTeamFolderTile(team: team)
+                            }
+                            .buttonStyle(PressableButtonStyle(scale: 0.97))
+
+                            Button {
+                                Haptics.tick()
+                                isShowingRecords = true
+                            } label: {
+                                UnlockedFolderTile(title: "RECORDS", symbol: "chart.bar")
                             }
                             .buttonStyle(PressableButtonStyle(scale: 0.97))
                         } else {
@@ -70,6 +79,14 @@ struct HomeView: View {
                                 withAnimation(.snappy) { lockedMessage = "Create your franchise first — tap START INVESTIGATION." }
                             } label: {
                                 LockedFolderTile(title: "TEAM", symbol: "person.3")
+                            }
+                            .buttonStyle(PressableButtonStyle(scale: 0.97))
+
+                            Button {
+                                Haptics.warning()
+                                withAnimation(.snappy) { lockedMessage = "Records begin with Season 1 — create your franchise first." }
+                            } label: {
+                                LockedFolderTile(title: "RECORDS", symbol: "chart.bar")
                             }
                             .buttonStyle(PressableButtonStyle(scale: 0.97))
                         }
@@ -115,6 +132,16 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $isPlaying) {
             SeasonView()
+        }
+        .fullScreenCover(isPresented: $isShowingTeamRoster) {
+            if let team = teamStore.userTeam {
+                TeamRosterView(userTeam: team)
+            }
+        }
+        .fullScreenCover(isPresented: $isShowingRecords) {
+            if let team = teamStore.userTeam {
+                RecordsView(userTeam: team)
+            }
         }
         .fullScreenCover(isPresented: $isEditingTeam) {
             if let team = teamStore.userTeam {

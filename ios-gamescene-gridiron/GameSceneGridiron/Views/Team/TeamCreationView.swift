@@ -324,6 +324,8 @@ struct TeamCreationView: View {
         guard let team = draftTeam else { return }
         Haptics.success()
         TeamStore.shared.save(team)
+        // Every franchise gets its permanent 12 players the moment it exists.
+        RosterManager.shared.ensureRoster(for: team)
         onConfirm(team)
     }
 }
