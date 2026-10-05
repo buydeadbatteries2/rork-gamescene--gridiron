@@ -1,10 +1,16 @@
 import SwiftUI
+import UIKit
 
 /// Temporary, unlabeled mystery location. Only visible while dragging (or while flashing a rejection).
+/// Shows a ghosted generic athlete silhouette so the zone reads as a missing
+/// player — the same silhouette for every zone, so no position information leaks.
 struct PlacementZoneView: View {
     let isHovered: Bool
     let isRejected: Bool
     var size: CGFloat = 38
+
+    private static let ghostAsset = "football_linebacker_game_piece"
+    private var hasGhostFigure: Bool { UIImage(named: Self.ghostAsset) != nil }
 
     @State private var pulse: Bool = false
 
@@ -21,13 +27,28 @@ struct PlacementZoneView: View {
                 .scaleEffect(pulse ? 1.15 : 0.95)
             Circle()
                 .strokeBorder(tint.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, dash: isHovered ? [] : [4, 3]))
-            Image(systemName: "person.fill")
-                .font(.system(size: size * 0.46))
-                .foregroundStyle(Color.white.opacity(0.18))
-            Text("?")
-                .font(.system(size: size * 0.42, weight: .heavy, design: .serif))
-                .foregroundStyle(tint)
-                .shadow(color: .black.opacity(0.7), radius: 1)
+            if hasGhostFigure {
+                Image(Self.ghostAsset)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: size * 0.92, height: size * 0.92)
+                    .grayscale(1)
+                    .opacity(0.3)
+                    .overlay {
+                        Text("?")
+                            .font(.system(size: size * 0.42, weight: .heavy, design: .serif))
+                            .foregroundStyle(tint)
+                            .shadow(color: .black.opacity(0.7), radius: 1)
+                    }
+            } else {
+                Image(systemName: "person.fill")
+                    .font(.system(size: size * 0.46))
+                    .foregroundStyle(Color.white.opacity(0.18))
+                Text("?")
+                    .font(.system(size: size * 0.42, weight: .heavy, design: .serif))
+                    .foregroundStyle(tint)
+                    .shadow(color: .black.opacity(0.7), radius: 1)
+            }
         }
         .frame(width: size, height: size)
         .scaleEffect(isHovered ? 1.22 : 1)

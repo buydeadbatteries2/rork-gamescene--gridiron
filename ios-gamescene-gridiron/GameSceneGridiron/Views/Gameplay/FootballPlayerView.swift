@@ -1,10 +1,29 @@
 import SwiftUI
 import UIKit
 
-/// Compact football-player piece: a team-colored vector token (plain blank
-/// helmet, opaque dark visor, no face, no numbers, no logos — compliant by
-/// construction) with a position-colored base badge. Offense reads dark,
-/// defense reads white at a glance.
+/// Maps a football position to its controlled realistic field-figure asset:
+/// premium mini-athlete renders with blank white uniforms (so the franchise kit
+/// recolors them via multiply), glossy black helmet and a fully opaque dark
+/// visor — no faces, numbers or logos by construction.
+nonisolated enum FieldFigureAssets {
+    static func asset(for position: FootballPosition) -> String {
+        switch position {
+        case .ol, .dl: "football_lineman_game_piece"
+        case .qb: "quarterback_game_piece"
+        case .rb: "football_running_back_3"
+        case .wr: "football_receiver_white"
+        case .te: "football_player_piece"
+        case .lb: "football_linebacker_game_piece"
+        case .cb, .fs, .ss: "football_defensive_back"
+        }
+    }
+
+    static func hasAsset(_ name: String) -> Bool { UIImage(named: name) != nil }
+}
+
+/// On-field player piece: a realistic miniature football athlete recolored to
+/// the team kit, with a position-shaped posture and a gold variant badge when
+/// a profile is confirmed. Offense/defense read apart through kit colors.
 struct FootballPlayerView: View {
     let position: FootballPosition
     var size: CGFloat = 24
@@ -14,6 +33,76 @@ struct FootballPlayerView: View {
     var kit: TeamKit?
 
     private var isOffense: Bool { position.side == .offense }
+    private var figureAsset: String { FieldFigureAssets.asset(for: position) }
+    private var usesRealisticFigure: Bool { FieldFigureAssets.hasAsset(figureAsset) }
+
+    /// Multiply tint over the blank white figure: the kit's jersey color. The
+    /// dark helmet and visor stay dark under multiplication.
+    private var uniformTint: Color {
+        kit?.jersey ?? (isOffense ? Color(hex: 0x33291C) : Color(hex: 0xF2F2F0))
+    }
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            figure
+            if let variant {
+                variantBadge(variant)
+            }
+        }
+        .frame(width: size * 1.3, height: size * 1.58)
+        .background { highlightGlow }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    // MARK: Figure
+
+    @ViewBuilder
+    private var figure: some View {
+        if usesRealisticFigure {
+            realisticFigure
+        } else {
+            vectorToken
+                .frame(width: size * 1.1, height: size * 1.42)
+        }
+    }
+
+    private var realisticFigure: some View {
+        Image(figureAsset)
+            .resizable()
+            .scaledToFit()
+            .colorMultiply(uniformTint)
+            .shadow(color: .black.opacity(0.4), radius: 1.6, y: 2)
+            .frame(width: size * 1.28, height: size * 1.5, alignment: .bottom)
+    }
+
+    private func variantBadge(_ variant: PlayerVariant) -> some View {
+        Image(systemName: variant.symbol)
+            .font(.system(size: size * 0.26, weight: .bold))
+            .foregroundStyle(Theme.ink)
+            .frame(width: size * 0.44, height: size * 0.44)
+            .background(Theme.goldGradient, in: .circle)
+            .overlay { Circle().strokeBorder(Color.white.opacity(0.55), lineWidth: 0.8) }
+            .offset(x: size * 0.08, y: -size * 0.04)
+            .shadow(color: .black.opacity(0.5), radius: 1.5, y: 1)
+    }
+
+    private var highlightGlow: some View {
+        Group {
+            if isHighlighted {
+                Circle()
+                    .fill(Theme.success.opacity(0.35))
+                    .frame(width: size * 1.9, height: size * 1.9)
+                    .blur(radius: 6)
+                Circle()
+                    .strokeBorder(Theme.gold, lineWidth: 1.5)
+                    .frame(width: size * 1.5, height: size * 1.5)
+            }
+        }
+    }
+
+    // MARK: Vector fallback (used only if the figure assets are unavailable)
+
     private var arch: HelmetArch { HelmetArch(position: position) }
     private var helmetDiameter: CGFloat { size * 0.64 * arch.helmetScale }
     private var facemaskColor: Color { isOffense ? Color(hex: 0xC9A25A) : Color(hex: 0x8B97A3) }
@@ -33,35 +122,6 @@ struct FootballPlayerView: View {
 
     private var labelColor: Color {
         kit?.number ?? (isOffense ? Theme.goldLight : Color(hex: 0x1E2A38))
-    }
-
-    var body: some View {
-        vectorToken
-            .frame(width: size * 1.1, height: size * 1.42)
-        .overlay(alignment: .topTrailing) {
-            if let variant {
-                Image(systemName: variant.symbol)
-                    .font(.system(size: size * 0.26, weight: .bold))
-                    .foregroundStyle(Theme.ink)
-                    .frame(width: size * 0.44, height: size * 0.44)
-                    .background(Theme.goldGradient, in: .circle)
-                    .offset(x: size * 0.06, y: isOffense ? -size * 0.38 : size * 0.06)
-            }
-        }
-        .background {
-            if isHighlighted {
-                Circle()
-                    .fill(Theme.success.opacity(0.35))
-                    .frame(width: size * 1.9, height: size * 1.9)
-                    .blur(radius: 6)
-                Circle()
-                    .strokeBorder(Theme.gold, lineWidth: 1.5)
-                    .frame(width: size * 1.5, height: size * 1.5)
-            }
-        }
-        .shadow(color: .black.opacity(0.45), radius: 2.5, y: 2)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
     }
 
     /// Team-colored vector marker: blank helmet, dark visor, plain jersey.

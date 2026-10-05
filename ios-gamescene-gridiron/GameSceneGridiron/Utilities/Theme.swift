@@ -44,6 +44,29 @@ nonisolated enum Theme {
     static let highlightPosition = Color(hex: 0xB7D6A5)   // green — who the clue is about
     static let highlightTrait = Color(hex: 0xEFD79A)      // gold — Fast / Power / Veteran flavor
 
+    // MARK: Playbook accents
+    // Numbered clue chips cycle through this palette (reference-style color coding).
+    static let clueChipColors: [Color] = [
+        Color(hex: 0xE0B23F),   // gold
+        Color(hex: 0x4E8FD9),   // blue
+        Color(hex: 0x63A86B),   // green
+        Color(hex: 0xC2412F),   // red
+        Color(hex: 0x9B76D8)    // purple
+    ]
+
+    static func clueChipColor(_ number: Int) -> Color {
+        clueChipColors[(number - 1) % clueChipColors.count]
+    }
+
+    /// Profile chip colors: speed = blue, strength = red, experience = gold.
+    static func variantColor(_ variant: PlayerVariant) -> Color {
+        switch variant {
+        case .fast: Color(hex: 0x4E8FD9)
+        case .power: Color(hex: 0xC2412F)
+        case .veteran: Color(hex: 0xD9B56E)
+        }
+    }
+
     static let goldGradient = LinearGradient(
         colors: [Color(hex: 0xF6E2A8), Color(hex: 0xD9B56E), Color(hex: 0x9C6B2C)],
         startPoint: .top,

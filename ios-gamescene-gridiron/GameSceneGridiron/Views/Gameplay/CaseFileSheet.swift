@@ -91,7 +91,7 @@ struct CaseFileSheet: View {
                     .foregroundStyle(Theme.paperInk)
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
-                Text("SIX CLUES. ONE TRUTH.")
+                Text("\(viewModel.puzzle.clues.count) CLUES. ONE TRUTH.")
                     .font(Theme.typewriter(13, relativeTo: .caption))
                     .tracking(1.5)
                     .foregroundStyle(Theme.paperInkSoft)
@@ -109,10 +109,7 @@ private struct ClueRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Text("\(clue.id).")
-                .font(Theme.typewriterBold(22, relativeTo: .title3))
-                .foregroundStyle(Theme.paperInk)
-                .frame(width: 30, alignment: .leading)
+            ClueNumberChip(number: clue.id, size: 30)
             VStack(alignment: .leading, spacing: 6) {
                 DifficultyPill(difficulty: clue.difficulty, compact: true)
                 Text(clue.text)

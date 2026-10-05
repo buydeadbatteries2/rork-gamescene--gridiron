@@ -8,6 +8,12 @@ struct EvidenceItemView: View {
     let kind: EvidenceItem.Kind
     var size: CGFloat = 26
 
+    /// Field-damage marks lie flat on the turf — they get no contact shadow.
+    private static let flatMarks: Set<EvidenceItem.Kind> = [
+        .skidMarks, .tornTurf, .grassStain, .cleatMarks, .divot,
+        .chalkMark, .wetPatch, .draggedFootTrail, .muddyFootprints
+    ]
+
     var body: some View {
         ZStack {
             Circle()
@@ -20,6 +26,15 @@ struct EvidenceItemView: View {
                     )
                 )
                 .frame(width: size * 1.5, height: size * 1.5)
+
+            if !Self.flatMarks.contains(kind) {
+                // Soft contact shadow so objects sit on the turf, not on it.
+                Ellipse()
+                    .fill(Color.black.opacity(0.4))
+                    .frame(width: size * 1.0, height: size * 0.26)
+                    .blur(radius: 2.2)
+                    .offset(y: size * 0.44)
+            }
 
             Group {
                 switch kind {
@@ -73,22 +88,38 @@ struct EvidenceItemView: View {
 
     private var towel: some View {
         ZStack {
+            // Base cloth with a soft cotton gradient.
             RoundedRectangle(cornerRadius: 3)
-                .fill(LinearGradient(colors: [Color(hex: 0xFF8A2A), Color(hex: 0xC4520E)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(LinearGradient(colors: [Color(hex: 0xFF9A42), Color(hex: 0xB84A0C)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .frame(width: size * 1.05, height: size * 0.72)
                 .rotationEffect(.degrees(8))
+            // Folded-over section.
             RoundedRectangle(cornerRadius: 3)
-                .fill(Color(hex: 0xE66A1A))
+                .fill(LinearGradient(colors: [Color(hex: 0xF27A24), Color(hex: 0xD05A14)], startPoint: .top, endPoint: .bottom))
                 .frame(width: size * 0.7, height: size * 0.5)
                 .rotationEffect(.degrees(-14))
                 .offset(x: size * 0.12, y: size * 0.08)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.black.opacity(0.12))
+                        .frame(width: size * 0.7, height: size * 0.12)
+                        .offset(y: -size * 0.17)
+                        .rotationEffect(.degrees(-14))
+                }
+            // Fold shadow creases.
             ForEach(0..<3, id: \.self) { i in
                 Capsule()
-                    .fill(Color.black.opacity(0.18))
-                    .frame(width: size * 0.6, height: 1.2)
-                    .offset(y: CGFloat(i - 1) * size * 0.14)
+                    .fill(Color.black.opacity(0.2))
+                    .frame(width: size * 0.55, height: 1.2)
+                    .offset(x: size * 0.05, y: CGFloat(i - 1) * size * 0.14)
                     .rotationEffect(.degrees(6))
             }
+            // Frayed corner.
+            Circle()
+                .trim(from: 0.6, to: 0.9)
+                .stroke(Color(hex: 0xE87A28), lineWidth: 1.2)
+                .frame(width: size * 0.16, height: size * 0.16)
+                .offset(x: -size * 0.42, y: -size * 0.24)
         }
         .shadow(color: .black.opacity(0.5), radius: 2, x: 1, y: 2)
     }
@@ -124,13 +155,35 @@ struct EvidenceItemView: View {
         .shadow(color: .black.opacity(0.55), radius: 2, x: 1, y: 2)
     }
 
+    /// Pressed cleat prints stamped into the turf: two staggered soles with
+    /// toe cleats, reading as a short trail of footprints.
     private var footprints: some View {
-        Image(systemName: "shoeprints.fill")
-            .resizable()
-            .scaledToFit()
-            .frame(width: size * 1.05)
-            .foregroundStyle(Color(hex: 0x5A3D22).opacity(0.9))
-            .shadow(color: Color(hex: 0x3A2612).opacity(0.6), radius: 1)
+        ZStack {
+            ForEach(0..<4, id: \.self) { i in
+                cleatPrint
+                    .offset(
+                        x: CGFloat(i % 2) * size * 0.42 - size * 0.21,
+                        y: CGFloat(i / 2) * size * 0.48 - size * 0.24
+                    )
+                    .rotationEffect(.degrees(i % 2 == 0 ? -14 : 12))
+            }
+        }
+        .shadow(color: Color(hex: 0x2E1F10).opacity(0.6), radius: 1)
+    }
+
+    private var cleatPrint: some View {
+        VStack(spacing: size * 0.025) {
+            Ellipse()
+                .fill(Color(hex: 0x4A341E).opacity(0.88))
+                .frame(width: size * 0.2, height: size * 0.26)
+            HStack(spacing: size * 0.035) {
+                ForEach(0..<3, id: \.self) { _ in
+                    Circle()
+                        .fill(Color(hex: 0x4A341E).opacity(0.8))
+                        .frame(width: size * 0.055, height: size * 0.055)
+                }
+            }
+        }
     }
 
     private var football: some View {
@@ -138,12 +191,25 @@ struct EvidenceItemView: View {
             Ellipse()
                 .fill(RadialGradient(colors: [Color(hex: 0xA0582A), Color(hex: 0x5A2C12)], center: UnitPoint(x: 0.4, y: 0.35), startRadius: 1, endRadius: size * 0.5))
                 .frame(width: size * 0.95, height: size * 0.56)
+            // End stripes.
+            ForEach([-0.28, 0.28], id: \.self) { x in
+                Capsule()
+                    .fill(Color.white.opacity(0.6))
+                    .frame(width: 1.6, height: size * 0.4)
+                    .offset(x: size * x)
+            }
             Capsule().fill(Color.white.opacity(0.9)).frame(width: size * 0.36, height: 1.5)
             HStack(spacing: size * 0.06) {
                 ForEach(0..<4, id: \.self) { _ in
                     Capsule().fill(Color.white.opacity(0.9)).frame(width: 1.3, height: size * 0.12)
                 }
             }
+            // Specular highlight.
+            Ellipse()
+                .fill(Color.white.opacity(0.18))
+                .frame(width: size * 0.3, height: size * 0.12)
+                .rotationEffect(.degrees(-18))
+                .offset(x: -size * 0.18, y: -size * 0.13)
         }
         .shadow(color: .black.opacity(0.55), radius: 2, x: 1, y: 2)
     }
@@ -529,7 +595,13 @@ struct EvidenceItemView: View {
     }
 
     private var pylon: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
+            // Side face gives the marker a sense of dimension.
+            RoundedRectangle(cornerRadius: 2)
+                .fill(LinearGradient(colors: [Color(hex: 0xB8480C), Color(hex: 0x8A3208)], startPoint: .top, endPoint: .bottom))
+                .frame(width: size * 0.16, height: size * 0.74)
+                .offset(x: size * 0.19, y: -size * 0.04)
+            // Front face.
             RoundedRectangle(cornerRadius: 2)
                 .fill(LinearGradient(colors: [Color(hex: 0xFF7A2A), Color(hex: 0xD2550E)], startPoint: .top, endPoint: .bottom))
                 .frame(width: size * 0.3, height: size * 0.8)
