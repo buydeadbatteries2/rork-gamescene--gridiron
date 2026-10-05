@@ -35,6 +35,7 @@ private struct SeasonHubView: View {
     @State private var showCelebration: Bool = false
     @State private var celebrationPending: Bool = false
     @State private var isEditingTeam: Bool = false
+    @State private var isShowingDifficultySelect: Bool = false
 
     private enum Destination {
         case calendar
@@ -86,7 +87,7 @@ private struct SeasonHubView: View {
                 SeasonCalendarView(
                     userTeam: userTeam,
                     onStartSeason: {
-                        seasonManager.startNewSeason(userTeam: userTeam)
+                        isShowingDifficultySelect = true
                     },
                     onClose: onClose,
                     onEditTeam: { isEditingTeam = true },
@@ -135,7 +136,7 @@ private struct SeasonHubView: View {
                     SeasonCalendarView(
                         userTeam: userTeam,
                         onStartSeason: {
-                            seasonManager.startNewSeason(userTeam: userTeam)
+                            isShowingDifficultySelect = true
                         },
                         onClose: onClose,
                         onEditTeam: { isEditingTeam = true },
@@ -195,6 +196,14 @@ private struct SeasonHubView: View {
                 isEditingTeam = false
             } onClose: {
                 isEditingTeam = false
+            }
+        }
+        .sheet(isPresented: $isShowingDifficultySelect) {
+            DifficultySelectView { level in
+                DifficultyManager.shared.select(level)
+                seasonManager.startNewSeason(userTeam: userTeam)
+                isShowingDifficultySelect = false
+                destination = .calendar
             }
         }
         .onChange(of: activeMatch) { oldValue, newValue in
@@ -274,8 +283,9 @@ private struct SeasonHubView: View {
         }
     }
 
+    /// Both season-start paths route through SELECT DIFFICULTY first; the
+    /// confirmed level is persisted and shapes the whole coming season.
     private func startNewSeason() {
-        seasonManager.startNewSeason(userTeam: userTeam)
-        destination = .calendar
+        isShowingDifficultySelect = true
     }
 }

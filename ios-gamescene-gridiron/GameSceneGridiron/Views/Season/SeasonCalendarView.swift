@@ -326,13 +326,16 @@ struct SeasonCalendarView: View {
                     .font(.system(size: 30, weight: .black).width(.compressed))
                     .monospacedDigit()
                     .foregroundStyle(Theme.paperInk)
-                Text(weekChipLabel)
-                    .font(.system(size: 10, weight: .heavy).width(.condensed))
-                    .tracking(1.4)
-                    .foregroundStyle(Theme.goldLight)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 3)
-                    .background(Color.black.opacity(0.6), in: .capsule)
+                HStack(spacing: 6) {
+                    DifficultyBadge(level: DifficultyManager.shared.selected)
+                    Text(weekChipLabel)
+                        .font(.system(size: 10, weight: .heavy).width(.condensed))
+                        .tracking(1.4)
+                        .foregroundStyle(Theme.goldLight)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3)
+                        .background(Color.black.opacity(0.6), in: .capsule)
+                }
             }
         }
         .padding(10)

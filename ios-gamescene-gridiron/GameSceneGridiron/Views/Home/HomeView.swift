@@ -10,13 +10,13 @@ struct HomeView: View {
     @State private var isShowingTeamRoster: Bool = false
     @State private var isShowingRecords: Bool = false
     @State private var isShowingShop: Bool = false
+    @State private var isShowingSettings: Bool = false
     @State private var lockedMessage: String?
     @State private var hasAppeared: Bool = false
     @State private var glow: Bool = false
 
     private let lockedModes: [(title: String, symbol: String)] = [
-        ("DYNASTY", "trophy"),
-        ("SETTINGS", "gearshape")
+        ("DYNASTY", "trophy")
     ]
 
     var body: some View {
@@ -105,6 +105,14 @@ struct HomeView: View {
                         }
                         .buttonStyle(PressableButtonStyle(scale: 0.97))
 
+                        Button {
+                            Haptics.tick()
+                            isShowingSettings = true
+                        } label: {
+                            UnlockedFolderTile(title: "SETTINGS", symbol: "gearshape")
+                        }
+                        .buttonStyle(PressableButtonStyle(scale: 0.97))
+
                         ForEach(lockedModes, id: \.title) { mode in
                             Button {
                                 Haptics.warning()
@@ -160,6 +168,9 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $isShowingShop) {
             ShopView()
+        }
+        .sheet(isPresented: $isShowingSettings) {
+            SettingsView()
         }
         .fullScreenCover(isPresented: $isEditingTeam) {
             if let team = teamStore.userTeam {

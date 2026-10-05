@@ -72,20 +72,24 @@ struct QuarterIntroView: View {
             divider
 
             HStack(spacing: 8) {
-                Image(systemName: "folder.badge.gearshape")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Theme.bronzeDeep)
-                Text("CASE FILE — \(puzzle.title.uppercased())")
-                    .font(Theme.typewriterBold(13, relativeTo: .footnote))
-                    .tracking(1)
-                    .foregroundStyle(Theme.paperInk)
+                HStack(spacing: 8) {
+                    Image(systemName: "folder.badge.gearshape")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.bronzeDeep)
+                    Text("CASE FILE — \(puzzle.title.uppercased())")
+                        .font(Theme.typewriterBold(13, relativeTo: .footnote))
+                        .tracking(1)
+                        .foregroundStyle(Theme.paperInk)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Theme.paperInk.opacity(0.06), in: .capsule)
+                .overlay { Capsule().strokeBorder(Theme.paperInk.opacity(0.25), lineWidth: 1) }
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+                DifficultyBadge(level: DifficultyManager.shared.selected)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(Theme.paperInk.opacity(0.06), in: .capsule)
-            .overlay { Capsule().strokeBorder(Theme.paperInk.opacity(0.25), lineWidth: 1) }
-            .minimumScaleFactor(0.8)
-            .lineLimit(1)
 
             if isOvertime {
                 Text("3 lives. Same rules. No second chances.")

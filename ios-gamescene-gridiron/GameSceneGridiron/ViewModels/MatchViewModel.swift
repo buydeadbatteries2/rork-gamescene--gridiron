@@ -38,37 +38,45 @@ final class MatchViewModel {
 
     /// Draws the game's case files from the local puzzle library via the
     /// deterministic scheduler: no case repeats within a game, and across a
-    /// 10-week regular season all 40 regulation cases are different.
+    /// 10-week regular season all 40 regulation cases are different. Each
+    /// case is then adapted to the effective difficulty (selected level ×
+    /// season stage) before conversion.
     /// - Parameters:
     ///   - seasonNumber: 0 for a standalone/quick game.
     ///   - week: 1–10 in the regular season; 11+ resolves playoff rotations.
-    init(isPlayoff: Bool = false, isChampionship: Bool = false, seasonNumber: Int = 0, week: Int = 1) {
+    ///   - difficulty: overrides the persisted selection (tests/previews).
+    init(isPlayoff: Bool = false, isChampionship: Bool = false, seasonNumber: Int = 0, week: Int = 1, difficulty: DifficultyLevel? = nil) {
         self.isPlayoff = isPlayoff
         self.isChampionship = isChampionship
+        // Changing the difficulty applies from the next unplayed game:
+        // schedules are already persisted and completed games are never
+        // regenerated, so only puzzles built after the change adapt.
+        let selected = difficulty ?? DifficultyManager.shared.selected
+        let target = DifficultyResolver.target(selected: selected, stage: .forWeek(week))
         let ids = CaseScheduler.gameCaseIDs(seasonNumber: seasonNumber, week: week)
         var maps: [[String: RosterIdentity]] = []
         var statMaps: [[String: PlayerStat]] = []
         if isPlayoff {
             regulationPuzzles = (0..<4).map {
-                let (puzzle, map) = Self.resolveWithRoster(ids.regulation[$0], quarterIndex: $0)
+                let (puzzle, map) = Self.resolveWithRoster(ids.regulation[$0], quarterIndex: $0, target: target)
                 maps.append(map)
                 statMaps.append(CaseLibrary.statEvents(forCaseID: ids.regulation[$0]))
                 return Self.intensified(puzzle)
             }
-            let (overtime, overtimeMap) = Self.resolveWithRoster(ids.overtime, quarterIndex: 4)
+            let (overtime, overtimeMap) = Self.resolveWithRoster(ids.overtime, quarterIndex: 4, target: target)
             maps.append(overtimeMap)
             statMaps.append(CaseLibrary.statEvents(forCaseID: ids.overtime))
             overtimePuzzle = Self.intensified(overtime)
         } else {
             var regulation: [QuarterPuzzle] = []
             for index in 0..<4 {
-                let (puzzle, map) = Self.resolveWithRoster(ids.regulation[index], quarterIndex: index)
+                let (puzzle, map) = Self.resolveWithRoster(ids.regulation[index], quarterIndex: index, target: target)
                 maps.append(map)
                 statMaps.append(CaseLibrary.statEvents(forCaseID: ids.regulation[index]))
                 regulation.append(puzzle)
             }
             regulationPuzzles = regulation
-            let (overtime, overtimeMap) = Self.resolveWithRoster(ids.overtime, quarterIndex: 4)
+            let (overtime, overtimeMap) = Self.resolveWithRoster(ids.overtime, quarterIndex: 4, target: target)
             maps.append(overtimeMap)
             statMaps.append(CaseLibrary.statEvents(forCaseID: ids.overtime))
             overtimePuzzle = overtime
@@ -77,12 +85,14 @@ final class MatchViewModel {
         statEventMaps = statMaps
     }
 
-    /// Resolves a scheduled case id and dresses its missing players in the
-    /// franchise roster's identities; falls back to the first library case if
-    /// the id cannot be found (never expected — covered by tests).
-    private static func resolveWithRoster(_ id: String, quarterIndex: Int) -> (QuarterPuzzle, [String: RosterIdentity]) {
+    /// Resolves a scheduled case id, adapts it to the difficulty target and
+    /// dresses its missing players in the franchise roster's identities;
+    /// falls back to the first library case if the id cannot be found (never
+    /// expected — covered by tests).
+    private static func resolveWithRoster(_ id: String, quarterIndex: Int, target: DifficultyTarget) -> (QuarterPuzzle, [String: RosterIdentity]) {
         let map = RosterManager.shared.identityAssignments(forCaseID: id)
-        let puzzle = CaseLibrary.puzzle(id: id, quarterIndex: quarterIndex)
+        let adapted = CaseLibrary.caseByID(id).map { CaseDifficultyAdapter.adapt($0, to: target) }
+        let puzzle = adapted.map { CaseLibrary.puzzle(for: $0, quarterIndex: quarterIndex) }
             ?? CaseLibrary.puzzle(for: CaseLibrary.all[0], quarterIndex: quarterIndex)
         return (puzzle.withRosterIdentities(map), map)
     }
