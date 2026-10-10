@@ -230,9 +230,12 @@ struct DifficultyTests {
         // easy-only clues) which rates genuinely EASY.
         let trainingProfile = CaseDifficultyProfile(of: TrainingCase.authored)
         #expect(trainingProfile.tag == .easy)
-        let counts = Dictionary(grouping: CaseLibrary.all, by: { $0.tag })
+        let profiles = CaseLibrary.all.map { CaseDifficultyProfile(of: $0) }
+        let counts = Dictionary(grouping: profiles, by: { $0.tag })
             .mapValues(\.count)
-        #expect((counts[.moderate] ?? 0) + (counts[.hard] ?? 0) == CaseLibrary.all.count)
+        let moderateCount = counts[CaseDifficultyTag.moderate] ?? 0
+        let hardCount = counts[CaseDifficultyTag.hard] ?? 0
+        #expect(moderateCount + hardCount == CaseLibrary.all.count)
     }
 
     // MARK: Persistence & isolation

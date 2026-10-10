@@ -6,6 +6,8 @@ struct GameHUDView: View {
     var matchViewModel: MatchViewModel?
     /// Tutorial: a soft pulsing halo teaches what the hint button does.
     var highlightHint: Bool = false
+    /// Tutorial-only header exit control (safe exit path from the TRAINING CASE).
+    var trainingExit: (() -> Void)? = nil
     let onPause: () -> Void
 
     var body: some View {
@@ -62,6 +64,14 @@ struct GameHUDView: View {
             }
             .buttonStyle(HUDButtonStyle())
             .accessibilityLabel("Pause")
+
+            if let trainingExit {
+                Button(action: trainingExit) {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(HUDButtonStyle())
+                .accessibilityLabel("Exit training")
+            }
             }
 
             if let matchViewModel {

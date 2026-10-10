@@ -14,6 +14,7 @@ struct TrainingFlowView: View {
     @State private var viewModel: GameViewModel
     @State private var session: TrainingSession
     @State private var hasAppeared: Bool = false
+    @State private var isExitConfirmed: Bool = false
 
     init(completeButtonTitle: String = "START MY SEASON", onComplete: @escaping () -> Void, onQuit: (() -> Void)? = nil) {
         self.completeButtonTitle = completeButtonTitle
@@ -38,10 +39,18 @@ struct TrainingFlowView: View {
                 viewModel: viewModel,
                 onQuit: { onQuit?() ?? onComplete() },
                 onQuarterComplete: { _ in },
-                training: session
+                training: session,
+                trainingExit: {
+                    Haptics.tick()
+                    isExitConfirmed = true
+                }
             )
+            // Once the case is solved the board freezes: no further tutorial
+            // interactions, highlights or prompts — only the completion card.
+            .allowsHitTesting(!session.isComplete)
+            .accessibilityHidden(session.isComplete)
 
-            if session.step == .complete {
+            if session.isComplete {
                 completionCard
                     .transition(.opacity)
                     .zIndex(10)
@@ -53,6 +62,27 @@ struct TrainingFlowView: View {
         }
         .onChange(of: viewModel.placements.count) { _, _ in
             session.placementsChanged()
+        }
+        .onChange(of: session.step) { _, step in
+            // Persisted the instant the final objective is solved — not on
+            // button tap, not on relaunch.
+            if step == .complete {
+                TutorialManager.shared.markTutorialCompleted()
+            }
+        }
+        // Safe exit from every mode: the confirm copy points at Settings
+        // replay, and EXIT hands off to the mode's own exit path.
+        .confirmationDialog(
+            "EXIT TRAINING?",
+            isPresented: $isExitConfirmed,
+            titleVisibility: .visible
+        ) {
+            Button("CONTINUE TRAINING", role: .cancel) {}
+            Button("EXIT", role: .destructive) {
+                onQuit?() ?? onComplete()
+            }
+        } message: {
+            Text("You can replay the tutorial later from Settings.")
         }
     }
 

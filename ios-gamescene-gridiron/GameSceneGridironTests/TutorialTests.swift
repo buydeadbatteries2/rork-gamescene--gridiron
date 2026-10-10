@@ -242,6 +242,92 @@ struct TutorialTests {
         #expect(!fresh.isFirstGameAssistActive)
     }
 
+    // MARK: Completion & exit flow
+
+    @Test("Training completion is reachable, explicit and quiets the coach")
+    func trainingCompletionStateIsExplicit() {
+        let gameViewModel = GameViewModel(puzzle: TrainingCase.puzzle(), wallet: PlayerWallet(defaults: freshIsolatedSuite()))
+        gameViewModel.isTraining = true
+        gameViewModel.fieldFrame = CGRect(x: 0, y: 0, width: 360, height: 480)
+        let session = TrainingSession(viewModel: gameViewModel)
+
+        #expect(!session.isComplete, "the session starts unfinished")
+
+        // The full interactive path: three real drag placements drive the step
+        // machine to hints, GOT IT lands on complete — there is no stuck state
+        // where the final objective is solved but completion never arrives.
+        for (playerID, solution) in gameViewModel.puzzle.solutions {
+            guard let slot = gameViewModel.puzzle.slot(id: solution.slotID) else {
+                Issue.record("Missing slot \(solution.slotID) in the training case")
+                continue
+            }
+            gameViewModel.selectVariant(solution.variant, for: playerID)
+            let point = gameViewModel.point(x: slot.x, y: slot.y)
+            let dropLocation = CGPoint(x: point.x, y: point.y + GameViewModel.dragLift)
+            #expect(gameViewModel.beginDrag(playerID: playerID, at: dropLocation))
+            gameViewModel.updateDrag(to: dropLocation)
+            gameViewModel.endDrag()
+            session.placementsChanged()
+        }
+        #expect(session.step == .hints)
+        session.confirmHints()
+
+        #expect(session.isComplete)
+        #expect(session.coach == nil, "no instructional prompt survives completion")
+        #expect(session.highlightedPlayerID == nil)
+        #expect(!session.isCaseFileHighlighted)
+        #expect(!session.isHintHighlighted)
+        #expect(session.guidedSlotID == nil)
+        #expect(session.highlightedEvidenceID == nil)
+    }
+
+    @Test("Completion persists at the moment of solving; reset re-arms it")
+    func tutorialCompletionPersists() {
+        #expect(!tutorial.hasCompletedTutorial)
+
+        tutorial.markTutorialCompleted()
+        #expect(tutorial.hasCompletedTutorial)
+        // Idempotent — a replay just re-confirms.
+        tutorial.markTutorialCompleted()
+
+        // Persisted immediately, not only after relaunch.
+        let reloaded = TutorialManager(defaults: defaults)
+        #expect(reloaded.hasCompletedTutorial)
+        #expect(reloaded.hasCompletedOnboarding == tutorial.hasCompletedOnboarding)
+
+        reloaded.resetTutorialData()
+        #expect(!TutorialManager(defaults: defaults).hasCompletedTutorial)
+    }
+
+    @Test("First-time completion offers START MY SEASON; replay offers DONE")
+    func completionButtonTitles() {
+        #expect(TrainingFlowView(onComplete: {}).completeButtonTitle == "START MY SEASON")
+        #expect(TrainingFlowView(completeButtonTitle: "DONE", onComplete: {}).completeButtonTitle == "DONE")
+    }
+
+    @Test("Replay completion never alters season progress")
+    func replayCompletionLeavesSeasonUntouched() {
+        let seasonDefaults = freshIsolatedSuite()
+        let seasonManager = SeasonManager(defaults: seasonDefaults)
+        let userTeam = GameTeam(
+            state: "Nevada", teamName: "Case Stags", logoID: "wolf",
+            primaryColorHex: 0x1E2A4A, secondaryColorHex: 0xC9CDD1, isUserTeam: true
+        )
+        seasonManager.startNewSeason(userTeam: userTeam)
+        let schedule = seasonManager.season?.scheduledCaseIDs
+        let gamesBefore = seasonManager.season?.games.count
+
+        // Completing (or replaying) the tutorial persists completion and never
+        // records a game, a reward or a schedule change.
+        tutorial.completeOnboarding()
+        tutorial.markTutorialCompleted()
+
+        #expect(seasonManager.season?.scheduledCaseIDs == schedule)
+        #expect(seasonManager.season?.games.count == gamesBefore)
+        #expect(seasonManager.userRecordLine == "0–0")
+        #expect(tutorial.hasCompletedOnboarding, "a returning user is never forced back into the tutorial")
+    }
+
     // MARK: Contextual tooltips
 
     @Test("Each contextual tooltip shows exactly once until data is reset")

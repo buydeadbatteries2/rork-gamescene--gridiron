@@ -14,6 +14,7 @@ final class TutorialManager {
 
     private enum DefaultsKey {
         static let onboardingComplete = "tutorial.onboardingComplete"
+        static let tutorialCompleted = "tutorial.completed"
         static let completedTooltips = "tutorial.completedTooltips"
         static let firstGameAssistDone = "tutorial.firstGameAssistDone"
         static let hapticsEnabled = "accessibility.hapticsEnabled"
@@ -27,6 +28,11 @@ final class TutorialManager {
     /// False on a fresh install — gates the guided onboarding flow at the root.
     /// True forever after (unless the user replays, which does not re-gate).
     private(set) var hasCompletedOnboarding: Bool
+
+    /// True the moment the final Training Case objective is solved — persisted
+    /// immediately at completion, never only after relaunch. Replay completion
+    /// is idempotent.
+    private(set) var hasCompletedTutorial: Bool
 
     /// One-time contextual tooltip ids already shown (Game Balls, Team screen,
     /// Player Stats, postseason). They stay dismissed until tutorial data resets.
@@ -70,6 +76,7 @@ final class TutorialManager {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         hasCompletedOnboarding = defaults.bool(forKey: DefaultsKey.onboardingComplete)
+        hasCompletedTutorial = defaults.bool(forKey: DefaultsKey.tutorialCompleted)
         completedTooltips = Set(defaults.stringArray(forKey: DefaultsKey.completedTooltips) ?? [])
         hasCompletedFirstGameAssist = defaults.bool(forKey: DefaultsKey.firstGameAssistDone)
         isHapticsEnabled = defaults.object(forKey: DefaultsKey.hapticsEnabled) as? Bool ?? true
@@ -86,7 +93,16 @@ final class TutorialManager {
     func completeOnboarding() {
         hasCompletedOnboarding = true
         defaults.set(true, forKey: DefaultsKey.onboardingComplete)
+        markTutorialCompleted()
         markFirstGameAssistDone()
+    }
+
+    /// Called the instant the Training Case is solved (not on button tap, not
+    /// on relaunch). Idempotent — replays just re-confirm it.
+    func markTutorialCompleted() {
+        guard !hasCompletedTutorial else { return }
+        hasCompletedTutorial = true
+        defaults.set(true, forKey: DefaultsKey.tutorialCompleted)
     }
 
     /// Marks the guided assists done when onboarding is skipped by finishing
@@ -128,9 +144,11 @@ final class TutorialManager {
     /// difficulty, economy and season data are untouched.
     func resetTutorialData() {
         hasCompletedOnboarding = false
+        hasCompletedTutorial = false
         completedTooltips = []
         hasCompletedFirstGameAssist = false
         defaults.removeObject(forKey: DefaultsKey.onboardingComplete)
+        defaults.removeObject(forKey: DefaultsKey.tutorialCompleted)
         defaults.removeObject(forKey: DefaultsKey.completedTooltips)
         defaults.removeObject(forKey: DefaultsKey.firstGameAssistDone)
     }

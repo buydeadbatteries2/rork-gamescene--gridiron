@@ -36,11 +36,11 @@ struct OnboardingFlowView: View {
                 .transition(.opacity)
 
             case .difficulty:
-                DifficultySelectView(confirmTitle: "CONTINUE TO TRAINING") { level in
+                DifficultySelectView(onConfirm: { level in
                     Haptics.pickUp()
                     DifficultyManager.shared.select(level)
                     withAnimation(.easeInOut(duration: 0.35)) { step = .training }
-                }
+                }, confirmTitle: "CONTINUE TO TRAINING")
                 .transition(.opacity)
 
             case .training:

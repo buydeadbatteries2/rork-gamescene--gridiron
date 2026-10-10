@@ -22,6 +22,11 @@ final class TrainingSession {
     }
 
     private(set) var step: Step = .inspectPlayer
+
+    /// Explicit completion state: true only once the final objective is solved.
+    /// The completion card reads this — never the presence of a coach overlay.
+    var isComplete: Bool { step == .complete }
+
     let viewModel: GameViewModel
 
     init(viewModel: GameViewModel) {
@@ -56,6 +61,9 @@ final class TrainingSession {
         case .inspectPlayer, .dragPlayer, .freePlay, .complete: break
         }
     }
+
+    /// Completing the case freezes the coaching: every highlight and prompt is
+    /// derived from the step, so `.complete` is already a quiet board.
 
     /// Called on every placement-count change from the view.
     func placementsChanged() {

@@ -16,6 +16,8 @@ struct GameplayView: View {
     /// TRAINING CASE coach (nil during real games): drives highlights, the
     /// coach banner row and ad suppression for the duration of the tutorial.
     var training: TrainingSession?
+    /// Tutorial-only header exit control — safe exit path from the TRAINING CASE.
+    var trainingExit: (() -> Void)? = nil
     /// First regular-season game only: subtle contextual training wheels
     /// (notebook pulse + control reminders). Never changes difficulty.
     var showFirstGameAssist: Bool = false
@@ -28,6 +30,7 @@ struct GameplayView: View {
         userTeam: GameTeam? = nil,
         opponent: GameTeam? = nil,
         training: TrainingSession? = nil,
+        trainingExit: (() -> Void)? = nil,
         showFirstGameAssist: Bool = false
     ) {
         self.viewModel = viewModel
@@ -37,6 +40,7 @@ struct GameplayView: View {
         self.userTeam = userTeam
         self.opponent = opponent
         self.training = training
+        self.trainingExit = trainingExit
         self.showFirstGameAssist = showFirstGameAssist
     }
 
@@ -47,7 +51,8 @@ struct GameplayView: View {
             GameHUDView(
                 viewModel: viewModel,
                 matchViewModel: matchViewModel,
-                highlightHint: training?.isHintHighlighted == true
+                highlightHint: training?.isHintHighlighted == true,
+                trainingExit: trainingExit
             ) {
                 Haptics.tick()
                 withAnimation(.easeOut(duration: 0.2)) { viewModel.isPaused = true }
