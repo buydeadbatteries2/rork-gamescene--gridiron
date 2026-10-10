@@ -51,11 +51,7 @@ final class PlayerWallet {
     }
 
     private static func load(from defaults: UserDefaults) -> PersistedState {
-        guard let data = defaults.data(forKey: PlayerWallet.storageKey),
-              let state = try? JSONDecoder().decode(PersistedState.self, from: data) else {
-            return PersistedState()
-        }
-        return state
+        SaveStore.load(PersistedState.self, key: PlayerWallet.storageKey, defaults: defaults) ?? PersistedState()
     }
 
     private func persist() {
@@ -67,9 +63,7 @@ final class PlayerWallet {
             doubledMatchIDs: doubledMatchIDs,
             lastChanceUsedKeys: lastChanceUsedKeys
         )
-        if let data = try? JSONEncoder().encode(state) {
-            defaults.set(data, forKey: Self.storageKey)
-        }
+        SaveStore.save(state, key: Self.storageKey, defaults: defaults)
     }
 
     private func record(_ transaction: RewardTransaction) {

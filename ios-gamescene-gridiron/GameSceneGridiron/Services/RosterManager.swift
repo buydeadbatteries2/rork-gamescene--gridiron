@@ -157,14 +157,11 @@ final class RosterManager {
             defaults.removeObject(forKey: Self.storageKey)
             return
         }
-        if let data = try? JSONEncoder().encode(franchise) {
-            defaults.set(data, forKey: Self.storageKey)
-        }
+        SaveStore.save(franchise, key: Self.storageKey, defaults: defaults)
     }
 
     private static func load(from defaults: UserDefaults) -> Franchise? {
-        guard let data = defaults.data(forKey: storageKey) else { return nil }
-        return try? JSONDecoder().decode(Franchise.self, from: data)
+        SaveStore.load(Franchise.self, key: storageKey, defaults: defaults)
     }
 
     // MARK: Deterministic roster generation

@@ -247,19 +247,20 @@ private struct SeasonHubView: View {
     }
 
     private func record(_ match: ActiveMatch, _ gameMatch: GameMatch) {
+        var wasRecorded = false
         let stage: FranchiseGameStage
         switch match {
         case .week(let game):
             guard let opponent = OpponentTeams.team(with: game.opponentID) else { return }
-            seasonManager.recordUserMatch(gameMatch, opponent: opponent)
+            wasRecorded = seasonManager.recordUserMatch(gameMatch, opponent: opponent)
             stage = .regularSeason
         case .semifinal(let matchup):
             guard let opponent = OpponentTeams.team(with: opponentID(in: matchup)) else { return }
-            seasonManager.recordUserPlayoffMatch(gameMatch, opponent: opponent)
+            wasRecorded = seasonManager.recordUserPlayoffMatch(gameMatch, opponent: opponent)
             stage = .semifinal
         case .championship(let matchup):
             guard let opponent = OpponentTeams.team(with: opponentID(in: matchup)) else { return }
-            seasonManager.recordUserPlayoffMatch(gameMatch, opponent: opponent)
+            wasRecorded = seasonManager.recordUserPlayoffMatch(gameMatch, opponent: opponent)
             stage = .championship
             if seasonManager.season?.bracket?.championID == userTeam.id {
                 celebrationPending = true
@@ -277,6 +278,16 @@ private struct SeasonHubView: View {
                 teamWon: gameMatch.result?.isWin ?? false,
                 events: gameMatch.statEvents,
                 appearedIDs: gameMatch.appearedFranchiseIDs
+            )
+        }
+
+        // Recognition events fire only for a game that was actually recorded
+        // (season + roster ledgers updated) — a safe break on the result screen.
+        if wasRecorded {
+            AchievementCoordinator.gameCompleted(
+                match: gameMatch,
+                stage: stage,
+                difficulty: DifficultyManager.shared.selected
             )
         }
     }

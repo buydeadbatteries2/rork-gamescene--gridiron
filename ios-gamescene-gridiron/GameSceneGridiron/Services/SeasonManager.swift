@@ -185,14 +185,11 @@ final class SeasonManager {
             defaults.removeObject(forKey: Self.storageKey)
             return
         }
-        if let data = try? JSONEncoder().encode(season) {
-            defaults.set(data, forKey: Self.storageKey)
-        }
+        SaveStore.save(season, key: Self.storageKey, defaults: defaults)
     }
 
     private static func load(from defaults: UserDefaults) -> Season? {
-        guard let data = defaults.data(forKey: storageKey) else { return nil }
-        return try? JSONDecoder().decode(Season.self, from: data)
+        SaveStore.load(Season.self, key: storageKey, defaults: defaults)
     }
 
     // MARK: Lifecycle
@@ -326,8 +323,19 @@ final class SeasonManager {
 
         season = updated
         persist()
+        emitSeasonEvents(for: updated)
         return true
     }
+
+    /// Phase 10 recognition events. Fires only for the real (standard-defaults)
+    /// instance so test suites recording dozens of fake games never pollute
+    /// the player's actual achievement/trophy records.
+    private func emitSeasonEvents(for updated: Season) {
+        guard isLiveInstance, updated.phase == .complete else { return }
+        AchievementCoordinator.seasonCompleted(season: updated, difficulty: DifficultyManager.shared.selected)
+    }
+
+    private var isLiveInstance: Bool { defaults === UserDefaults.standard }
 
     /// Simulates every CPU game scheduled for the given week (all opponents
     /// except the one that just faced the player).
@@ -470,6 +478,7 @@ final class SeasonManager {
         updated.bracket = bracket
         season = updated
         persist()
+        emitSeasonEvents(for: updated)
         return true
     }
 

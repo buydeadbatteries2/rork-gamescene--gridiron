@@ -12,6 +12,7 @@ struct PlayerDetailView: View {
 
     @State private var hasAppeared: Bool = false
     @State private var showStatsTooltip: Bool = false
+    @State private var rosterManager = RosterManager.shared
 
     var body: some View {
         ZStack {
@@ -38,6 +39,10 @@ struct PlayerDetailView: View {
                     )
                     .opacity(hasAppeared ? 1 : 0)
                     .offset(y: hasAppeared ? 0 : 14)
+
+                    careerHonorsCard
+                        .opacity(hasAppeared ? 1 : 0)
+                        .offset(y: hasAppeared ? 0 : 14)
 
                     gameLogCard
                         .opacity(hasAppeared ? 1 : 0)
@@ -217,6 +222,81 @@ struct PlayerDetailView: View {
                             .font(.system(size: 17, weight: .heavy).width(.condensed))
                             .monospacedDigit()
                             .foregroundStyle(Theme.goldLight)
+                    }
+                    .padding(.vertical, 6)
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(Theme.paperInk.opacity(0.12)).frame(height: 1)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .paperCard(cornerRadius: 6)
+        .rotationEffect(.degrees(-0.4))
+    }
+
+    // MARK: Career honors
+
+    /// CAREER HONORS — pure recognition, no ratings or progression boosts:
+    /// Player of the Game totals, titles won with the franchise, franchise
+    /// records this player currently holds and personal achievements.
+    private var honorRows: [String] {
+        var rows: [String] = []
+
+        let pog = player.careerStats.value(for: .playerOfTheGame) + player.seasonStats.value(for: .playerOfTheGame)
+        if pog > 0 { rows.append("\(pog)× PLAYER OF THE GAME") }
+
+        let titles = LegacyStore.shared.championshipsWon
+        if titles > 0, player.gameLogs.contains(where: { $0.teamWon && $0.isPlayoff }) {
+            rows.append("\(titles)× GRIDIRON CHAMPION")
+        }
+
+        if let franchise = rosterManager.franchise {
+            for stat in PlayerStat.recordCategories {
+                if let record = franchise.records.record(for: stat), record.holderName == player.displayName {
+                    rows.append("FRANCHISE RECORD · \(stat.recordLabel.uppercased()) (\(record.value))")
+                }
+            }
+        }
+
+        for achievement in AchievementCatalog.achievements(in: .player) {
+            if AchievementManager.shared.isUnlocked(achievement.id),
+               AchievementManager.shared.holderName(achievement.id) == player.displayName {
+                rows.append("\(achievement.name) · \(achievement.detail)")
+            }
+        }
+
+        return rows
+    }
+
+    @ViewBuilder
+    private var careerHonorsCard: some View {
+        let rows = honorRows
+        VStack(spacing: 4) {
+            Text("CAREER HONORS")
+                .font(.system(size: 11, weight: .heavy).width(.condensed))
+                .tracking(2)
+                .foregroundStyle(Theme.paperInkSoft)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if rows.isEmpty {
+                Text("HONORS APPEAR HERE — AWARDS, TITLES, RECORDS AND ACHIEVEMENTS.")
+                    .font(Theme.typewriter(12, relativeTo: .caption))
+                    .foregroundStyle(Theme.paperInkSoft)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+            } else {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: 8) {
+                        Image(systemName: "rosette")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Theme.gold)
+                        Text(row)
+                            .font(Theme.typewriter(12, relativeTo: .caption))
+                            .foregroundStyle(Theme.paperInk)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: 0)
                     }
                     .padding(.vertical, 6)
                     .overlay(alignment: .bottom) {

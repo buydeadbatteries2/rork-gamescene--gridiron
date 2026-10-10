@@ -12,6 +12,8 @@ final class AudioManager {
     static let shared = AudioManager()
 
     static let fileExtension = "mp3"
+    /// Ceiling on simultaneously playing one-shot effects — burst safety.
+    static let maxSimultaneousEffects = 8
 
     private enum DefaultsKey {
         static let musicEnabled = "audio.musicEnabled"
@@ -144,7 +146,12 @@ final class AudioManager {
         player.volume = effectVolume
         player.prepareToPlay()
         player.play()
+        // Reap finished players, then cap the pool: rapid taps (or a burst of
+        // overlapping stings) can never spawn runaway audio instances.
         activeEffectPlayers.removeAll { !$0.isPlaying }
+        if activeEffectPlayers.count >= Self.maxSimultaneousEffects {
+            activeEffectPlayers.removeFirst(activeEffectPlayers.count - Self.maxSimultaneousEffects + 1)
+        }
         activeEffectPlayers.append(player)
     }
 

@@ -10,6 +10,7 @@ struct RecordsView: View {
 
     @State private var rosterManager = RosterManager.shared
     @State private var hasAppeared: Bool = false
+    @State private var isShowingAchievements: Bool = false
 
     var body: some View {
         ZStack {
@@ -29,6 +30,10 @@ struct RecordsView: View {
                         .opacity(hasAppeared ? 1 : 0)
                         .offset(y: hasAppeared ? 0 : 16)
 
+                    achievementsButton
+                        .opacity(hasAppeared ? 1 : 0)
+                        .offset(y: hasAppeared ? 0 : 16)
+
                     Spacer(minLength: 10)
                 }
                 .padding(.horizontal, 20)
@@ -36,6 +41,9 @@ struct RecordsView: View {
                 .padding(.bottom, 30)
             }
             .scrollIndicators(.hidden)
+        }
+        .fullScreenCover(isPresented: $isShowingAchievements) {
+            AchievementsView()
         }
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.05)) { hasAppeared = true }
@@ -159,6 +167,33 @@ struct RecordsView: View {
                 seasonNumber: record.seasonNumber
             )
         }
+    }
+
+    // MARK: Achievements entry
+
+    private var achievementsButton: some View {
+        Button {
+            Haptics.tick()
+            AudioManager.shared.play(.buttonPress)
+            isShowingAchievements = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "rosette")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.gold)
+                Text("ACHIEVEMENTS")
+                    .font(.system(size: 15, weight: .heavy).width(.condensed))
+                    .tracking(1.5)
+                    .foregroundStyle(Theme.goldLight)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Theme.gold)
+            }
+            .padding(.horizontal, 16)
+        }
+        .buttonStyle(GoldCapsuleButtonStyle())
+        .accessibilityLabel("Open achievements, \(AchievementManager.shared.unlockedCount) of \(AchievementManager.shared.totalCount) unlocked")
     }
 
     // MARK: Dynasty history

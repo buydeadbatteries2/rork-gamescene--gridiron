@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// SETTINGS — everything the player can tune, grouped in four pinned cards:
+/// SETTINGS — everything the player can tune, grouped in pinned cards:
 /// GAMEPLAY (difficulty + tutorial replay), AUDIO (toggles + volumes),
-/// ACCESSIBILITY (haptics, reduce motion, larger clue text, high contrast)
-/// and PURCHASES (Ad-Free status + restore). Changing difficulty during an
-/// active season applies from the next unplayed game; completed games are
-/// never touched.
+/// ACCESSIBILITY (haptics, reduce motion, larger clue text, high contrast),
+/// PURCHASES (Ad-Free status + restore) and ABOUT (version + legal links).
+/// Changing difficulty during an active season applies from the next
+/// unplayed game; completed games are never touched.
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -30,6 +30,7 @@ struct SettingsView: View {
                     audioCard
                     accessibilityCard
                     purchasesCard
+                    aboutCard
                     effectNote
                 }
                 .padding(.horizontal, 18)
@@ -309,6 +310,61 @@ struct SettingsView: View {
             .buttonStyle(PressableButtonStyle(playsPressSound: true))
             .accessibilityHint("Restores the Ad-Free purchase from the App Store")
         }
+    }
+
+    // MARK: About
+
+    /// ABOUT — bundle version (read live, never hard-coded) plus configurable
+    /// hooks for the Privacy Policy, Terms of Use and Support. A link that
+    /// isn't configured yet renders a neutral unavailable state, never a dead
+    /// end and never an invented URL.
+    private var aboutCard: some View {
+        card(rotation: -0.3) {
+            sectionHeader("ABOUT", symbol: "info.circle")
+
+            Text(AppInfo.displayLine)
+                .font(.system(size: 14, weight: .heavy).width(.condensed))
+                .tracking(1)
+                .foregroundStyle(Theme.paperInk)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 6)
+                .accessibilityLabel("App version \(AppInfo.version), build \(AppInfo.build)")
+
+            aboutLinkRow("PRIVACY POLICY", symbol: "hand.raised.fill", url: AppLinks.privacyPolicyURL)
+            aboutLinkRow("TERMS OF USE", symbol: "doc.plaintext", url: AppLinks.termsOfUseURL)
+            aboutLinkRow("SUPPORT", symbol: "envelope", url: AppLinks.supportURL)
+        }
+    }
+
+    private func aboutLinkRow(_ title: String, symbol: String, url: URL?) -> some View {
+        Button {
+            Haptics.tick()
+            guard let url else { return }
+            AudioManager.shared.play(.buttonPress)
+            UIApplication.shared.open(url)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(url != nil ? Theme.gold : Theme.paperInkSoft.opacity(0.5))
+                    .frame(width: 24)
+                Text(title)
+                    .font(.system(size: 13, weight: .heavy).width(.condensed))
+                    .tracking(1.4)
+                    .foregroundStyle(url != nil ? Theme.paperInk : Theme.paperInkSoft.opacity(0.7))
+                Spacer()
+                Text(url != nil ? "OPEN" : "COMING SOON")
+                    .font(.system(size: 9, weight: .black).width(.condensed))
+                    .tracking(1.2)
+                    .foregroundStyle(Theme.paperInkSoft.opacity(0.7))
+            }
+            .padding(.vertical, 8)
+            .contentShape(.rect)
+        }
+        .buttonStyle(PressableButtonStyle())
+        .disabled(url == nil)
+        .accessibilityLabel(title)
+        .accessibilityHint(url != nil ? "Opens the page" : "Not yet available")
     }
 
     // MARK: Shared pieces

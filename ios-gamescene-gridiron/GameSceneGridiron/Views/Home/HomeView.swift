@@ -11,13 +11,10 @@ struct HomeView: View {
     @State private var isShowingRecords: Bool = false
     @State private var isShowingShop: Bool = false
     @State private var isShowingSettings: Bool = false
+    @State private var isShowingTrophyRoom: Bool = false
     @State private var lockedMessage: String?
     @State private var hasAppeared: Bool = false
     @State private var glow: Bool = false
-
-    private let lockedModes: [(title: String, symbol: String)] = [
-        ("DYNASTY", "trophy")
-    ]
 
     var body: some View {
         ZStack {
@@ -113,15 +110,13 @@ struct HomeView: View {
                         }
                         .buttonStyle(PressableButtonStyle(scale: 0.97))
 
-                        ForEach(lockedModes, id: \.title) { mode in
-                            Button {
-                                Haptics.warning()
-                                withAnimation(.snappy) { lockedMessage = "\(mode.title.capitalized) opens in a future season." }
-                            } label: {
-                                LockedFolderTile(title: mode.title, symbol: mode.symbol)
-                            }
-                            .buttonStyle(PressableButtonStyle(scale: 0.97))
+                        Button {
+                            Haptics.tick()
+                            isShowingTrophyRoom = true
+                        } label: {
+                            UnlockedFolderTile(title: "TROPHY ROOM", symbol: "trophy.fill")
                         }
+                        .buttonStyle(PressableButtonStyle(scale: 0.97))
                     }
                     .opacity(hasAppeared ? 1 : 0)
                     .offset(y: hasAppeared ? 0 : 20)
@@ -173,6 +168,9 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $isShowingShop) {
             ShopView()
+        }
+        .fullScreenCover(isPresented: $isShowingTrophyRoom) {
+            TrophyRoomView()
         }
         .sheet(isPresented: $isShowingSettings) {
             SettingsView()

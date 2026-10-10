@@ -30,6 +30,9 @@ final class MatchViewModel {
     private let isPlayoff: Bool
     /// True only for the championship final — adds the championship bonus.
     private let isChampionship: Bool
+    /// The difficulty actually active for this game — every achievement that
+    /// references difficulty reads this, never the live selection.
+    private let activeDifficulty: DifficultyLevel
     /// Stable identity for this game's reward transaction. A fresh game (replay)
     /// gets a new id, so its reward can be claimed exactly once.
     private(set) var matchID = UUID()
@@ -52,6 +55,7 @@ final class MatchViewModel {
         // schedules are already persisted and completed games are never
         // regenerated, so only puzzles built after the change adapt.
         let selected = difficulty ?? DifficultyManager.shared.selected
+        activeDifficulty = selected
         let target = DifficultyResolver.target(selected: selected, stage: .forWeek(week))
         let ids = CaseScheduler.gameCaseIDs(seasonNumber: seasonNumber, week: week)
         var maps: [[String: RosterIdentity]] = []
@@ -195,6 +199,16 @@ final class MatchViewModel {
         )
         if match.isComplete {
             grantMatchReward()
+        }
+        // Safe-break achievement event (quarter result): a solved quarter in a
+        // real game — training never reaches MatchViewModel.
+        if outcome == .solved {
+            AchievementCoordinator.quarterSolved(
+                livesLost: viewModel.puzzle.startingLives - viewModel.lives,
+                hintsUsed: viewModel.usedHints.count,
+                isOvertime: viewModel.puzzleIndex >= GameMatch.regulationQuarters,
+                difficulty: activeDifficulty
+            )
         }
         withAnimation(.easeInOut(duration: 0.3)) {
             phase = match.isComplete ? .gameResult : .quarterResult

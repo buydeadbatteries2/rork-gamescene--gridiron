@@ -11,6 +11,13 @@ struct ContentView: View {
             .fullScreenCover(isPresented: $showOnboarding) {
                 OnboardingFlowView()
             }
+            // ACHIEVEMENT UNLOCKED notifications float above everything.
+            // Unlocks only queue at safe breaks, so this never lands on a
+            // live drag/drop — and a tap dismisses instantly.
+            .overlay(alignment: .top) {
+                AchievementPopupView()
+                    .allowsHitTesting(true)
+            }
     }
 }
 

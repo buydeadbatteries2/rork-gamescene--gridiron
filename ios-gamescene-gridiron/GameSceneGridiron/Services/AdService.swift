@@ -94,20 +94,30 @@ final class AdManager {
     /// Presents a rewarded ad. Resolves `.granted` only through the reward
     /// callback; an early close resolves `.dismissed` and nothing may be
     /// granted by the caller.
+    ///
+    /// Production safety: the fake 1.2-second success exists in DEBUG builds
+    /// only. A release build without the live AdMob integration can never
+    /// grant a mock reward — it resolves `.dismissed`, which every call site
+    /// surfaces as "no video is available right now" with nothing spent and
+    /// nothing granted.
     func showRewarded(_ placement: RewardedAdPlacement) async -> RewardedAdResult {
         guard !isRewardedAdShowing else { return .dismissed }
         isRewardedAdShowing = true
         defer { isRewardedAdShowing = false }
 
-        // Ad SDK integration point: present the rewarded video and map its
-        // reward callback to `.granted`, an early close to `.dismissed`.
-        // Development placeholder simulates a short watched ad.
-        try? await Task.sleep(for: .seconds(1.2))
         #if DEBUG
+        // Development placeholder: simulates a short watched ad so the whole
+        // economy (hints, Last Chance, 2× rewards) is exercisable end to end.
+        try? await Task.sleep(for: .seconds(1.2))
         print("[AdManager] rewarded ad granted (\(placement.rawValue), development placeholder)")
-        #endif
-
         isNextInterstitialSuppressed = true
         return .granted
+        #else
+        // Ad SDK integration point (production): present the AdMob rewarded
+        // video here and map its reward callback to `.granted`, an early
+        // close to `.dismissed`. Until that integration ships, release builds
+        // always report unavailability — never a simulated reward.
+        return .dismissed
+        #endif
     }
 }

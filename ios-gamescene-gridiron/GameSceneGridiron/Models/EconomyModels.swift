@@ -26,6 +26,12 @@ nonisolated struct EconomyConfig: Sendable {
     let hintCost: Int
     /// Forced interstitial frequency: at most one every N completed games.
     let interstitialEveryNGames: Int
+    // MARK: Achievement rewards (Phase 10) — one-time Game Ball payouts.
+    let achievementRewardFirstCase: Int
+    let achievementRewardPerfectGame: Int
+    let achievementRewardFirstChampionship: Int
+    let achievementRewardUndefeated: Int
+    let achievementRewardHallWorthy: Int
 
     init(
         quarterSolvedReward: Int = 10,
@@ -36,7 +42,12 @@ nonisolated struct EconomyConfig: Sendable {
         startingGameBalls: Int = 0,
         startingHints: Int = 3,
         hintCost: Int = 50,
-        interstitialEveryNGames: Int = 2
+        interstitialEveryNGames: Int = 2,
+        achievementRewardFirstCase: Int = 25,
+        achievementRewardPerfectGame: Int = 50,
+        achievementRewardFirstChampionship: Int = 100,
+        achievementRewardUndefeated: Int = 150,
+        achievementRewardHallWorthy: Int = 250
     ) {
         self.quarterSolvedReward = quarterSolvedReward
         self.regulationWinReward = regulationWinReward
@@ -47,6 +58,11 @@ nonisolated struct EconomyConfig: Sendable {
         self.startingHints = startingHints
         self.hintCost = hintCost
         self.interstitialEveryNGames = interstitialEveryNGames
+        self.achievementRewardFirstCase = achievementRewardFirstCase
+        self.achievementRewardPerfectGame = achievementRewardPerfectGame
+        self.achievementRewardFirstChampionship = achievementRewardFirstChampionship
+        self.achievementRewardUndefeated = achievementRewardUndefeated
+        self.achievementRewardHallWorthy = achievementRewardHallWorthy
     }
 }
 
@@ -59,6 +75,7 @@ nonisolated enum RewardKind: String, Codable, Hashable, Sendable {
     case hintPurchase
     case rewardedHint
     case rewardedLife
+    case achievementReward
 }
 
 /// One immutable wallet movement, kept as a local history for debugging and

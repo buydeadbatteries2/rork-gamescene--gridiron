@@ -37,9 +37,7 @@ final class TeamStore {
             )
         }
         userTeam = stored
-        if let data = try? JSONEncoder().encode(stored) {
-            defaults.set(data, forKey: Self.storageKey)
-        }
+        SaveStore.save(stored, key: Self.storageKey, defaults: defaults)
     }
 
     func clear() {
@@ -48,7 +46,6 @@ final class TeamStore {
     }
 
     private static func load(from defaults: UserDefaults) -> GameTeam? {
-        guard let data = defaults.data(forKey: storageKey) else { return nil }
-        return try? JSONDecoder().decode(GameTeam.self, from: data)
+        SaveStore.load(GameTeam.self, key: storageKey, defaults: defaults)
     }
 }
