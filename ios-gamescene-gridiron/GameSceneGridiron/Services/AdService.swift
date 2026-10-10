@@ -19,6 +19,37 @@ enum RewardedAdPlacement: String, Sendable {
     case doubleReward
 }
 
+// MARK: - Banner policy
+
+/// What the gameplay banner slot displays. Pure and testable so the
+/// release-safety rules stay enforced in one place.
+nonisolated enum BannerAdPolicy {
+    enum BannerVisibility: Equatable, Sendable {
+        /// No banner at all — the slot collapses and the layout reclaims it.
+        case hidden
+        /// DEBUG only: the clearly labeled development placeholder for
+        /// layout testing while no real ad is loaded.
+        case developmentPlaceholder
+        /// A real ad banner has loaded and is displayed.
+        case loadedBanner
+    }
+
+    /// Release-safety contract:
+    /// - Ad-Free always suppresses the banner, loaded or not.
+    /// - A release build with no loaded ad shows NOTHING (never a fake or
+    ///   "sponsored" strip).
+    /// - A loaded real ad always gets the banner space.
+    static func visibility(
+        isAdFree: Bool,
+        isBannerLoaded: Bool,
+        isDevelopmentBuild: Bool
+    ) -> BannerVisibility {
+        if isAdFree { return .hidden }
+        if isBannerLoaded { return .loadedBanner }
+        return isDevelopmentBuild ? .developmentPlaceholder : .hidden
+    }
+}
+
 // MARK: - Ad manager
 
 /// Owns every ad surface: the gameplay banner, forced interstitials at natural
@@ -39,6 +70,10 @@ final class AdManager {
     /// forced interstitial is suppressed once.
     private(set) var isNextInterstitialSuppressed = false
     private(set) var isRewardedAdShowing = false
+    /// True only after a real banner load callback reports success. A release
+    /// build starts (and stays) unloaded until the AdMob integration fires —
+    /// meaning the banner slot stays collapsed, showing no fake strip.
+    private(set) var isBannerAdLoaded = false
 
     init(interstitialEveryNGames: Int = EconomyConfig.standard.interstitialEveryNGames) {
         self.interstitialEveryNGames = max(1, interstitialEveryNGames)
@@ -50,6 +85,54 @@ final class AdManager {
     /// from field, clues, tray and controls. Ad-Free owners get no banner at
     /// all and the layout expands naturally into the freed space.
     var showsBannerAds: Bool { !PurchaseManager.shared.hasAdFree }
+
+    /// Whether this compile configuration is a development build.
+    static var isDevelopmentBuild: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
+    /// What the banner slot currently displays (see `BannerAdPolicy`).
+    var bannerVisibility: BannerAdPolicy.BannerVisibility {
+        BannerAdPolicy.visibility(
+            isAdFree: PurchaseManager.shared.hasAdFree,
+            isBannerLoaded: isBannerAdLoaded,
+            isDevelopmentBuild: Self.isDevelopmentBuild
+        )
+    }
+
+    /// Begins loading a banner ad. Never called for Ad-Free owners — they are
+    /// never asked for a banner at all. The real AdMob load request goes at
+    /// the marked integration point; only its success callback may flip
+    /// `isBannerAdLoaded`.
+    func requestBannerAd() {
+        guard showsBannerAds, !isBannerAdLoaded else { return }
+
+        #if DEBUG
+        // Development placeholder: simulates a successful banner load so the
+        // loaded-banner layout state is exercisable. Release builds never run
+        // this — no simulated ad can ever occupy the slot.
+        print("[AdManager] banner ad loaded (development placeholder)")
+        isBannerAdLoaded = true
+        #else
+        // Ad SDK integration point (production): request the AdMob banner
+        // here and set `isBannerAdLoaded = true` ONLY from its success
+        // callback. Until that integration ships, release builds keep the
+        // slot collapsed — no fake banner, no reserved space.
+        #endif
+    }
+
+    /// Pauses/unloads the banner after the entitlement state changes (an
+    /// Ad-Free purchase or restore mid-session). The slot collapses and the
+    /// layout reclaims the space.
+    func handleBannerEntitlementChanged() {
+        if !showsBannerAds {
+            isBannerAdLoaded = false
+        }
+    }
 
     // MARK: Interstitials
 

@@ -172,3 +172,76 @@ struct ProductionReadinessTests {
         #endif
     }
 }
+
+/// Banner ad slot release-safety contract:
+/// - DEBUG builds may show the clearly labeled development placeholder while
+///   no real ad is loaded (layout testing).
+/// - RELEASE builds with no loaded ad show NOTHING — no fake, reserved or
+///   "sponsored" strip; the slot collapses and the layout reclaims it.
+/// - A successfully loaded real ad gets the banner space.
+/// - Ad-Free ownership always suppresses the banner, loaded or not.
+@MainActor
+struct BannerAdPolicyTests {
+
+    @Test func developmentBuildShowsLabeledPlaceholderWhileNoAdIsLoaded() {
+        let visibility = BannerAdPolicy.visibility(
+            isAdFree: false, isBannerLoaded: false, isDevelopmentBuild: true
+        )
+        #expect(visibility == .developmentPlaceholder)
+    }
+
+    @Test func releaseBuildWithoutLoadedAdShowsNoFakeBanner() {
+        let visibility = BannerAdPolicy.visibility(
+            isAdFree: false, isBannerLoaded: false, isDevelopmentBuild: false
+        )
+        #expect(visibility == .hidden)
+    }
+
+    @Test func loadedRealAdGetsTheBannerSpace() {
+        // A loaded real ad displays regardless of build configuration.
+        #expect(
+            BannerAdPolicy.visibility(isAdFree: false, isBannerLoaded: true, isDevelopmentBuild: false)
+                == .loadedBanner
+        )
+        #expect(
+            BannerAdPolicy.visibility(isAdFree: false, isBannerLoaded: true, isDevelopmentBuild: true)
+                == .loadedBanner
+        )
+    }
+
+    @Test func adFreeAlwaysSuppressesTheBanner() {
+        // Loaded/unloaded × dev/release — Ad-Free wins every time.
+        for isLoaded in [false, true] {
+            for isDev in [false, true] {
+                #expect(
+                    BannerAdPolicy.visibility(isAdFree: true, isBannerLoaded: isLoaded, isDevelopmentBuild: isDev)
+                        == .hidden
+                )
+            }
+        }
+    }
+
+    @Test func bannerLoadStateFollowsTheCompileConfigurationContract() {
+        let adManager = AdManager()
+        #expect(!adManager.isBannerAdLoaded)
+
+        #if DEBUG
+        // Development: the simulated load marks the slot as loaded (the real
+        // SDK will own this transition in production).
+        adManager.requestBannerAd()
+        #expect(adManager.isBannerAdLoaded)
+        #expect(adManager.bannerVisibility == .loadedBanner)
+        #else
+        // Release without the live SDK: requesting never loads anything —
+        // the slot stays hidden, no fake banner.
+        adManager.requestBannerAd()
+        #expect(!adManager.isBannerAdLoaded)
+        #expect(adManager.bannerVisibility == .hidden)
+        #endif
+    }
+
+    @Test func bannerSlotKeepsTheDocumentedFixedHeight() {
+        #expect(GameBannerAdView.height == 50)
+        #expect(AdBannerPlaceholder.height == 50)
+    }
+}
