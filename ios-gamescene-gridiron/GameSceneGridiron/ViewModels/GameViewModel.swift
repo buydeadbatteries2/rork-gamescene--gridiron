@@ -263,6 +263,7 @@ final class GameViewModel {
             lives = isTraining ? lives : max(0, lives - 1)
             rejectedSlotID = slot.id
             rejectionCount += 1
+            BalanceTelemetry.shared.recordWrongPlacement(caseID: puzzle.id)
             Haptics.error()
             AudioManager.shared.play(.placementWrong)
             if isTraining {
@@ -312,6 +313,10 @@ final class GameViewModel {
             } else {
                 Haptics.warning()
                 AudioManager.shared.play(.quarterLost)
+                BalanceTelemetry.shared.recordQuarterFailure(
+                    caseID: self.puzzle.id,
+                    difficulty: DifficultyManager.shared.selected.title
+                )
             }
         }
     }
@@ -349,6 +354,7 @@ final class GameViewModel {
 
     private func revealNextHint() {
         guard let hint = nextHint, result == .inProgress else { return }
+        BalanceTelemetry.shared.recordHintUsed(caseID: puzzle.id)
         usedHintIDs.insert(hint.id)
         usedHints.append(UsedHint(id: hint.id, playerID: hint.playerID, text: hint.text, date: .now))
         if let index = puzzle.clues.firstIndex(where: { $0.playerID == hint.playerID }) {
@@ -449,7 +455,7 @@ final class GameViewModel {
 
     // MARK: Feedback
 
-    private func show(_ message: FeedbackMessage, duration: Double = 1.6) {
+    func show(_ message: FeedbackMessage, duration: Double = 1.6) {
         feedbackTask?.cancel()
         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
             feedback = message

@@ -767,7 +767,7 @@ nonisolated enum CasePack2 {
                 (key: "de-edge", x: 0.165, y: 0.465),
                 (key: "fs-center", x: 0.50, y: 0.13),
                 (key: "gun-left", x: 0.38, y: 0.655),
-                (key: "under-center", x: 0.50, y: 0.63),
+                (key: "under-center", x: 0.50, y: 0.605),
                 (key: "box-right", x: 0.66, y: 0.295),
                 (key: "deep-right", x: 0.70, y: 0.155),
                 (key: "slot-right", x: 0.80, y: 0.44)

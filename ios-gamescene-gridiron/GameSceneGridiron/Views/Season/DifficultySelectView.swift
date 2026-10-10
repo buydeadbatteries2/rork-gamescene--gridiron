@@ -12,6 +12,8 @@ struct DifficultySelectView: View {
 
     @State private var selection: DifficultyLevel = DifficultyManager.shared.selected
     @State private var hasAppeared: Bool = false
+    /// A rapid double-tap on the confirm must never start two seasons.
+    @State private var confirmThrottle = TapThrottle()
 
     var body: some View {
         ZStack {
@@ -59,6 +61,7 @@ struct DifficultySelectView: View {
 
     private var confirmButton: some View {
         Button {
+            guard confirmThrottle.accept() else { return }
             Haptics.pickUp()
             AudioManager.shared.play(.profileSelect)
             onConfirm(selection)

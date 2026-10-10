@@ -253,9 +253,16 @@ struct TutorialTests {
 
         #expect(!session.isComplete, "the session starts unfinished")
 
-        // The full interactive path: three real drag placements drive the step
-        // machine to hints, GOT IT lands on complete — there is no stuck state
-        // where the final objective is solved but completion never arrives.
+        // The full interactive path: open the coach gates exactly as the user
+        // would (inspect → profiles → clue), then three real drag placements
+        // drive the step machine to hints, GOT IT lands on complete — there is
+        // no stuck state where the final objective is solved but completion
+        // never arrives.
+        gameViewModel.expandedPlayerID = gameViewModel.remainingPlayers.first?.id
+        session.handleExpansion()
+        session.confirmProfiles()
+        session.confirmClue()
+
         for (playerID, solution) in gameViewModel.puzzle.solutions {
             guard let slot = gameViewModel.puzzle.slot(id: solution.slotID) else {
                 Issue.record("Missing slot \(solution.slotID) in the training case")
@@ -268,6 +275,10 @@ struct TutorialTests {
             gameViewModel.updateDrag(to: dropLocation)
             gameViewModel.endDrag()
             session.placementsChanged()
+            // Dismiss the lessons that appear between placements.
+            session.confirmEvidence()
+            session.confirmLives()
+            session.confirmRelational()
         }
         #expect(session.step == .hints)
         session.confirmHints()

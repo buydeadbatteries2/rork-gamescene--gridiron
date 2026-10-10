@@ -11,6 +11,8 @@ struct ShopView: View {
     @State private var isPurchasing = false
     @State private var isRestoring = false
     @State private var toast: String?
+    /// Blocks a rapid double-tap from buying two hints in one gesture.
+    @State private var hintThrottle = TapThrottle()
 
     private var wallet: PlayerWallet { PlayerWallet.shared }
     private var config: EconomyConfig { .standard }
@@ -253,6 +255,7 @@ struct ShopView: View {
     // MARK: Actions
 
     private func buyHint() {
+        guard hintThrottle.accept() else { return }
         guard wallet.buyHint() else {
             Haptics.warning()
             showToast("NOT ENOUGH GAME BALLS")
@@ -264,9 +267,10 @@ struct ShopView: View {
     }
 
     private func purchaseAdFree(price: String) {
+        guard !isPurchasing else { return }
+        isPurchasing = true
         Haptics.pickUp()
         Task { @MainActor in
-            isPurchasing = true
             let granted = await PurchaseManager.shared.purchaseAdFree()
             isPurchasing = false
             if granted {

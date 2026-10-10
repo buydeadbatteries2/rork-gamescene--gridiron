@@ -392,7 +392,7 @@ nonisolated enum CasePack3 {
                 (key: "de-edge", x: 0.835, y: 0.465),
                 (key: "cb-right", x: 0.925, y: 0.435),
                 (key: "ss-box", x: 0.66, y: 0.295),
-                (key: "under-center", x: 0.50, y: 0.63),
+                (key: "under-center", x: 0.50, y: 0.605),
                 (key: "slot-right", x: 0.85, y: 0.42),
                 (key: "deep-right", x: 0.70, y: 0.155),
                 (key: "back-left", x: 0.38, y: 0.70),
@@ -474,7 +474,7 @@ nonisolated enum CasePack3 {
                 (key: "wr-right", x: 0.925, y: 0.52),
                 (key: "de-right", x: 0.72, y: 0.475),
                 (key: "fs-center", x: 0.50, y: 0.13),
-                (key: "under-center", x: 0.50, y: 0.63),
+                (key: "under-center", x: 0.50, y: 0.605),
                 (key: "back-right", x: 0.62, y: 0.70),
                 (key: "slot-left", x: 0.205, y: 0.525),
                 (key: "box-right", x: 0.66, y: 0.295),
@@ -562,7 +562,7 @@ nonisolated enum CasePack3 {
                 (key: "deep-right", x: 0.70, y: 0.155),
                 (key: "box-left", x: 0.30, y: 0.28),
                 (key: "back-right", x: 0.62, y: 0.70),
-                (key: "under-center", x: 0.50, y: 0.63)
+                (key: "under-center", x: 0.50, y: 0.605)
             ],
             clues: [
                 (player: "te", family: .footballResponsibility, difficulty: .easy,
@@ -812,7 +812,7 @@ nonisolated enum CasePack3 {
                 (key: "te-right", x: 0.775, y: 0.565),
                 (key: "dt-nose", x: 0.50, y: 0.475),
                 (key: "fs-center", x: 0.50, y: 0.13),
-                (key: "under-center", x: 0.50, y: 0.63),
+                (key: "under-center", x: 0.50, y: 0.605),
                 (key: "back-left", x: 0.38, y: 0.70),
                 (key: "slot-left", x: 0.205, y: 0.525),
                 (key: "edge-right", x: 0.835, y: 0.465),

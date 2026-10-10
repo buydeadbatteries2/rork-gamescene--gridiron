@@ -15,6 +15,9 @@ struct SettingsView: View {
     @State private var tutorial = TutorialManager.shared
     @State private var hasAppeared: Bool = false
     @State private var isReplayingTutorial: Bool = false
+#if DEBUG
+    @State private var isShowingDevMenu: Bool = false
+#endif
 
     var body: some View {
         ZStack {
@@ -49,6 +52,11 @@ struct SettingsView: View {
                 isReplayingTutorial = false
             }
         }
+        #if DEBUG
+        .sheet(isPresented: $isShowingDevMenu) {
+            DevMenuView()
+        }
+        #endif
     }
 
     private var header: some View {
@@ -336,13 +344,30 @@ struct SettingsView: View {
     }
 
     private var effectNote: some View {
-        Text("CHANGING DIFFICULTY APPLIES FROM YOUR NEXT UNPLAYED GAME. COMPLETED GAMES ARE NEVER CHANGED.")
-            .font(.system(size: 9, weight: .heavy).width(.condensed))
-            .tracking(1.2)
-            .foregroundStyle(Theme.paperInkSoft.opacity(0.75))
-            .multilineTextAlignment(.center)
-            .lineSpacing(2)
-            .padding(.horizontal, 12)
+        VStack(spacing: 10) {
+            Text("CHANGING DIFFICULTY APPLIES FROM YOUR NEXT UNPLAYED GAME. COMPLETED GAMES ARE NEVER CHANGED.")
+                .font(.system(size: 9, weight: .heavy).width(.condensed))
+                .tracking(1.2)
+                .foregroundStyle(Theme.paperInkSoft.opacity(0.75))
+                .multilineTextAlignment(.center)
+                .lineSpacing(2)
+                .padding(.horizontal, 12)
+            #if DEBUG
+            Button {
+                Haptics.tick()
+                isShowingDevMenu = true
+            } label: {
+                Text("DEVELOPER QA")
+                    .font(.system(size: 11, weight: .heavy).width(.condensed))
+                    .tracking(1.5)
+                    .foregroundStyle(Theme.goldLight)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .overlay { Capsule().strokeBorder(Theme.gold.opacity(0.4), lineWidth: 1) }
+                    .contentShape(.capsule)
+            }
+            .accessibilityLabel("Developer QA menu (debug builds only)")
+            #endif
+        }
     }
 
     private func sectionHeader(_ title: String, symbol: String) -> some View {

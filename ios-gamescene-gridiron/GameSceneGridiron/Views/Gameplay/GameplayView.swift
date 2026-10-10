@@ -223,10 +223,12 @@ struct GameplayView: View {
     // MARK: Rewarded offers
 
     @State private var isWatchingAd = false
+    /// Blocks a rapid double-tap from buying two hints in one gesture.
+    @State private var buyHintThrottle = TapThrottle()
 
     /// Runs one rewarded-ad presentation. Grants `onGranted` only when the
-    /// reward callback fired — a dismissed ad grants nothing and the offer
-    /// stays up for another choice.
+    /// ad's reward callback fired — a dismissed ad grants nothing and the
+    /// offer stays up for another choice, with a friendly explanation.
     private func watchRewarded(_ placement: RewardedAdPlacement, onGranted: @escaping () -> Void) {
         guard !isWatchingAd else { return }
         isWatchingAd = true
@@ -235,6 +237,16 @@ struct GameplayView: View {
             isWatchingAd = false
             if result == .granted {
                 onGranted()
+            } else {
+                // No ad inventory / early close — explain, never dead-end.
+                viewModel.show(
+                    FeedbackMessage(
+                        title: "NO VIDEO AVAILABLE",
+                        detail: "Rewarded video isn't available right now. Nothing was spent — try again shortly.",
+                        tone: .info
+                    ),
+                    duration: 3.2
+                )
             }
         }
     }
@@ -242,6 +254,7 @@ struct GameplayView: View {
     /// Game Ball shortcut inside the hint offer — the sheet itself is the
     /// "Use 50 Game Balls to add 1 Hint?" confirmation.
     private func buyHintFromOffer() {
+        guard buyHintThrottle.accept() else { return }
         guard PlayerWallet.shared.buyHint() else {
             Haptics.warning()
             return

@@ -178,7 +178,22 @@ nonisolated enum DifficultyResolver {
     }
 
     static func target(selected: DifficultyLevel, stage: SeasonStage) -> DifficultyTarget {
-        target(forRating: effectiveRating(selected: selected, stage: stage))
+        var resolved = target(forRating: effectiveRating(selected: selected, stage: stage))
+        if selected == .rookie {
+            // Rookie never inherits Hall-of-Famer-level zone counts late in the
+            // season: decoy zones stay capped at 2 and the missing-player trim
+            // stays available at every stage.
+            resolved = DifficultyTarget(
+                tier: resolved.tier,
+                hintStrength: resolved.hintStrength,
+                clueOrdering: resolved.clueOrdering,
+                maxDecoys: min(resolved.maxDecoys ?? 2, 2),
+                addedDecoys: resolved.addedDecoys,
+                maxMissingPlayers: min(resolved.maxMissingPlayers, 4),
+                rating: resolved.rating
+            )
+        }
+        return resolved
     }
 
     /// Maps the effective rating onto concrete puzzle knobs:
