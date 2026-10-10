@@ -24,10 +24,10 @@ nonisolated enum DifficultyLevel: String, Codable, CaseIterable, Hashable, Senda
     /// One-line card copy for the selection screen.
     var blurb: String {
         switch self {
-        case .rookie: "More guidance. Fewer missing players. Stronger hints."
-        case .pro: "Balanced GameScene experience."
-        case .allPro: "More complex clues and tougher deductions."
-        case .hallOfFamer: "Maximum deduction challenge."
+        case .rookie: "Clearer clues • fewer players • stronger hints"
+        case .pro: "Balanced GameScene experience"
+        case .allPro: "More relationships • tougher deductions"
+        case .hallOfFamer: "Maximum logical challenge"
         }
     }
 

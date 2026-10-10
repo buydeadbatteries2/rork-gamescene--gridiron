@@ -13,6 +13,7 @@ struct TeamRosterView: View {
     @State private var selectedPlayer: FranchisePlayer?
     @State private var isEditingTeam: Bool = false
     @State private var hasAppeared: Bool = false
+    @State private var showTeamTooltip: Bool = false
 
     var body: some View {
         ZStack {
@@ -44,6 +45,18 @@ struct TeamRosterView: View {
         }
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.05)) { hasAppeared = true }
+            if !TutorialManager.shared.hasSeenTooltip(ContextualTooltip.teamScreen) {
+                showTeamTooltip = true
+            }
+        }
+        .overlay {
+            // First time the Team screen opens: one-time contextual tooltip.
+            if showTeamTooltip {
+                FirstTimeTooltip(text: "These 12 players stay with your franchise across seasons.") {
+                    TutorialManager.shared.markTooltipSeen(ContextualTooltip.teamScreen)
+                    showTeamTooltip = false
+                }
+            }
         }
         .fullScreenCover(item: $selectedPlayer) { player in
             PlayerDetailView(player: player, team: userTeam, onClose: { selectedPlayer = nil })

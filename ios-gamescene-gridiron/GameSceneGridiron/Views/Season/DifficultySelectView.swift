@@ -6,6 +6,10 @@ import SwiftUI
 struct DifficultySelectView: View {
     let onConfirm: (DifficultyLevel) -> Void
 
+    /// The confirm button's copy — onboarding continues to the training case
+    /// instead of starting a season directly.
+    var confirmTitle: String = "START SEASON"
+
     @State private var selection: DifficultyLevel = DifficultyManager.shared.selected
     @State private var hasAppeared: Bool = false
 
@@ -61,7 +65,7 @@ struct DifficultySelectView: View {
         } label: {
             HStack {
                 Spacer()
-                Text("START SEASON")
+                Text(confirmTitle)
                 Spacer()
                 Image(systemName: "sportscourt.fill")
                     .font(.system(size: 16, weight: .bold))

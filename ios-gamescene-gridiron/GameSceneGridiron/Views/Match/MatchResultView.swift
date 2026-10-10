@@ -15,6 +15,7 @@ struct MatchResultView: View {
     @State private var stampIn: Bool = false
     @State private var detailsIn: Bool = false
     @State private var isDoubling: Bool = false
+    @State private var showGameBallsTooltip: Bool = false
 
     private let wallet = PlayerWallet.shared
 
@@ -86,6 +87,15 @@ struct MatchResultView: View {
             AudioManager.shared.play(result.isWin ? .caseSolved : .quarterLost)
             withAnimation(.spring(response: 0.42, dampingFraction: 0.55).delay(0.15)) { stampIn = true }
             withAnimation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.5)) { detailsIn = true }
+        }
+        .overlay {
+            // First time Game Balls appear: one-time contextual tooltip.
+            if showGameBallsTooltip {
+                FirstTimeTooltip(text: "Game Balls are earned by solving cases and winning games.") {
+                    TutorialManager.shared.markTooltipSeen(ContextualTooltip.gameBalls)
+                    showGameBallsTooltip = false
+                }
+            }
         }
         .sensoryFeedback(result.isWin ? .success : .warning, trigger: stampIn)
     }
@@ -496,6 +506,9 @@ struct MatchResultView: View {
         .onAppear {
             AudioManager.shared.play(.gameballDeposit)
             Haptics.success()
+            if !TutorialManager.shared.hasSeenTooltip(ContextualTooltip.gameBalls) {
+                showGameBallsTooltip = true
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Case reward: earned \(total) game balls. Wallet balance \(balance).")

@@ -12,6 +12,7 @@ struct PlayoffBracketView: View {
 
     @State private var seasonManager = SeasonManager.shared
     @State private var hasAppeared: Bool = false
+    @State private var showPostseasonTooltip: Bool = false
 
     private var bracket: PlayoffBracket? { seasonManager.season?.bracket }
 
@@ -43,6 +44,18 @@ struct PlayoffBracketView: View {
         }
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) { hasAppeared = true }
+            // First postseason qualification: one-time contextual tooltip.
+            if bracket != nil, !TutorialManager.shared.hasSeenTooltip(ContextualTooltip.postseason) {
+                showPostseasonTooltip = true
+            }
+        }
+        .overlay {
+            if showPostseasonTooltip {
+                FirstTimeTooltip(text: "Win here to advance toward the championship.") {
+                    TutorialManager.shared.markTooltipSeen(ContextualTooltip.postseason)
+                    showPostseasonTooltip = false
+                }
+            }
         }
     }
 

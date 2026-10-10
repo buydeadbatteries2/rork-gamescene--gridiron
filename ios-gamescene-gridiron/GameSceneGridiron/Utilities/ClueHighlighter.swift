@@ -11,38 +11,45 @@ enum ClueHighlighter {
     private struct Rule {
         let pattern: String
         let color: Color
+        let highContrastColor: Color
     }
 
     private static let rules: [Rule] = [
         // 1. Physical evidence — orange marker
         Rule(
-            pattern: #"\b(orange towel|loose football|muddy footprints|water bottle|dropped glove|towel|football|bottle|glove|footprints)\b"#,
-            color: Theme.highlightEvidence
+            pattern: #"\b(orange towel|loose football|muddy footprints|water bottle|dropped glove|orange cone|laminated play sheet|play sheet|play card|mouthguard|pylon|kicking tee|chin strap|broken helmet strap|loose cleat|cleat marks|skid marks|torn turf|grass stain|chalk mark|wet patch|divot|whistle|clipboard|headset|challenge flag|equipment bag|yard marker|chain marker|marker board|towel|football|bottle|glove|footprints|cone)\b"#,
+            color: Theme.highlightEvidence,
+            highContrastColor: Theme.highlightEvidenceHC
         ),
         // 2. Who the clue is about — green marker
         Rule(
             pattern: #"\b(running back|wide receiver|tight end|cornerback|linebacker|strong safety|free safety|quarterback|defensive end|offensive line|safety|lineman|blocker|receiver|defender|route runner|back)\b"#,
-            color: Theme.highlightPosition
+            color: Theme.highlightPosition,
+            highContrastColor: Theme.highlightPositionHC
         ),
         // 3. Fast / Power / Veteran flavor — gold marker
         Rule(
             pattern: #"\b(film study|twelve seasons|strong enough|quick|speed|strong|physical|seasoned|fast)\b"#,
-            color: Theme.highlightTrait
+            color: Theme.highlightTrait,
+            highContrastColor: Theme.highlightTraitHC
         ),
         // 4. Where on the field — blue marker
         Rule(
             pattern: #"\b(right sideline|left sideline|right side|left side|dead center|directly across|across from|deeper than|center of the field|line of scrimmage|top of the field|bottom of the field|in front of|deeper|deep|wide|behind|sideline|backfield)\b"#,
-            color: Theme.highlightDirection
+            color: Theme.highlightDirection,
+            highContrastColor: Theme.highlightDirectionHC
         ),
     ]
 
     /// Returns the text with soft marker backgrounds applied. Unmatched copy keeps
     /// its normal styling, so the notebook never turns into neon clutter.
-    static func highlighted(_ text: String) -> AttributedString {
+    /// With `highContrast` the markers switch to saturated, strongly-contrasting
+    /// colors against the manila paper (High Contrast Clue Highlights setting).
+    static func highlighted(_ text: String, highContrast: Bool = false) -> AttributedString {
         var result = AttributedString()
         var cursor = text.startIndex
 
-        for (range, color) in mergedMatches(in: text) {
+        for (range, color) in mergedMatches(in: text, highContrast: highContrast) {
             if cursor < range.lowerBound {
                 result.append(AttributedString(String(text[cursor..<range.lowerBound])))
             }
@@ -59,11 +66,12 @@ enum ClueHighlighter {
 
     /// Collects regex matches for every rule, first-come-first-served so higher
     /// priority rules keep their words, then sorts them back into reading order.
-    private static func mergedMatches(in text: String) -> [(Range<String.Index>, Color)] {
+    private static func mergedMatches(in text: String, highContrast: Bool) -> [(Range<String.Index>, Color)] {
         var kept: [(Range<String.Index>, Color)] = []
         for rule in rules {
+            let color = highContrast ? rule.highContrastColor : rule.color
             for range in matches(in: text, pattern: rule.pattern) where !kept.contains(where: { $0.0.overlaps(range) }) {
-                kept.append((range, rule.color))
+                kept.append((range, color))
             }
         }
         return kept.sorted { $0.0.lowerBound < $1.0.lowerBound }

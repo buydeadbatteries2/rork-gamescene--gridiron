@@ -63,10 +63,14 @@ struct MatchFlowView: View {
                     GameplayView(
                         viewModel: quarterViewModel,
                         matchViewModel: matchViewModel,
-                        onQuit: { dismiss() },
+                        onQuit: {
+                            markFirstGameAssistDone()
+                            dismiss()
+                        },
                         onQuarterComplete: { matchViewModel.finishQuarter(with: $0) },
                         userTeam: userTeam,
-                        opponent: opponent
+                        opponent: opponent,
+                        showFirstGameAssist: showFirstGameAssist
                     )
                     .id(matchViewModel.match.currentQuarterIndex)
                     .transition(.opacity)
@@ -110,6 +114,7 @@ struct MatchFlowView: View {
             // Natural-break bookkeeping for the interstitial frequency gate.
             if matchViewModel.match.isComplete {
                 AdManager.shared.recordCompletedGame()
+                markFirstGameAssistDone()
             }
             guard let onSeasonResult, !reportedSeasonResult else { return }
             reportedSeasonResult = true
@@ -123,6 +128,22 @@ struct MatchFlowView: View {
         // this match + quarter and persisted in the wallet.
         quarterViewModel?.lastChanceKey = matchViewModel.currentLastChanceKey
         matchViewModel.beginQuarter()
+    }
+
+    // MARK: First-game assist
+
+    /// Subtle training wheels for the user's very first regular-season game
+    /// only (Season 1, Week 1). Never changes the selected difficulty.
+    private var showFirstGameAssist: Bool {
+        guard !isPlayoff, seasonNumber == 1, week == 1 else { return false }
+        return TutorialManager.shared.isFirstGameAssistActive
+    }
+
+    /// The training wheels disappear after Game 1 — marked on completion or
+    /// on leaving the game.
+    private func markFirstGameAssistDone() {
+        guard showFirstGameAssist else { return }
+        TutorialManager.shared.markFirstGameAssistDone()
     }
 
     private func playAgain() {

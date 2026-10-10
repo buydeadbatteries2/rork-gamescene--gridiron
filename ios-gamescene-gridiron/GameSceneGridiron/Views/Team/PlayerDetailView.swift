@@ -11,6 +11,7 @@ struct PlayerDetailView: View {
     let onClose: () -> Void
 
     @State private var hasAppeared: Bool = false
+    @State private var showStatsTooltip: Bool = false
 
     var body: some View {
         ZStack {
@@ -52,6 +53,18 @@ struct PlayerDetailView: View {
         }
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.05)) { hasAppeared = true }
+            if !TutorialManager.shared.hasSeenTooltip(ContextualTooltip.playerStats) {
+                showStatsTooltip = true
+            }
+        }
+        .overlay {
+            // First time Player Stats appear: one-time contextual tooltip.
+            if showStatsTooltip {
+                FirstTimeTooltip(text: "Stats are awarded from events that actually occur in solved cases.") {
+                    TutorialManager.shared.markTooltipSeen(ContextualTooltip.playerStats)
+                    showStatsTooltip = false
+                }
+            }
         }
     }
 

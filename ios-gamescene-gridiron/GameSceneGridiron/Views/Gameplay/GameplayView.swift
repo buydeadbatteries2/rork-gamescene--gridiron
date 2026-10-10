@@ -13,6 +13,12 @@ struct GameplayView: View {
     /// Franchises coloring the field tokens: offense = user team, defense = opponent.
     let userTeam: GameTeam?
     let opponent: GameTeam?
+    /// TRAINING CASE coach (nil during real games): drives highlights, the
+    /// coach banner row and ad suppression for the duration of the tutorial.
+    var training: TrainingSession?
+    /// First regular-season game only: subtle contextual training wheels
+    /// (notebook pulse + control reminders). Never changes difficulty.
+    var showFirstGameAssist: Bool = false
 
     init(
         viewModel: GameViewModel,
@@ -20,7 +26,9 @@ struct GameplayView: View {
         onQuit: @escaping () -> Void = {},
         onQuarterComplete: @escaping (GameViewModel) -> Void = { _ in },
         userTeam: GameTeam? = nil,
-        opponent: GameTeam? = nil
+        opponent: GameTeam? = nil,
+        training: TrainingSession? = nil,
+        showFirstGameAssist: Bool = false
     ) {
         self.viewModel = viewModel
         self.matchViewModel = matchViewModel
@@ -28,39 +36,79 @@ struct GameplayView: View {
         self.onQuarterComplete = onQuarterComplete
         self.userTeam = userTeam
         self.opponent = opponent
+        self.training = training
+        self.showFirstGameAssist = showFirstGameAssist
     }
 
     var body: some View {
         @Bindable var viewModel = viewModel
 
         VStack(spacing: 14) {
-            GameHUDView(viewModel: viewModel, matchViewModel: matchViewModel) {
+            GameHUDView(
+                viewModel: viewModel,
+                matchViewModel: matchViewModel,
+                highlightHint: training?.isHintHighlighted == true
+            ) {
                 Haptics.tick()
                 withAnimation(.easeOut(duration: 0.2)) { viewModel.isPaused = true }
             }
             .padding(.horizontal, 16)
             .padding(.top, 6)
 
-            GameFieldView(viewModel: viewModel, userTeam: userTeam, opponent: opponent)
+            GameFieldView(
+                viewModel: viewModel,
+                userTeam: userTeam,
+                opponent: opponent,
+                highlightedEvidenceID: training?.highlightedEvidenceID,
+                guidedSlotID: training?.guidedSlotID
+            )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .frame(minHeight: 220)
                 .padding(.horizontal, 6)
                 .layoutPriority(1)
 
-            ClueNotebookView(viewModel: viewModel) {
-                Haptics.tick()
-                viewModel.isNotebookPresented = true
+            // Coach banner (training) or first-game reminder strip — always
+            // its own layout row, never covering field, notebook or tray.
+            if let coach = training?.coach {
+                CoachBanner(message: coach) {
+                    Haptics.tick()
+                    AudioManager.shared.play(.buttonPress)
+                    training?.advancePastCurrentStep()
+                }
+                .padding(.horizontal, 16)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if showFirstGameAssist, !viewModel.isDragging {
+                firstGameReminder
+                    .padding(.horizontal, 16)
+                    .transition(.opacity)
             }
+
+            ClueNotebookView(
+                viewModel: viewModel,
+                onOpenCaseFile: {
+                    Haptics.tick()
+                    viewModel.isNotebookPresented = true
+                },
+                highlightCaseFile: training?.isCaseFileHighlighted == true,
+                assistPulse: showFirstGameAssist
+            )
             .padding(.horizontal, 16)
 
-            RosterTrayView(viewModel: viewModel, tint: userTeam?.primaryColor)
+            RosterTrayView(
+                viewModel: viewModel,
+                tint: userTeam?.primaryColor,
+                highlightedPlayerID: training?.highlightedPlayerID
+            )
                 .frame(height: 200, alignment: .bottom)
 
             // Absolute bottom banner slot, always its own row — never over
-            // gameplay content. Ad-Free owners get the space back entirely.
-            GameBannerAdView()
-                .padding(.horizontal, 16)
-                .padding(.bottom, 6)
+            // gameplay content. Ad-Free owners and the training case get the
+            // space back entirely.
+            if training == nil {
+                GameBannerAdView()
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 6)
+            }
         }
         .coordinateSpace(.named(Self.coordinateSpace))
         .overlay(alignment: .topLeading) {
@@ -198,6 +246,29 @@ struct GameplayView: View {
         viewModel.hintPurchased()
     }
 
+    // MARK: First-game assist
+
+    /// One slim reminder strip for the user's very first regular-season game —
+    /// subtle, non-blocking, and gone after Game 1.
+    private var firstGameReminder: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "hand.point.up.left")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Theme.gold)
+            Text("ARROWS BROWSE PLAYERS — PICK A PROFILE, THEN HOLD TO DRAG")
+                .font(.system(size: 9, weight: .heavy).width(.condensed))
+                .tracking(1)
+                .foregroundStyle(Theme.paperInkSoft)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity)
+        .paperCard(cornerRadius: 4)
+        .accessibilityLabel("Reminder: arrows browse players. Pick a profile, then hold to drag.")
+    }
+
     private var gameplayBackground: some View {
         ZStack {
             Theme.ink
@@ -221,4 +292,50 @@ struct GameplayView: View {
 #Preview {
     GameplayView(viewModel: GameViewModel(puzzle: SampleQuarter.puzzle))
         .preferredColorScheme(.dark)
+}
+
+/// One-mechanic-at-a-time coach banner shown between the field and the
+/// notebook during the TRAINING CASE. With a button it waits for GOT IT;
+/// without one it waits for the user to perform the taught action.
+struct CoachBanner: View {
+    let message: TrainingSession.Message
+    let onConfirm: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
+                Image(systemName: "graduationcap")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.bronzeDeep)
+                Text(message.title)
+                    .font(.system(size: 13, weight: .heavy).width(.condensed))
+                    .tracking(1.5)
+                    .foregroundStyle(Theme.paperInk)
+                Spacer(minLength: 0)
+                if let buttonTitle = message.buttonTitle {
+                    Button(action: onConfirm) {
+                        Text(buttonTitle)
+                            .font(.system(size: 11, weight: .heavy).width(.condensed))
+                            .tracking(1.2)
+                            .foregroundStyle(Theme.ink)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                    }
+                    .buttonStyle(GoldCapsuleButtonStyle())
+                    .accessibilityLabel("\(buttonTitle): \(message.title)")
+                }
+            }
+            Text(message.detail)
+                .font(Theme.typewriter(12.5, relativeTo: .footnote))
+                .foregroundStyle(Theme.paperInkSoft)
+                .lineSpacing(2.5)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .paperCard(cornerRadius: 6)
+        .shadow(color: .black.opacity(0.55), radius: 10, y: 5)
+        .accessibilityElement(children: .contain)
+    }
 }

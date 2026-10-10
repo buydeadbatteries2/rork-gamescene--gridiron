@@ -1,14 +1,20 @@
 import SwiftUI
 
-/// SETTINGS — difficulty lives here. Changing it during an active season
-/// applies from the next unplayed game; completed games are never touched.
-/// Audio toggles mirror the pause-menu switches and persist via the audio
-/// manager.
+/// SETTINGS — everything the player can tune, grouped in four pinned cards:
+/// GAMEPLAY (difficulty + tutorial replay), AUDIO (toggles + volumes),
+/// ACCESSIBILITY (haptics, reduce motion, larger clue text, high contrast)
+/// and PURCHASES (Ad-Free status + restore). Changing difficulty during an
+/// active season applies from the next unplayed game; completed games are
+/// never touched.
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var difficulty = DifficultyManager.shared
+    @State private var purchaseManager = PurchaseManager.shared
+    @State private var audio = AudioManager.shared
+    @State private var tutorial = TutorialManager.shared
     @State private var hasAppeared: Bool = false
+    @State private var isReplayingTutorial: Bool = false
 
     var body: some View {
         ZStack {
@@ -17,8 +23,10 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     header
-                    difficultyCard
+                    gameplayCard
                     audioCard
+                    accessibilityCard
+                    purchasesCard
                     effectNote
                 }
                 .padding(.horizontal, 18)
@@ -31,6 +39,15 @@ struct SettingsView: View {
         }
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.05)) { hasAppeared = true }
+        }
+        .fullScreenCover(isPresented: $isReplayingTutorial) {
+            // REPLAY TUTORIAL: the guided training case again — team creation,
+            // difficulty, the season and the economy are never re-forced.
+            TrainingFlowView(completeButtonTitle: "DONE") {
+                isReplayingTutorial = false
+            } onQuit: {
+                isReplayingTutorial = false
+            }
         }
     }
 
@@ -64,27 +81,46 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: Difficulty
+    // MARK: Gameplay
 
-    private var difficultyCard: some View {
-        VStack(spacing: 2) {
-            sectionHeader("DIFFICULTY", symbol: "speedometer")
+    private var gameplayCard: some View {
+        card(rotation: -0.5) {
+            sectionHeader("GAMEPLAY", symbol: "speedometer")
             ForEach(DifficultyLevel.allCases, id: \.self) { level in
                 difficultyRow(level)
             }
+            Divider().overlay(Theme.paperInk.opacity(0.14)).padding(.vertical, 8)
+            Button {
+                Haptics.pickUp()
+                AudioManager.shared.play(.cardSelect)
+                isReplayingTutorial = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "graduationcap")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(Theme.goldLight)
+                        .frame(width: 36, height: 36)
+                        .background(Color.black.opacity(0.4), in: .circle)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("REPLAY TUTORIAL")
+                            .font(.system(size: 15, weight: .black).width(.compressed))
+                            .tracking(1)
+                            .foregroundStyle(Theme.paperInk)
+                        Text("Run the guided Training Case again")
+                            .font(Theme.typewriter(11, relativeTo: .caption))
+                            .foregroundStyle(Theme.paperInkSoft)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.paperInk.opacity(0.4))
+                }
+                .padding(.vertical, 8)
+                .contentShape(.rect)
+            }
+            .buttonStyle(PressableButtonStyle(scale: 0.99))
+            .accessibilityLabel("Replay tutorial")
         }
-        .padding(.vertical, 14)
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity)
-        .background {
-            PaperSurface(cornerRadius: 8, darkness: 0.04)
-                .shadow(color: .black.opacity(0.6), radius: 16, y: 10)
-        }
-        .overlay(alignment: .top) {
-            PushPin(size: 18).offset(y: -8)
-        }
-        .rotationEffect(.degrees(-0.5))
-        .accessibilityElement(children: .contain)
     }
 
     private func difficultyRow(_ level: DifficultyLevel) -> some View {
@@ -132,25 +168,146 @@ struct SettingsView: View {
     // MARK: Audio
 
     private var audioCard: some View {
-        VStack(spacing: 2) {
+        card(rotation: 0.5) {
             sectionHeader("AUDIO", symbol: "speaker.wave.2")
+
             Toggle(isOn: Binding(
-                get: { AudioManager.shared.isMusicEnabled },
-                set: { AudioManager.shared.setMusicEnabled($0) }
+                get: { audio.isMusicEnabled },
+                set: { audio.setMusicEnabled($0) }
             )) {
                 settingLabel("MUSIC", detail: "Investigation score")
             }
             .tint(Theme.gold)
-            .padding(.vertical, 10)
+            .padding(.vertical, 6)
+
+            volumeSlider(label: "MUSIC VOLUME", value: Binding(
+                get: { audio.musicVolume },
+                set: { audio.musicVolume = $0 }
+            ))
 
             Toggle(isOn: Binding(
-                get: { AudioManager.shared.isSoundEffectsEnabled },
-                set: { AudioManager.shared.setSoundEffectsEnabled($0) }
+                get: { audio.isSoundEffectsEnabled },
+                set: { audio.setSoundEffectsEnabled($0) }
             )) {
                 settingLabel("SOUND EFFECTS", detail: "Stings, snaps and stamps")
             }
             .tint(Theme.gold)
-            .padding(.vertical, 10)
+            .padding(.vertical, 6)
+
+            volumeSlider(label: "SFX VOLUME", value: Binding(
+                get: { audio.effectVolume },
+                set: { audio.effectVolume = $0 }
+            ))
+        }
+    }
+
+    private func volumeSlider(label: String, value: Binding<Float>) -> some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .font(.system(size: 10, weight: .heavy).width(.condensed))
+                .tracking(1.4)
+                .foregroundStyle(Theme.paperInkSoft)
+                .frame(width: 96, alignment: .leading)
+            Slider(value: value, in: 0...1)
+                .tint(Theme.gold)
+        }
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(label)
+    }
+
+    // MARK: Accessibility
+
+    private var accessibilityCard: some View {
+        card(rotation: -0.4) {
+            sectionHeader("ACCESSIBILITY", symbol: "figure.wave")
+
+            Toggle(isOn: Binding(
+                get: { tutorial.isHapticsEnabled },
+                set: { tutorial.isHapticsEnabled = $0 }
+            )) {
+                settingLabel("HAPTICS", detail: "Vibration on picks, verdicts and rewards")
+            }
+            .tint(Theme.gold)
+            .padding(.vertical, 6)
+
+            Toggle(isOn: Binding(
+                get: { tutorial.isReduceMotionEnabled },
+                set: { tutorial.isReduceMotionEnabled = $0 }
+            )) {
+                settingLabel("REDUCE MOTION", detail: "Calmer page flips and slides")
+            }
+            .tint(Theme.gold)
+            .padding(.vertical, 6)
+
+            Toggle(isOn: Binding(
+                get: { tutorial.isLargerClueTextEnabled },
+                set: { tutorial.isLargerClueTextEnabled = $0 }
+            )) {
+                settingLabel("LARGER CLUE TEXT", detail: "Bigger notebook type, never clipped")
+            }
+            .tint(Theme.gold)
+            .padding(.vertical, 6)
+
+            Toggle(isOn: Binding(
+                get: { tutorial.isHighContrastCluesEnabled },
+                set: { tutorial.isHighContrastCluesEnabled = $0 }
+            )) {
+                settingLabel("HIGH CONTRAST CLUES", detail: "Stronger highlighted words and tags")
+            }
+            .tint(Theme.gold)
+            .padding(.vertical, 6)
+        }
+    }
+
+    // MARK: Purchases
+
+    private var purchasesCard: some View {
+        card(rotation: 0.4) {
+            sectionHeader("PURCHASES", symbol: "checkmark.seal")
+
+            HStack(spacing: 12) {
+                Image(systemName: purchaseManager.hasAdFree ? "seal.fill" : "seal")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(purchaseManager.hasAdFree ? Theme.gold : Theme.paperInkSoft)
+                    .frame(width: 36, height: 36)
+                    .background(Color.black.opacity(0.4), in: .circle)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(purchaseManager.hasAdFree ? "AD-FREE OWNED" : "ADS ENABLED")
+                        .font(.system(size: 15, weight: .black).width(.compressed))
+                        .tracking(1)
+                        .foregroundStyle(Theme.paperInk)
+                    Text(purchaseManager.hasAdFree ? "No banner or interstitial ads" : "Ad-Free removes them permanently")
+                        .font(Theme.typewriter(11, relativeTo: .caption))
+                        .foregroundStyle(Theme.paperInkSoft)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 8)
+
+            Button {
+                Haptics.tick()
+                AudioManager.shared.play(.buttonPress)
+                Task { await purchaseManager.restorePurchases() }
+            } label: {
+                Text("RESTORE PURCHASES")
+                    .font(.system(size: 13, weight: .heavy).width(.condensed))
+                    .tracking(1.6)
+                    .foregroundStyle(Theme.paperInk)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .overlay { Capsule().strokeBorder(Theme.paperInk.opacity(0.4), lineWidth: 1.2) }
+                    .contentShape(.capsule)
+            }
+            .buttonStyle(PressableButtonStyle(playsPressSound: true))
+            .accessibilityHint("Restores the Ad-Free purchase from the App Store")
+        }
+    }
+
+    // MARK: Shared pieces
+
+    private func card<Content: View>(rotation: Double, @ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 2) {
+            content()
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 16)
@@ -162,7 +319,7 @@ struct SettingsView: View {
         .overlay(alignment: .top) {
             PushPin(size: 18).offset(y: -8)
         }
-        .rotationEffect(.degrees(0.5))
+        .rotationEffect(.degrees(rotation))
         .accessibilityElement(children: .contain)
     }
 

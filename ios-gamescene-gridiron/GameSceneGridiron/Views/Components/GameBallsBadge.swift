@@ -98,6 +98,12 @@ struct CountUpNumber: View {
             displayed = to
             return
         }
+        // Reduce Motion: the total appears immediately — no count-up movement.
+        guard !Motion.isReduced else {
+            displayed = to
+            Haptics.soft()
+            return
+        }
         let steps = max(1, min(24, abs(to - start)))
         for step in 1...steps {
             try? await Task.sleep(for: .seconds(duration / Double(steps)))

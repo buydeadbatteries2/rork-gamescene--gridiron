@@ -11,6 +11,11 @@ struct GameFieldView: View {
     /// Franchises wearing their colors: offense = user team, defense = opponent.
     var userTeam: GameTeam?
     var opponent: GameTeam?
+    /// Tutorial: the evidence object the coach is explaining glows softly.
+    var highlightedEvidenceID: String? = nil
+    /// Tutorial: while dragging, the correct training zone gets a subtle
+    /// extra glow (guidance only — the drop still has to be made by hand).
+    var guidedSlotID: String? = nil
 
     private var kits: (user: TeamKit, opponent: TeamKit)? {
         guard let userTeam, let opponent else { return nil }
@@ -32,6 +37,13 @@ struct GameFieldView: View {
 
                 ForEach(viewModel.puzzle.evidence) { item in
                     evidence(item, token: token)
+                        .overlay {
+                            if item.id == highlightedEvidenceID {
+                                PulsingHalo()
+                                    .padding(-6)
+                                    .allowsHitTesting(false)
+                            }
+                        }
                         .position(x: size.width * item.x, y: size.height * item.y)
                 }
 
@@ -83,6 +95,19 @@ struct GameFieldView: View {
                             .position(markerPoints[slot.id] ?? CGPoint(x: size.width * slot.x, y: size.height * slot.y))
                             .transition(.opacity.combined(with: .scale(scale: 0.6)))
                         }
+                    }
+
+                    // Tutorial guidance: a soft chalk glow under the correct
+                    // training target while the coach lesson is dragging.
+                    if viewModel.isDragging, let guided = guidedSlotID,
+                       guided != viewModel.hoveredSlotID,
+                       let slot = viewModel.puzzle.slot(id: guided) {
+                        Circle()
+                            .strokeBorder(Theme.chalk.opacity(0.65), lineWidth: 2)
+                            .background(Color.white.opacity(0.08), in: .circle)
+                            .frame(width: zoneDiameter * 1.25, height: zoneDiameter * 1.25)
+                            .position(x: size.width * slot.x, y: size.height * slot.y)
+                            .transition(.opacity)
                     }
 
                     // Snap preview ring at the TRUE target point — the display

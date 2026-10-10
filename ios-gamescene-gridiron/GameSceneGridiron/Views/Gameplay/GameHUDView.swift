@@ -4,6 +4,8 @@ import SwiftUI
 struct GameHUDView: View {
     let viewModel: GameViewModel
     var matchViewModel: MatchViewModel?
+    /// Tutorial: a soft pulsing halo teaches what the hint button does.
+    var highlightHint: Bool = false
     let onPause: () -> Void
 
     var body: some View {
@@ -12,6 +14,9 @@ struct GameHUDView: View {
                 Text(viewModel.puzzle.quarterLabel)
                     .font(Theme.typewriterBold(22, relativeTo: .title3))
                     .foregroundStyle(Theme.paperInk)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.4)
+                    .padding(.horizontal, 4)
                     .frame(width: 64, height: 46)
                     .paperCard(cornerRadius: 3)
                     .rotationEffect(.degrees(-2))
@@ -43,6 +48,13 @@ struct GameHUDView: View {
                     .allowsHitTesting(false)
             }
             .opacity(viewModel.hintsRemaining > 0 ? 1 : 0.5)
+            .overlay {
+                if highlightHint {
+                    PulsingHalo()
+                        .padding(-4)
+                        .allowsHitTesting(false)
+                }
+            }
             .accessibilityLabel("Use hint, \(viewModel.hintsRemaining) remaining")
 
             Button(action: onPause) {

@@ -151,7 +151,12 @@ struct HomeView: View {
         }
         .onAppear {
             withAnimation(.spring(response: 0.8, dampingFraction: 0.8).delay(0.05)) { hasAppeared = true }
-            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { glow = true }
+            // Reduce Motion: the CTA glow rests at a gentle constant shine.
+            if !Motion.isReduced {
+                withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { glow = true }
+            } else {
+                glow = true
+            }
         }
         .fullScreenCover(isPresented: $isPlaying) {
             SeasonView()

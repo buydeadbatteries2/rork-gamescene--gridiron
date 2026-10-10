@@ -16,6 +16,8 @@ final class AudioManager {
     private enum DefaultsKey {
         static let musicEnabled = "audio.musicEnabled"
         static let effectsEnabled = "audio.soundEffectsEnabled"
+        static let musicVolume = "audio.musicVolume"
+        static let effectVolume = "audio.effectVolume"
     }
 
     // MARK: Settings (persisted locally)
@@ -29,8 +31,21 @@ final class AudioManager {
     }
 
     /// Master levels (0...1). Music stays low so clue reading is never overpowered.
-    var musicVolume: Float = 0.3
-    var effectVolume: Float = 0.85
+    /// Both volumes persist and apply to the live music player immediately.
+    var musicVolume: Float {
+        didSet {
+            guard oldValue != musicVolume else { return }
+            defaults.set(musicVolume, forKey: DefaultsKey.musicVolume)
+            musicPlayer?.setVolume(musicVolume, fadeDuration: 0.12)
+        }
+    }
+
+    var effectVolume: Float {
+        didSet {
+            guard oldValue != effectVolume else { return }
+            defaults.set(effectVolume, forKey: DefaultsKey.effectVolume)
+        }
+    }
 
     private let defaults: UserDefaults
     private var musicPlayer: AVAudioPlayer?
@@ -43,10 +58,13 @@ final class AudioManager {
     private var isSessionConfigured = false
     private var fadeTask: Task<Void, Never>?
 
-    private init(defaults: UserDefaults = .standard) {
+    /// Test-injectable: pass an isolated defaults suite for hermetic tests.
+    init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.isMusicEnabled = defaults.object(forKey: DefaultsKey.musicEnabled) as? Bool ?? true
         self.isSoundEffectsEnabled = defaults.object(forKey: DefaultsKey.effectsEnabled) as? Bool ?? true
+        self.musicVolume = defaults.object(forKey: DefaultsKey.musicVolume) as? Float ?? 0.3
+        self.effectVolume = defaults.object(forKey: DefaultsKey.effectVolume) as? Float ?? 0.85
     }
 
     // MARK: Music

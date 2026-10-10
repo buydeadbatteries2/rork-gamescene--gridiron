@@ -44,6 +44,13 @@ nonisolated enum Theme {
     static let highlightPosition = Color(hex: 0xB7D6A5)   // green — who the clue is about
     static let highlightTrait = Color(hex: 0xEFD79A)      // gold — Fast / Power / Veteran flavor
 
+    // MARK: High Contrast Clue Highlights (saturated markers — strong contrast
+    // against manila paper, same case-file aesthetic)
+    static let highlightEvidenceHC = Color(hex: 0xC25E00)
+    static let highlightDirectionHC = Color(hex: 0x0F4C81)
+    static let highlightPositionHC = Color(hex: 0x2D6A1F)
+    static let highlightTraitHC = Color(hex: 0x7A5A00)
+
     static let goldGradient = LinearGradient(
         colors: [Color(hex: 0xF6E2A8), Color(hex: 0xD9B56E), Color(hex: 0x9C6B2C)],
         startPoint: .top,

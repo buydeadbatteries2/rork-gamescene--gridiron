@@ -214,10 +214,8 @@ private struct SeasonHubView: View {
     }
 
     private var pageTransition: AnyTransition {
-        .asymmetric(
-            insertion: .move(edge: .trailing).combined(with: .opacity),
-            removal: .move(edge: .trailing).combined(with: .opacity)
-        )
+        // Reduce Motion: plain fades instead of full-width page flips.
+        Motion.pageTransition
     }
 
     private var championName: String? {

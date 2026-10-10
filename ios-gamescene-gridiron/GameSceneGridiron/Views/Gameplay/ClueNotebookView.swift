@@ -6,6 +6,13 @@ import SwiftUI
 struct ClueNotebookView: View {
     let viewModel: GameViewModel
     let onOpenCaseFile: () -> Void
+    /// Tutorial / first-game assist: a soft pulsing gold halo over the CASE FILE button.
+    var highlightCaseFile: Bool = false
+    /// First-game assist: a subtle glow around the whole notebook.
+    var assistPulse: Bool = false
+
+    private var isLargerText: Bool { TutorialManager.shared.isLargerClueTextEnabled }
+    private var isHighContrast: Bool { TutorialManager.shared.isHighContrastCluesEnabled }
 
     var body: some View {
         let clues = viewModel.puzzle.clues
@@ -31,6 +38,7 @@ struct ClueNotebookView: View {
                         .contentShape(.rect)
                     }
                     .accessibilityLabel("Open full case file")
+                    .caseFileHighlight(isActive: highlightCaseFile)
 
                     if let clue {
                         DifficultyPill(difficulty: clue.difficulty, compact: true)
@@ -46,6 +54,7 @@ struct ClueNotebookView: View {
                     Text("\(viewModel.currentClueIndex + 1)/\(clues.count)")
                         .font(Theme.typewriter(13, relativeTo: .caption))
                         .monospacedDigit()
+                        .foregroundStyle(isHighContrast ? Theme.paperInk : Theme.paperInk.opacity(0.85))
 
                     Button { viewModel.nextClue(); Haptics.tick() } label: {
                         Image(systemName: "chevron.right").frame(width: 30, height: 30).contentShape(.rect)
@@ -62,17 +71,33 @@ struct ClueNotebookView: View {
                 }
 
                 if let clue {
-                    clueBody(clue)
-                        .id(clue.id)
-                        .transition(.asymmetric(insertion: .opacity.combined(with: .offset(x: 16)), removal: .opacity))
+                    // Larger Clue Text: the clue area scrolls vertically if the
+                    // copy needs more room — content is never clipped.
+                    if isLargerText {
+                        ScrollView {
+                            clueBody(clue)
+                                .id(clue.id)
+                        }
+                        .scrollIndicators(.hidden)
+                    } else {
+                        clueBody(clue)
+                            .id(clue.id)
+                            .transition(clueTransition)
+                    }
                 }
             }
             .padding(.leading, 10)
             .padding(.trailing, 14)
             .padding(.vertical, 10)
         }
-        .frame(height: 162)
+        .frame(height: isLargerText ? 210 : 162)
         .paperCard(cornerRadius: 6)
+        .overlay {
+            if assistPulse {
+                PulsingHalo()
+                    .allowsHitTesting(false)
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             ChalkDiagram()
                 .frame(width: 58, height: 40)
@@ -92,6 +117,7 @@ struct ClueNotebookView: View {
         .clipShape(.rect(cornerRadius: 6, style: .continuous))
         .shadow(color: .black.opacity(0.5), radius: 10, y: 5)
         .animation(.easeOut(duration: 0.22), value: viewModel.currentClueIndex)
+        .animation(.easeInOut(duration: 0.3), value: isLargerText)
         .gesture(
             DragGesture(minimumDistance: 24)
                 .onEnded { value in
@@ -102,23 +128,30 @@ struct ClueNotebookView: View {
         )
     }
 
+    private var clueTransition: AnyTransition {
+        Motion.isReduced ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(x: 16)), removal: .opacity)
+    }
+
     @ViewBuilder
     private func clueBody(_ clue: PuzzleClue) -> some View {
         let isSolved = viewModel.isClueSolved(clue)
         VStack(alignment: .leading, spacing: 7) {
-            Text(ClueHighlighter.highlighted(clue.text))
-                .font(Theme.typewriter(15.5, relativeTo: .callout))
+            Text(ClueHighlighter.highlighted(clue.text, highContrast: isHighContrast))
+                .font(Theme.typewriter(isLargerText ? 21 : 15.5, relativeTo: .callout))
                 .foregroundStyle(Theme.paperInk.opacity(isSolved ? 0.45 : 1))
-                .lineSpacing(3.5)
-                .minimumScaleFactor(0.68)
+                .lineSpacing(isLargerText ? 5 : 3.5)
+                // Larger Clue Text never shrinks or clips — without it, the
+                // graceful minimum-scale fallback still applies.
+                .minimumScaleFactor(isLargerText ? 1 : 0.68)
+                .fixedSize(horizontal: false, vertical: isLargerText)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
 
             if let hint = viewModel.usedHint(for: clue), !isSolved {
                 Label {
-                    Text(ClueHighlighter.highlighted(hint.text))
-                        .font(.system(size: 12, weight: .medium))
+                    Text(ClueHighlighter.highlighted(hint.text, highContrast: isHighContrast))
+                        .font(.system(size: isLargerText ? 15 : 12, weight: .medium))
                         .lineSpacing(2)
-                        .lineLimit(3)
+                        .lineLimit(isLargerText ? nil : 3)
                         .minimumScaleFactor(0.8)
                 } icon: {
                     Image(systemName: "lightbulb.fill")
@@ -127,9 +160,45 @@ struct ClueNotebookView: View {
                 .foregroundStyle(Theme.bronzeDeep)
             }
         }
-        .frame(maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
         .overlay(alignment: .bottomTrailing) {
             if isSolved { SolvedStamp().padding(.trailing, 4) }
+        }
+    }
+}
+
+// MARK: Highlight helpers
+
+/// Soft pulsing gold halo used by the tutorial and first-game assists.
+struct PulsingHalo: View {
+    @State private var isPulsing: Bool = false
+
+    var body: some View {
+        let motion = Motion.isReduced
+        RoundedRectangle(cornerRadius: 8)
+            .strokeBorder(Theme.gold.opacity(motion ? 0.75 : (isPulsing ? 0.85 : 0.25)), lineWidth: 2.5)
+            .onAppear {
+                guard !motion else { return }
+                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                    isPulsing = true
+                }
+            }
+    }
+}
+
+extension View {
+    /// Pulsing gold ring around the CASE FILE button during the clue-reading lesson.
+    @ViewBuilder
+    func caseFileHighlight(isActive: Bool) -> some View {
+        if isActive {
+            self.overlay {
+                PulsingHalo()
+                    .padding(.horizontal, -5)
+                    .padding(.vertical, -3)
+                    .allowsHitTesting(false)
+            }
+        } else {
+            self
         }
     }
 }
@@ -155,6 +224,14 @@ struct DifficultyPill: View {
             .padding(.vertical, compact ? 2 : 5)
             .frame(minWidth: compact ? 0 : 82)
             .background(color, in: .rect(cornerRadius: 3))
+            // High Contrast Clue Highlights: a crisp light rim around the
+            // selected clue's difficulty tag.
+            .overlay {
+                if TutorialManager.shared.isHighContrastCluesEnabled {
+                    RoundedRectangle(cornerRadius: 3)
+                        .strokeBorder(Theme.chalk.opacity(0.9), lineWidth: 1.2)
+                }
+            }
             .accessibilityLabel("Difficulty \(difficulty.rawValue)")
     }
 }

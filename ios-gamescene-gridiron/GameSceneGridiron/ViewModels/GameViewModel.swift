@@ -25,6 +25,11 @@ final class GameViewModel {
     /// Uniquely identifies this quarter for the Last Chance ledger:
     /// "\(matchID)-q\(quarterIndex)" during a match, standalone otherwise.
     var lastChanceKey: String = "standalone-quarter"
+    /// TRAINING CASE mode: wrong placements teach the mechanic instead of
+    /// costing a heart, so the tutorial can never permanently fail.
+    var isTraining: Bool = false
+    /// TRAINING CASE mode: wrong placements teach the mechanic instead of
+    /// costing a heart, so the tutorial can never permanently fail.
     /// True while the final heart is gone but the Last Chance offer is up —
     /// the quarter verdict waits for the player's choice.
     private(set) var isLastChancePending = false
@@ -255,12 +260,25 @@ final class GameViewModel {
                 finish(with: .won)
             }
         } else {
-            lives = max(0, lives - 1)
+            lives = isTraining ? lives : max(0, lives - 1)
             rejectedSlotID = slot.id
             rejectionCount += 1
             Haptics.error()
             AudioManager.shared.play(.placementWrong)
-            show(FeedbackMessage(title: "THAT DOESN'T FIT THE EVIDENCE", detail: nil, tone: .failure))
+            if isTraining {
+                // Mistakes explain the mechanic and let the player continue —
+                // the tutorial can never be permanently failed.
+                show(
+                    FeedbackMessage(
+                        title: "NOT QUITE — RE-READ THE CLUE",
+                        detail: "No heart is lost in training. In real games a wrong placement costs a heart. The clue describes what the play needs, and the evidence marks the spot.",
+                        tone: .info
+                    ),
+                    duration: 3.4
+                )
+            } else {
+                show(FeedbackMessage(title: "THAT DOESN'T FIT THE EVIDENCE", detail: nil, tone: .failure))
+            }
 
             let rejected = slot.id
             Task { @MainActor [weak self] in
@@ -268,7 +286,7 @@ final class GameViewModel {
                 if self?.rejectedSlotID == rejected { self?.rejectedSlotID = nil }
             }
 
-            if lives == 0 {
+            if !isTraining, lives == 0 {
                 offerLastChanceOrFinish()
             }
         }

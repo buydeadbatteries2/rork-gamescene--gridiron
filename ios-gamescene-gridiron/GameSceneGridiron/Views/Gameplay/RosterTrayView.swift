@@ -12,6 +12,8 @@ struct RosterTrayView: View {
     let viewModel: GameViewModel
     /// Team primary tint applied to the controlled body assets on every card.
     var tint: Color? = nil
+    /// Tutorial: the missing-player card the coach wants tapped glows softly.
+    var highlightedPlayerID: String? = nil
 
     private enum SlideDirection { case forward, back }
 
@@ -115,6 +117,13 @@ struct RosterTrayView: View {
                         onToggle: { viewModel.toggleExpanded(player.id) },
                         onSelectVariant: { viewModel.selectVariant($0, for: player.id) }
                     )
+                    .overlay {
+                        if player.id == highlightedPlayerID, !viewModel.isDragging {
+                            PulsingHalo()
+                                .clipShape(.rect(cornerRadius: 12, style: .continuous))
+                                .allowsHitTesting(false)
+                        }
+                    }
                     .simultaneousGesture(dragGesture(for: player))
                     .transition(.asymmetric(insertion: .opacity, removal: .scale(scale: 0.4).combined(with: .opacity)))
                 }
@@ -231,12 +240,7 @@ struct RosterTrayView: View {
     }
 
     private var slideTransition: AnyTransition {
-        let enters: Edge = slideDirection == .forward ? .trailing : .leading
-        let exits: Edge = slideDirection == .forward ? .leading : .trailing
-        return .asymmetric(
-            insertion: .move(edge: enters).combined(with: .opacity),
-            removal: .move(edge: exits).combined(with: .opacity)
-        )
+        Motion.cardSlide(forward: slideDirection == .forward)
     }
 
     // MARK: Drag

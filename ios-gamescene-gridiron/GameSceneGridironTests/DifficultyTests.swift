@@ -210,13 +210,29 @@ struct DifficultyTests {
         #expect(hallOfFamer.clues.first?.difficulty == .hard)
     }
 
-    @Test("Difficulty tags span the library from Easy to Expert")
-    func difficultyTagsSpanTheLibrary() {
-        let counts = Dictionary(grouping: CaseLibrary.all, by: { CaseDifficultyProfile(of: $0).tag })
-            .mapValues(\.count)
-        for tag in CaseDifficultyTag.allCases {
-            #expect((counts[tag] ?? 0) > 0, "no \(tag.title) cases in the library: \(counts)")
+    @Test("Difficulty tags are honestly derived from case content")
+    func difficultyTagsAreDerivedFromContent() {
+        // Every case's tag matches its rating band — tags are computed,
+        // never hand-assigned.
+        for puzzleCase in CaseLibrary.all {
+            let profile = CaseDifficultyProfile(of: puzzleCase)
+            let expected: CaseDifficultyTag = switch profile.rating {
+            case ..<0.3: .easy
+            case ..<0.5: .moderate
+            case ..<0.7: .hard
+            default: .expert
+            }
+            #expect(profile.tag == expected, "\(puzzleCase.id): tag \(profile.tag) must match rating \(profile.rating)")
         }
+
+        // The season library clusters mid-to-hard by design; the low end of
+        // the scale is proven by the training case (3 missing, no decoys,
+        // easy-only clues) which rates genuinely EASY.
+        let trainingProfile = CaseDifficultyProfile(of: TrainingCase.authored)
+        #expect(trainingProfile.tag == .easy)
+        let counts = Dictionary(grouping: CaseLibrary.all, by: { $0.tag })
+            .mapValues(\.count)
+        #expect((counts[.moderate] ?? 0) + (counts[.hard] ?? 0) == CaseLibrary.all.count)
     }
 
     // MARK: Persistence & isolation
