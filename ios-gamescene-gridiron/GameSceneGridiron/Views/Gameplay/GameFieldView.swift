@@ -204,11 +204,14 @@ struct GameFieldView: View {
     }
 }
 
-/// The field surface. Uses the bright striped-turf render (sideline crowd
-/// along the top edge) with painted broadcast markings when bundled, and
-/// falls back to the original painted turf so the puzzle board always works.
+/// The field surface. Uses the perspective turf render supplied as the game
+/// board (with a dark stands strip + sideline crew above the far boundary),
+/// and falls back to the original painted turf so the puzzle board always
+/// works. The render carries its own painted yard lines, hash marks and
+/// numbers, so only the functional lines (first down, scrimmage, depth cues)
+/// are drawn over it.
 struct FieldTurf: View {
-    static let turfAsset = "football_field_striped"
+    static let turfAsset = "field_perspective"
     private static let usesRenderedTurf = UIImage(named: turfAsset) != nil
 
     var body: some View {
@@ -219,30 +222,37 @@ struct FieldTurf: View {
         }
     }
 
-    /// Daylight stadium turf: vivid mowing stripes, the blurred sideline
-    /// crowd kept visible at the top, crisp white yard lines and hash marks,
-    /// big faded numbers, yellow first-down and blue scrimmage lines.
+    /// Perspective field filling the board, anchored so the near (bottom)
+    /// sideline stays on screen; the far sideline tucks under a narrow
+    /// stands-and-crew strip at the top edge.
     private var renderedTurf: some View {
-        Theme.turf
-            .overlay(alignment: .top) {
+        GeometryReader { proxy in
+            let apron = min(max(proxy.size.height * 0.075, 16), 26)
+            ZStack(alignment: .top) {
+                Theme.turf
+
                 Image(Self.turfAsset)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
+                    .offset(y: apron * 0.9)
                     .allowsHitTesting(false)
-            }
-            .overlay { FieldMarkings().allowsHitTesting(false) }
-            .overlay {
-                // Light falls from the stands: a touch brighter up top, the
-                // backfield foot only slightly shaded so figures stay vivid.
+
+                SidelineCrewView()
+                    .frame(height: apron)
+
+                FieldMarkings(showsYardLines: false)
+                    .allowsHitTesting(false)
+
                 LinearGradient(
-                    colors: [Color.white.opacity(0.05), .clear, .black.opacity(0.14)],
+                    colors: [Color.white.opacity(0.04), .clear, .black.opacity(0.12)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 .allowsHitTesting(false)
             }
-            .clipped()
-            .accessibilityHidden(true)
+        }
+        .clipped()
+        .accessibilityHidden(true)
     }
 
     /// Painted fallback: mowing stripes, chalk lines, same markings.
@@ -263,7 +273,7 @@ struct FieldTurf: View {
 
             FieldMarkings.drawYardLines(context: context, width: w, height: h)
             FieldMarkings.drawLineOfScrimmage(context: context, width: w, height: h)
-            FieldMarkings.drawLabels(context: context, width: w, height: h)
+            FieldMarkings.drawLabels(context: context, width: w, height: h, showsNumbers: true)
 
             var route = Path()
             route.move(to: CGPoint(x: w * 0.3, y: h * 0.62))
@@ -281,21 +291,27 @@ struct FieldTurf: View {
     }
 }
 
-/// Broadcast-style painted markings shared by both turf paths: white yard
-/// lines with per-yard hash marks, big faded yard numbers along both
-/// sidelines, the yellow first-down line, the blue line of scrimmage and the
-/// DEEP / BACKFIELD depth arrows.
+/// Painted markings shared by both turf paths: white yard lines with per-yard
+/// hash marks, big faded yard numbers along both sidelines, the yellow
+/// first-down line, the blue line of scrimmage and the DEEP / BACKFIELD depth
+/// arrows. The perspective turf render already paints its own yard lines,
+/// hash marks and numbers, so the rendered path passes `showsYardLines: false`
+/// and draws only the functional overlays.
 struct FieldMarkings: View {
     /// Normalized field height of the line of scrimmage (offense lines up below it).
     static let scrimmageY: CGFloat = 0.52
     /// Normalized field height of the first-down marker, up-field of the ball.
     static let firstDownY: CGFloat = 0.42
 
+    var showsYardLines = true
+
     var body: some View {
         Canvas { context, size in
-            Self.drawYardLines(context: context, width: size.width, height: size.height)
+            if showsYardLines {
+                Self.drawYardLines(context: context, width: size.width, height: size.height)
+            }
             Self.drawLineOfScrimmage(context: context, width: size.width, height: size.height)
-            Self.drawLabels(context: context, width: size.width, height: size.height)
+            Self.drawLabels(context: context, width: size.width, height: size.height, showsNumbers: showsYardLines)
         }
     }
 
@@ -351,15 +367,17 @@ struct FieldMarkings: View {
         context.stroke(los, with: .color(Color(hex: 0x2F7BFF).opacity(0.8)), lineWidth: 2.2)
     }
 
-    static func drawLabels(context: GraphicsContext, width: CGFloat, height: CGFloat) {
-        let yardLabels = ["40", "45", "50", "45", "40", "35", "30", "25", "20"]
-        for (index, label) in yardLabels.enumerated() {
-            let y = height * CGFloat(index + 1) / 10 + height * 0.05
-            let text = Text(label)
-                .font(.system(size: max(14, width * 0.068), weight: .black).width(.condensed))
-                .foregroundColor(Color.white.opacity(0.38))
-            context.draw(context.resolve(text), at: CGPoint(x: width * 0.095, y: y))
-            context.draw(context.resolve(text), at: CGPoint(x: width * 0.905, y: y))
+    static func drawLabels(context: GraphicsContext, width: CGFloat, height: CGFloat, showsNumbers: Bool = true) {
+        if showsNumbers {
+            let yardLabels = ["40", "45", "50", "45", "40", "35", "30", "25", "20"]
+            for (index, label) in yardLabels.enumerated() {
+                let y = height * CGFloat(index + 1) / 10 + height * 0.05
+                let text = Text(label)
+                    .font(.system(size: max(14, width * 0.068), weight: .black).width(.condensed))
+                    .foregroundColor(Color.white.opacity(0.38))
+                context.draw(context.resolve(text), at: CGPoint(x: width * 0.095, y: y))
+                context.draw(context.resolve(text), at: CGPoint(x: width * 0.905, y: y))
+            }
         }
 
         // Depth cues: chalk arrows showing that deeper = toward the top

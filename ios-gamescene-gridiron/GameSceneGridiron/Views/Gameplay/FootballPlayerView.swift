@@ -47,7 +47,14 @@ struct FootballPlayerView: View {
     /// One body scale for all eleven players: an upright athlete is
     /// `standingHeightScale` tokens tall and each stance takes its real
     /// fraction of that, so a crouched lineman never towers over a safety.
-    private var standingHeight: CGFloat { size * FieldFigureCatalog.standingHeightScale }
+    /// Defense draws a step smaller so both sides read at the same mass.
+    static func standingScale(facing: FieldFigureCatalog.Facing) -> Double {
+        facing == .front ? 0.9 : 1.0
+    }
+
+    private var standingHeight: CGFloat {
+        size * FieldFigureCatalog.standingHeightScale * Self.standingScale(facing: figure.facing)
+    }
     private var figureHeight: CGFloat { standingHeight * figure.heightRatio }
     /// Width follows the render's own aspect — never squeezed by a cap.
     private var figureWidth: CGFloat {

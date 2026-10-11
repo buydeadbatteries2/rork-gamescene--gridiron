@@ -75,6 +75,19 @@ struct FieldArtTests {
         #expect(ClueNotebookView.badgeColor(for: -1) == ClueNotebookView.badgeColor(for: 5))
     }
 
+    @Test func defenseRendersAStepSmallerThanOffense() {
+        #expect(FootballPlayerView.standingScale(facing: .front) < FootballPlayerView.standingScale(facing: .back))
+        #expect(FootballPlayerView.standingScale(facing: .front) > 0.8)
+        #expect(FootballPlayerView.standingScale(facing: .back) == 1.0)
+    }
+
+    @Test func sidelineCrewLineupIsPopulatedAndVaried() {
+        #expect(SidelineCrewView.lineup.count >= 8)
+        for role in [SidelineCrewView.CrewRole.referee, .coach, .photographer, .player] {
+            #expect(SidelineCrewView.lineup.contains(role))
+        }
+    }
+
     @Test func offenseAlwaysDrawsOverDefenseAndNearerFiguresDrawOverFartherOnes() {
         // Viewer looks up-field from behind the offense: any offensive figure
         // beats any defensive figure, even one lower on the field.
