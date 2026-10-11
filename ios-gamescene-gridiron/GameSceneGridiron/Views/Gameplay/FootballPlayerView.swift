@@ -44,15 +44,22 @@ struct FootballPlayerView: View {
         kit?.number ?? (isOffense ? Theme.goldLight : Color(hex: 0x1E2A38))
     }
 
-    /// Figure dimensions: athletes stand roughly twice as tall as the token.
-    private var figureWidth: CGFloat { size * 1.5 }
-    private var figureHeight: CGFloat { size * 2.0 }
+    /// One body scale for all eleven players: an upright athlete is
+    /// `standingHeightScale` tokens tall and each stance takes its real
+    /// fraction of that, so a crouched lineman never towers over a safety.
+    private var standingHeight: CGFloat { size * FieldFigureCatalog.standingHeightScale }
+    private var figureHeight: CGFloat { standingHeight * figure.heightRatio }
+    /// Width follows the render's own aspect — never squeezed by a cap.
+    private var figureWidth: CGFloat {
+        guard let image = UIImage(named: figure.asset), image.size.height > 0 else { return figureHeight * 0.6 }
+        return figureHeight * image.size.width / image.size.height
+    }
 
     var body: some View {
         Group {
             if usesFigure {
                 figureToken
-                    .frame(width: figureWidth, height: figureHeight + size * 0.3)
+                    .frame(width: max(figureWidth, size * 1.1), height: figureHeight + size * 0.3)
             } else {
                 vectorToken
                     .frame(width: size * 1.1, height: size * 1.42)
@@ -99,12 +106,12 @@ struct FootballPlayerView: View {
                 .resizable()
                 .scaledToFit()
                 .colorMultiply(figureTint)
-                .frame(width: figureWidth, height: figureHeight)
+                .frame(height: figureHeight)
                 .background(alignment: .bottom) {
                     // Soft contact shadow grounds the athlete on the turf.
                     Ellipse()
                         .fill(Color.black.opacity(0.42))
-                        .frame(width: figureWidth * 0.72, height: size * 0.32)
+                        .frame(width: max(figureWidth * 0.8, size * 0.9), height: size * 0.3)
                         .blur(radius: 3)
                         .offset(y: size * 0.08)
                 }

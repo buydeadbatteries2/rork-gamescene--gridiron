@@ -30,6 +30,24 @@ struct FieldArtTests {
         #expect(FieldFigureCatalog.allAssets.count == 9)
     }
 
+    @Test func figuresShareOneBodyScaleAcrossStancesAndSides() {
+        for position in FootballPosition.allCases {
+            let ratio = FieldFigureCatalog.figure(for: position).heightRatio
+            #expect(ratio > 0.5 && ratio <= 1.0, "\(position) ratio \(ratio)")
+        }
+        let ol = FieldFigureCatalog.figure(for: .ol).heightRatio
+        let dl = FieldFigureCatalog.figure(for: .dl).heightRatio
+        #expect(FieldFigureCatalog.figure(for: .fs).heightRatio > FieldFigureCatalog.figure(for: .lb).heightRatio)
+        #expect(abs(ol - dl) < 0.05)
+        #expect(FieldFigureCatalog.figure(for: .cb).heightRatio == FieldFigureCatalog.figure(for: .wr).heightRatio)
+        #expect(FieldFigureCatalog.standingHeightScale > 2 && FieldFigureCatalog.standingHeightScale < 3.5)
+    }
+
+    @Test func turfRenderIsBundledAndScrimmageSitsBelowFirstDown() {
+        #expect(UIImage(named: FieldTurf.turfAsset) != nil)
+        #expect(FieldMarkings.firstDownY < FieldMarkings.scrimmageY)
+    }
+
     @Test func everyFieldFigureIsBundled() {
         for asset in FieldFigureCatalog.allAssets {
             #expect(UIImage(named: asset) != nil, "missing field figure \(asset)")

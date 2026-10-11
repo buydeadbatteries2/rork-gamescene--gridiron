@@ -22,21 +22,31 @@ nonisolated enum FieldFigureCatalog {
         let asset: String
         let facing: Facing
         let stance: String
+        /// How tall the posed body is as a fraction of the same athlete
+        /// standing fully upright. Every render is cropped tight to its
+        /// content, so without this a lineman in a three-point stance would
+        /// draw as tall as a safety standing up straight.
+        let heightRatio: Double
     }
+
+    /// Upright athlete height in multiples of the field token size. Every
+    /// figure is drawn at `standingHeightScale * heightRatio` so all eleven
+    /// players share one body scale regardless of stance or side.
+    static let standingHeightScale: Double = 2.7
 
     /// Exactly one figure per position group. Safeties share the deep
     /// defensive-back body; no per-team or per-player art is ever generated.
     static func figure(for position: FootballPosition) -> Figure {
         switch position {
-        case .qb: Figure(asset: "field_qb_back", facing: .back, stance: "Under center, ready for the snap")
-        case .rb: Figure(asset: "field_rb_back", facing: .back, stance: "Two-point stance, hands on knees")
-        case .wr: Figure(asset: "field_wr_back", facing: .back, stance: "Split-out sprinter's stance")
-        case .te: Figure(asset: "field_te_back", facing: .back, stance: "Low crouched stance on the line")
-        case .ol: Figure(asset: "field_ol_back", facing: .back, stance: "Three-point stance, hand down")
-        case .dl: Figure(asset: "field_dl_front", facing: .front, stance: "Four-point stance, head up")
-        case .lb: Figure(asset: "field_lb_front", facing: .front, stance: "Two-point ready stance")
-        case .cb: Figure(asset: "field_cb_front", facing: .front, stance: "Press-coverage stance")
-        case .ss, .fs: Figure(asset: "field_s_front", facing: .front, stance: "Upright deep-zone stance")
+        case .qb: Figure(asset: "field_qb_back", facing: .back, stance: "Under center, ready for the snap", heightRatio: 0.74)
+        case .rb: Figure(asset: "field_rb_back", facing: .back, stance: "Two-point stance, hands on knees", heightRatio: 0.72)
+        case .wr: Figure(asset: "field_wr_back", facing: .back, stance: "Split-out sprinter's stance", heightRatio: 0.84)
+        case .te: Figure(asset: "field_te_back", facing: .back, stance: "Low crouched stance on the line", heightRatio: 0.62)
+        case .ol: Figure(asset: "field_ol_back", facing: .back, stance: "Three-point stance, hand down", heightRatio: 0.58)
+        case .dl: Figure(asset: "field_dl_front", facing: .front, stance: "Four-point stance, head up", heightRatio: 0.56)
+        case .lb: Figure(asset: "field_lb_front", facing: .front, stance: "Two-point ready stance", heightRatio: 0.78)
+        case .cb: Figure(asset: "field_cb_front", facing: .front, stance: "Press-coverage stance", heightRatio: 0.84)
+        case .ss, .fs: Figure(asset: "field_s_front", facing: .front, stance: "Upright deep-zone stance", heightRatio: 0.94)
         }
     }
 
