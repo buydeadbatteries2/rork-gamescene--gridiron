@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// One live quarter: HUD, field, clue notebook, roster tray and reserved ad area,
-/// stacked vertically. The quarter view model is injected by the match flow so the
+/// One live quarter: HUD, field, roster tray, tabbed case notebook and the
+/// banner row, stacked vertically. The quarter view model is injected by the match flow so the
 /// match can carry the finished quarter's state into the result screen.
 struct GameplayView: View {
     static let coordinateSpace = "gameplay"
@@ -88,6 +88,16 @@ struct GameplayView: View {
                     .transition(.opacity)
             }
 
+            // Roster tray sits directly under the field so the hold-drag to
+            // a placement zone is the shortest possible travel; the case
+            // notebook (CLUES / FIELD EVIDENCE / NOTES) sits below it.
+            RosterTrayView(
+                viewModel: viewModel,
+                tint: userTeam?.primaryColor,
+                highlightedPlayerID: training?.highlightedPlayerID
+            )
+                .frame(height: 200, alignment: .bottom)
+
             ClueNotebookView(
                 viewModel: viewModel,
                 onOpenCaseFile: {
@@ -98,13 +108,6 @@ struct GameplayView: View {
                 assistPulse: showFirstGameAssist
             )
             .padding(.horizontal, 16)
-
-            RosterTrayView(
-                viewModel: viewModel,
-                tint: userTeam?.primaryColor,
-                highlightedPlayerID: training?.highlightedPlayerID
-            )
-                .frame(height: 200, alignment: .bottom)
 
             // Absolute bottom banner slot, always its own row — never over
             // gameplay content. Ad-Free owners and the training case get the

@@ -1,9 +1,28 @@
 import SwiftUI
 
-/// Spiral-bound case-file card showing one clue at a time, styled like the physical
-/// football detective notebook: manila texture, generous margins, marker-highlighted
-/// clue copy. Swipe or tap arrows to page.
+/// The detective's spiral case notebook with three folder tabs:
+/// CLUES (numbered, color-coded, marker-highlighted list — tap a clue to make
+/// it the active one), FIELD EVIDENCE (polaroid photos of every object on the
+/// field — tap to locate it on the turf) and NOTES (what's been placed, what's
+/// still missing, hints spent). The trailing expand button opens the full
+/// Case File sheet.
 struct ClueNotebookView: View {
+    enum Tab: String, CaseIterable, Identifiable {
+        case clues = "CLUES"
+        case evidence = "FIELD EVIDENCE"
+        case notes = "NOTES"
+
+        var id: String { rawValue }
+
+        var symbol: String {
+            switch self {
+            case .clues: "list.clipboard"
+            case .evidence: "magnifyingglass"
+            case .notes: "note.text"
+            }
+        }
+    }
+
     let viewModel: GameViewModel
     let onOpenCaseFile: () -> Void
     /// Tutorial / first-game assist: a soft pulsing gold halo over the CASE FILE button.
@@ -11,159 +30,406 @@ struct ClueNotebookView: View {
     /// First-game assist: a subtle glow around the whole notebook.
     var assistPulse: Bool = false
 
+    @State private var tab: Tab = .clues
+
     private var isLargerText: Bool { TutorialManager.shared.isLargerClueTextEnabled }
     private var isHighContrast: Bool { TutorialManager.shared.isHighContrastCluesEnabled }
 
+    /// Colored clue-number badges, in notebook order (1…6).
+    static let clueBadgeColors: [Color] = [
+        Color(hex: 0xE2A82E), Color(hex: 0x2F6FBF), Color(hex: 0xC2412F),
+        Color(hex: 0x3E8A4A), Color(hex: 0x7A4FB5), Color(hex: 0xE07A1F)
+    ]
+
+    static func badgeColor(for index: Int) -> Color {
+        clueBadgeColors[((index % clueBadgeColors.count) + clueBadgeColors.count) % clueBadgeColors.count]
+    }
+
     var body: some View {
-        let clues = viewModel.puzzle.clues
-        let clue = viewModel.currentClue
+        VStack(spacing: 0) {
+            tabBar
 
-        HStack(alignment: .top, spacing: 0) {
-            SpiralBinding()
-                .frame(width: 18)
-                .padding(.vertical, 12)
+            HStack(alignment: .top, spacing: 0) {
+                SpiralBinding()
+                    .frame(width: 18)
+                    .padding(.vertical, 12)
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline) {
-                    Button(action: onOpenCaseFile) {
-                        HStack(spacing: 5) {
-                            Text("CASE FILE")
-                                .font(Theme.typewriterBold(14, relativeTo: .caption))
-                                .tracking(1.4)
-                            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                .font(.system(size: 9, weight: .bold))
-                        }
-                        .foregroundStyle(Theme.paperInk)
-                        .frame(minHeight: 30)
-                        .contentShape(.rect)
-                    }
-                    .accessibilityLabel("Open full case file")
-                    .caseFileHighlight(isActive: highlightCaseFile)
-
-                    if let clue {
-                        DifficultyPill(difficulty: clue.difficulty, compact: true)
-                    }
-
-                    Spacer(minLength: 4)
-
-                    Button { viewModel.previousClue(); Haptics.tick() } label: {
-                        Image(systemName: "chevron.left").frame(width: 30, height: 30).contentShape(.rect)
-                    }
-                    .accessibilityLabel("Previous clue")
-
-                    Text("\(viewModel.currentClueIndex + 1)/\(clues.count)")
-                        .font(Theme.typewriter(13, relativeTo: .caption))
-                        .monospacedDigit()
-                        .foregroundStyle(isHighContrast ? Theme.paperInk : Theme.paperInk.opacity(0.85))
-
-                    Button { viewModel.nextClue(); Haptics.tick() } label: {
-                        Image(systemName: "chevron.right").frame(width: 30, height: 30).contentShape(.rect)
-                    }
-                    .accessibilityLabel("Next clue")
-                }
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Theme.paperInk)
-
-                // Case-file rule: short bronze accent over the full divider
-                ZStack(alignment: .leading) {
-                    Rectangle().fill(Theme.paperInk.opacity(0.3)).frame(height: 1)
-                    Rectangle().fill(Theme.bronze).frame(width: 30, height: 2)
-                }
-
-                if let clue {
-                    // Larger Clue Text: the clue area scrolls vertically if the
-                    // copy needs more room — content is never clipped.
-                    if isLargerText {
-                        ScrollView {
-                            clueBody(clue)
-                                .id(clue.id)
-                        }
-                        .scrollIndicators(.hidden)
-                    } else {
-                        clueBody(clue)
-                            .id(clue.id)
-                            .transition(clueTransition)
+                Group {
+                    switch tab {
+                    case .clues: cluesPage
+                    case .evidence: evidencePage
+                    case .notes: notesPage
                     }
                 }
+                .padding(.leading, 8)
+                .padding(.trailing, 10)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .transition(.opacity)
             }
-            .padding(.leading, 10)
-            .padding(.trailing, 14)
-            .padding(.vertical, 10)
+            .frame(height: isLargerText ? 228 : 182)
+            .background {
+                PaperSurface(cornerRadius: 0)
+                    .overlay { RuledLines().allowsHitTesting(false) }
+            }
         }
-        .frame(height: isLargerText ? 210 : 162)
-        .paperCard(cornerRadius: 6)
+        .background {
+            // Dark binder behind the tabs so the inactive tabs read as folder
+            // tabs sitting behind the active page.
+            UnevenRoundedRectangle(topLeadingRadius: 8, bottomLeadingRadius: 6, bottomTrailingRadius: 6, topTrailingRadius: 8)
+                .fill(Color(hex: 0x1C1712))
+                .shadow(color: .black.opacity(0.5), radius: 10, y: 5)
+        }
         .overlay {
             if assistPulse {
                 PulsingHalo()
                     .allowsHitTesting(false)
             }
         }
-        .overlay(alignment: .bottomTrailing) {
-            ChalkDiagram()
-                .frame(width: 58, height: 40)
-                .padding(10)
-                .opacity(0.22)
-                .allowsHitTesting(false)
-        }
-        .overlay {
-            // Manila paper grain for a physical notebook feel.
-            Image("manila_paper_texture")
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .opacity(0.14)
-                .blendMode(.multiply)
-                .allowsHitTesting(false)
-        }
         .clipShape(.rect(cornerRadius: 6, style: .continuous))
-        .shadow(color: .black.opacity(0.5), radius: 10, y: 5)
-        .animation(.easeOut(duration: 0.22), value: viewModel.currentClueIndex)
+        .animation(.easeInOut(duration: 0.22), value: tab)
         .animation(.easeInOut(duration: 0.3), value: isLargerText)
-        .gesture(
-            DragGesture(minimumDistance: 24)
-                .onEnded { value in
-                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Case notebook, \(tab.rawValue.capitalized) tab")
+    }
+
+    // MARK: Tabs
+
+    private var tabBar: some View {
+        HStack(alignment: .bottom, spacing: 3) {
+            ForEach(Tab.allCases) { item in
+                let isSelected = tab == item
+                Button {
+                    guard tab != item else { return }
                     Haptics.tick()
-                    if value.translation.width < 0 { viewModel.nextClue() } else { viewModel.previousClue() }
+                    AudioManager.shared.play(.buttonPress)
+                    tab = item
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: item.symbol)
+                            .font(.system(size: 11, weight: .bold))
+                        Text(item.rawValue)
+                            .font(.system(size: 11, weight: .heavy).width(.condensed))
+                            .tracking(1.1)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
+                    .foregroundStyle(isSelected ? Theme.paperInk : Theme.paper.opacity(0.72))
+                    .padding(.horizontal, 10)
+                    .frame(height: isSelected ? 34 : 30)
+                    .frame(maxWidth: .infinity)
+                    .background {
+                        UnevenRoundedRectangle(topLeadingRadius: 7, topTrailingRadius: 7)
+                            .fill(isSelected ? AnyShapeStyle(Theme.paper) : AnyShapeStyle(Color(hex: 0x2B241C)))
+                    }
+                    .overlay(alignment: .bottom) {
+                        if isSelected {
+                            Rectangle()
+                                .fill(Theme.bronze)
+                                .frame(height: 2)
+                                .padding(.horizontal, 10)
+                                .offset(y: -3)
+                        }
+                    }
+                    .contentShape(.rect)
                 }
-        )
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(item.rawValue.capitalized) tab")
+                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+            }
+
+            Button(action: onOpenCaseFile) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.goldLight)
+                    .frame(width: 34, height: 30)
+                    .background(Color(hex: 0x2B241C), in: UnevenRoundedRectangle(topLeadingRadius: 7, topTrailingRadius: 7))
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open full case file")
+            .caseFileHighlight(isActive: highlightCaseFile)
+        }
+        .padding(.horizontal, 6)
+        .padding(.top, 5)
     }
 
-    private var clueTransition: AnyTransition {
-        Motion.isReduced ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(x: 16)), removal: .opacity)
-    }
+    // MARK: Clues
 
-    @ViewBuilder
-    private func clueBody(_ clue: PuzzleClue) -> some View {
-        let isSolved = viewModel.isClueSolved(clue)
-        VStack(alignment: .leading, spacing: 7) {
-            Text(ClueHighlighter.highlighted(clue.text, highContrast: isHighContrast))
-                .font(Theme.typewriter(isLargerText ? 21 : 15.5, relativeTo: .callout))
-                .foregroundStyle(Theme.paperInk.opacity(isSolved ? 0.45 : 1))
-                .lineSpacing(isLargerText ? 5 : 3.5)
-                // Larger Clue Text never shrinks or clips — without it, the
-                // graceful minimum-scale fallback still applies.
-                .minimumScaleFactor(isLargerText ? 1 : 0.68)
-                .fixedSize(horizontal: false, vertical: isLargerText)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-
-            if let hint = viewModel.usedHint(for: clue), !isSolved {
-                Label {
-                    Text(ClueHighlighter.highlighted(hint.text, highContrast: isHighContrast))
-                        .font(.system(size: isLargerText ? 15 : 12, weight: .medium))
-                        .lineSpacing(2)
-                        .lineLimit(isLargerText ? nil : 3)
-                        .minimumScaleFactor(0.8)
-                } icon: {
-                    Image(systemName: "lightbulb.fill")
-                        .font(.system(size: 11, weight: .bold))
+    private var cluesPage: some View {
+        let clues = viewModel.puzzle.clues
+        return ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: isLargerText ? 10 : 6) {
+                    ForEach(Array(clues.enumerated()), id: \.element.id) { index, clue in
+                        clueRow(clue, index: index, isCurrent: index == viewModel.currentClueIndex)
+                            .id(clue.id)
+                    }
                 }
-                .foregroundStyle(Theme.bronzeDeep)
+                .padding(.trailing, 2)
+            }
+            .scrollIndicators(.hidden)
+            .onChange(of: viewModel.currentClueIndex) { _, index in
+                guard clues.indices.contains(index) else { return }
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(clues[index].id, anchor: .center)
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .top)
-        .overlay(alignment: .bottomTrailing) {
-            if isSolved { SolvedStamp().padding(.trailing, 4) }
+    }
+
+    private func clueRow(_ clue: PuzzleClue, index: Int, isCurrent: Bool) -> some View {
+        let isSolved = viewModel.isClueSolved(clue)
+        return Button {
+            viewModel.showClue(at: index)
+            Haptics.tick()
+        } label: {
+            HStack(alignment: .top, spacing: 9) {
+                ZStack {
+                    Circle()
+                        .fill(Self.badgeColor(for: index))
+                        .frame(width: 22, height: 22)
+                        .shadow(color: .black.opacity(0.3), radius: 1, y: 1)
+                    Text("\(index + 1)")
+                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+                .opacity(isSolved ? 0.5 : 1)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(ClueHighlighter.highlighted(clue.text, highContrast: isHighContrast))
+                        .font(Theme.typewriter(isLargerText ? 18 : 13.5, relativeTo: .callout))
+                        .foregroundStyle(Theme.paperInk.opacity(isSolved ? 0.45 : 1))
+                        .lineSpacing(isLargerText ? 4 : 2.5)
+                        .strikethrough(isSolved, color: Theme.paperInk.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if let hint = viewModel.usedHint(for: clue), !isSolved {
+                        Label {
+                            Text(ClueHighlighter.highlighted(hint.text, highContrast: isHighContrast))
+                                .font(.system(size: isLargerText ? 14 : 11.5, weight: .medium))
+                                .lineSpacing(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } icon: {
+                            Image(systemName: "lightbulb.fill")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundStyle(Theme.bronzeDeep)
+                    }
+                }
+
+                if isSolved {
+                    SolvedStamp()
+                        .scaleEffect(0.62)
+                        .frame(width: 44, height: 18)
+                } else {
+                    DifficultyPill(difficulty: clue.difficulty, compact: true)
+                        .padding(.top, 3)
+                }
+            }
+            .padding(.vertical, 5)
+            .padding(.horizontal, 6)
+            .background {
+                if isCurrent {
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(Theme.bronze.opacity(0.13))
+                        .overlay(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(Theme.bronze)
+                                .frame(width: 3)
+                        }
+                }
+            }
+            .contentShape(.rect)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Clue \(index + 1): \(clue.text)")
+        .accessibilityValue(isSolved ? "Solved" : (isCurrent ? "Active clue" : "Unsolved"))
+    }
+
+    // MARK: Field evidence
+
+    private var evidencePage: some View {
+        let evidence = viewModel.puzzle.evidence
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("\(evidence.count) ITEMS LOGGED ON THE FIELD — TAP A PHOTO TO LOCATE IT")
+                .font(.system(size: 9, weight: .heavy).width(.condensed))
+                .tracking(1.1)
+                .foregroundStyle(Theme.paperInkSoft)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(Array(evidence.enumerated()), id: \.element.id) { index, item in
+                        let isInspected = viewModel.inspectedEvidenceID == item.id
+                        Button {
+                            Haptics.tick()
+                            viewModel.inspect(item)
+                        } label: {
+                            EvidencePolaroid(kind: item.kind, isSelected: isInspected)
+                                .rotationEffect(.degrees(index.isMultiple(of: 2) ? -2.2 : 1.8))
+                        }
+                        .buttonStyle(PressableButtonStyle(scale: 0.94))
+                        .accessibilityLabel("\(item.kind.title) photo")
+                        .accessibilityHint("Locates it on the field")
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 6)
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    // MARK: Notes
+
+    private var notesPage: some View {
+        let placed = viewModel.placements
+        let missing = viewModel.remainingPlayers
+        let hints = viewModel.usedHints
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 9) {
+                if placed.isEmpty && hints.isEmpty {
+                    Text("No deductions logged yet. Read the clues, then place the missing players.")
+                        .font(Theme.typewriter(12.5, relativeTo: .footnote))
+                        .foregroundStyle(Theme.paperInkSoft)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if !placed.isEmpty {
+                    notesHeader("PLACED", symbol: "checkmark.seal.fill", tint: Theme.easy)
+                    ForEach(placed) { placement in
+                        noteLine(
+                            marker: "✓",
+                            markerTint: Theme.easy,
+                            text: "\(placement.player.shortName) — \(placement.player.position.rawValue) · \(placement.variant.title.uppercased())"
+                        )
+                    }
+                }
+
+                if !missing.isEmpty {
+                    notesHeader("STILL MISSING", symbol: "questionmark.circle", tint: Theme.bronzeDeep)
+                    ForEach(missing) { player in
+                        noteLine(
+                            marker: "□",
+                            markerTint: Theme.paperInkSoft,
+                            text: "\(player.shortName) — \(player.position.fullName)"
+                        )
+                    }
+                }
+
+                if !hints.isEmpty {
+                    notesHeader("HINTS USED", symbol: "lightbulb.fill", tint: Theme.medium)
+                    ForEach(hints) { hint in
+                        noteLine(marker: "•", markerTint: Theme.bronzeDeep, text: hint.text)
+                    }
+                }
+
+                HStack(spacing: 14) {
+                    Label("\(viewModel.hintsRemaining) HINTS LEFT", systemImage: "lightbulb")
+                    Label("\(viewModel.lives) LIVES", systemImage: "heart.fill")
+                }
+                .font(.system(size: 10, weight: .heavy).width(.condensed))
+                .tracking(1)
+                .foregroundStyle(Theme.paperInkSoft)
+                .padding(.top, 2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private func notesHeader(_ title: String, symbol: String, tint: Color) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.system(size: 10.5, weight: .heavy).width(.condensed))
+                .tracking(1.4)
+                .foregroundStyle(Theme.paperInk)
+        }
+    }
+
+    private func noteLine(marker: String, markerTint: Color, text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Text(marker)
+                .font(Theme.typewriterBold(12, relativeTo: .caption))
+                .foregroundStyle(markerTint)
+                .frame(width: 12)
+            Text(text)
+                .font(Theme.typewriter(12.5, relativeTo: .footnote))
+                .foregroundStyle(Theme.paperInk)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+// MARK: Evidence polaroid
+
+/// Instant-photo card of one evidence object: white frame, turf backdrop,
+/// typewritten caption. Used on the FIELD EVIDENCE notebook tab.
+struct EvidencePolaroid: View {
+    let kind: EvidenceItem.Kind
+    var isSelected: Bool = false
+    var width: CGFloat = 82
+
+    var body: some View {
+        VStack(spacing: 5) {
+            ZStack {
+                LinearGradient(
+                    colors: [Color(hex: 0x3F7A34), Theme.turf, Theme.turfDark],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                // Faint yard line so the photo reads as "taken on the field".
+                Rectangle()
+                    .fill(Theme.chalk.opacity(0.55))
+                    .frame(height: 1.5)
+                    .offset(y: width * 0.22)
+                EvidenceItemView(kind: kind, size: width * 0.42)
+            }
+            .frame(width: width - 10, height: width - 10)
+            .clipShape(.rect(cornerRadius: 1.5))
+
+            Text(kind.title.uppercased())
+                .font(Theme.typewriterBold(7.5, relativeTo: .caption2))
+                .tracking(0.4)
+                .foregroundStyle(Theme.paperInk)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(width: width - 10)
+        }
+        .padding(.top, 5)
+        .padding(.bottom, 6)
+        .frame(width: width)
+        .background(Color(hex: 0xF4EFE2), in: .rect(cornerRadius: 2))
+        .overlay {
+            RoundedRectangle(cornerRadius: 2)
+                .strokeBorder(isSelected ? Theme.gold : Color.black.opacity(0.15), lineWidth: isSelected ? 2 : 1)
+        }
+        .shadow(color: .black.opacity(isSelected ? 0.5 : 0.35), radius: isSelected ? 6 : 3, y: 3)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Faint horizontal rule lines, like a lined notebook page.
+private struct RuledLines: View {
+    var body: some View {
+        Canvas { context, size in
+            let spacing: CGFloat = 22
+            var y: CGFloat = 36
+            while y < size.height {
+                var line = Path()
+                line.move(to: CGPoint(x: 26, y: y))
+                line.addLine(to: CGPoint(x: size.width - 8, y: y))
+                context.stroke(line, with: .color(Color(hex: 0x6E8BB0).opacity(0.16)), lineWidth: 0.8)
+                y += spacing
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 

@@ -1,12 +1,20 @@
 import SwiftUI
+import UIKit
 
-/// SwiftUI illustrations of the physical evidence left on the field, with a soft
-/// gold halo backing so each object reads as a clue on the photoreal turf.
-/// Covers the full 38-object evidence library; every object is fictional and
-/// generic — no real-world brands anywhere.
+/// Physical evidence left on the field. Each of the 38 fictional objects has a
+/// photoreal cutout render (`evidence_<kind>` imageset — generic, brand-free)
+/// drawn over a soft gold halo so it reads as a clue on the turf; the original
+/// vector pictogram remains as a fallback if an asset is ever missing.
 struct EvidenceItemView: View {
     let kind: EvidenceItem.Kind
     var size: CGFloat = 26
+
+    /// Bundled photoreal renders, checked once per kind.
+    private static let availableAssets: Set<String> = Set(
+        EvidenceItem.Kind.allCases.map(\.assetName).filter { UIImage(named: $0) != nil }
+    )
+
+    private var usesRender: Bool { Self.availableAssets.contains(kind.assetName) }
 
     var body: some View {
         ZStack {
@@ -21,6 +29,37 @@ struct EvidenceItemView: View {
                 )
                 .frame(width: size * 1.5, height: size * 1.5)
 
+            if usesRender {
+                renderedObject
+            } else {
+                vectorIllustration
+            }
+        }
+        .frame(width: size * 1.3, height: size * 1.3)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(kind.title)
+    }
+
+    // MARK: Photoreal render
+
+    /// Field marks (prints, stains, chalk) sit flush on the grass; objects get
+    /// a stronger lift shadow so they feel like they're resting on the turf.
+    private var renderedObject: some View {
+        Image(kind.assetName)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size * kind.renderScale, height: size * kind.renderScale)
+            .shadow(
+                color: .black.opacity(kind.isFieldMark ? 0.25 : 0.55),
+                radius: kind.isFieldMark ? 1 : 2.5,
+                x: 1,
+                y: kind.isFieldMark ? 1 : 2
+            )
+    }
+
+    // MARK: Vector fallback
+
+    private var vectorIllustration: some View {
             Group {
                 switch kind {
                 case .orangeTowel: towel
@@ -63,10 +102,6 @@ struct EvidenceItemView: View {
                 case .draggedFootTrail: dragTrail
                 }
             }
-        }
-        .frame(width: size * 1.3, height: size * 1.3)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(kind.title)
     }
 
     // MARK: Core objects

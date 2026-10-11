@@ -1,10 +1,11 @@
 import SwiftUI
 import UIKit
 
-/// Compact football-player piece: a team-colored vector token (plain blank
-/// helmet, opaque dark visor, no face, no numbers, no logos — compliant by
-/// construction) with a position-colored base badge. Offense reads dark,
-/// defense reads white at a glance.
+/// On-field football player piece. Renders the photoreal figure from
+/// `FieldFigureCatalog` — offense seen from behind, defense seen from the
+/// front — recolored into the team kit, with a small position tag under the
+/// feet so clues ("the tight end…") stay readable at a glance. Falls back to
+/// the original blank vector token if a figure asset is ever missing.
 struct FootballPlayerView: View {
     let position: FootballPosition
     var size: CGFloat = 24
@@ -13,7 +14,15 @@ struct FootballPlayerView: View {
     /// Team uniform colors; nil keeps the default house kit.
     var kit: TeamKit?
 
+    /// Figures whose bundled asset is actually present — checked once.
+    private static let availableFigures: Set<String> = Set(
+        FieldFigureCatalog.allAssets.filter { UIImage(named: $0) != nil }
+    )
+
     private var isOffense: Bool { position.side == .offense }
+    private var figure: FieldFigureCatalog.Figure { FieldFigureCatalog.figure(for: position) }
+    private var usesFigure: Bool { Self.availableFigures.contains(figure.asset) }
+
     private var arch: HelmetArch { HelmetArch(position: position) }
     private var helmetDiameter: CGFloat { size * 0.64 * arch.helmetScale }
     private var facemaskColor: Color { isOffense ? Color(hex: 0xC9A25A) : Color(hex: 0x8B97A3) }
@@ -35,9 +44,20 @@ struct FootballPlayerView: View {
         kit?.number ?? (isOffense ? Theme.goldLight : Color(hex: 0x1E2A38))
     }
 
+    /// Figure dimensions: athletes stand roughly twice as tall as the token.
+    private var figureWidth: CGFloat { size * 1.5 }
+    private var figureHeight: CGFloat { size * 2.0 }
+
     var body: some View {
-        vectorToken
-            .frame(width: size * 1.1, height: size * 1.42)
+        Group {
+            if usesFigure {
+                figureToken
+                    .frame(width: figureWidth, height: figureHeight + size * 0.3)
+            } else {
+                vectorToken
+                    .frame(width: size * 1.1, height: size * 1.42)
+            }
+        }
         .overlay(alignment: .topTrailing) {
             if let variant {
                 Image(systemName: variant.symbol)
@@ -45,24 +65,64 @@ struct FootballPlayerView: View {
                     .foregroundStyle(Theme.ink)
                     .frame(width: size * 0.44, height: size * 0.44)
                     .background(Theme.goldGradient, in: .circle)
-                    .offset(x: size * 0.06, y: isOffense ? -size * 0.38 : size * 0.06)
+                    .offset(x: size * 0.06, y: usesFigure ? -size * 0.1 : (isOffense ? -size * 0.38 : size * 0.06))
             }
         }
         .background {
             if isHighlighted {
                 Circle()
                     .fill(Theme.success.opacity(0.35))
-                    .frame(width: size * 1.9, height: size * 1.9)
+                    .frame(width: size * 2.2, height: size * 2.2)
                     .blur(radius: 6)
                 Circle()
                     .strokeBorder(Theme.gold, lineWidth: 1.5)
-                    .frame(width: size * 1.5, height: size * 1.5)
+                    .frame(width: size * 1.8, height: size * 1.8)
             }
         }
         .shadow(color: .black.opacity(0.45), radius: 2.5, y: 2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
     }
+
+    // MARK: Photoreal figure
+
+    /// White-uniform figure multiplied by the jersey color: team identity
+    /// comes entirely from the kit, the art stays blank and brand-free.
+    private var figureTint: Color {
+        if let kit { return kit.jersey.lightened(kit.isAlternate ? 0 : 0.12) }
+        return isOffense ? Color(hex: 0x3A332B) : Color(hex: 0xF2F2F2)
+    }
+
+    private var figureToken: some View {
+        VStack(spacing: 0) {
+            Image(figure.asset)
+                .resizable()
+                .scaledToFit()
+                .colorMultiply(figureTint)
+                .frame(width: figureWidth, height: figureHeight)
+                .background(alignment: .bottom) {
+                    // Soft contact shadow grounds the athlete on the turf.
+                    Ellipse()
+                        .fill(Color.black.opacity(0.42))
+                        .frame(width: figureWidth * 0.72, height: size * 0.32)
+                        .blur(radius: 3)
+                        .offset(y: size * 0.08)
+                }
+            Text(position.rawValue)
+                .font(.system(size: size * 0.27, weight: .heavy).width(.condensed))
+                .foregroundStyle(labelColor)
+                .padding(.horizontal, size * 0.16)
+                .padding(.vertical, size * 0.03)
+                .background(
+                    (kit?.jersey ?? (isOffense ? Color(hex: 0x15120E) : Color(hex: 0xE9ECEF))).opacity(0.92),
+                    in: .capsule
+                )
+                .overlay { Capsule().strokeBorder(rimColor, lineWidth: 0.8) }
+                .offset(y: -size * 0.04)
+        }
+    }
+
+    // MARK: Vector fallback
 
     /// Team-colored vector marker: blank helmet, dark visor, plain jersey.
     private var vectorToken: some View {
@@ -130,8 +190,9 @@ struct FootballPlayerView: View {
 
     private var accessibilityText: String {
         let side = isOffense ? "Offense" : "Defense"
-        if let variant { return "\(side) \(position.fullName), \(variant.title)" }
-        return "\(side) \(position.fullName)"
+        let facing = figure.facing == .back ? "seen from behind" : "facing the offense"
+        if let variant { return "\(side) \(position.fullName), \(variant.title), \(facing)" }
+        return "\(side) \(position.fullName), \(facing)"
     }
 }
 

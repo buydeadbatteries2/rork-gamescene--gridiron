@@ -4,7 +4,7 @@ import Foundation
 /// The library is deliberately broad — equipment, sideline gear and field damage —
 /// so every case file reads like a fresh scene, not the same five props.
 nonisolated struct EvidenceItem: Identifiable, Hashable, Sendable {
-    nonisolated enum Kind: String, Hashable, Sendable {
+    nonisolated enum Kind: String, Hashable, Sendable, CaseIterable {
         // Legacy core objects
         case orangeTowel
         case droppedGlove
@@ -91,6 +91,48 @@ nonisolated struct EvidenceItem: Identifiable, Hashable, Sendable {
             case .chalkMark: "Chalk Mark"
             case .wetPatch: "Wet Patch"
             case .draggedFootTrail: "Dragged-Foot Trail"
+            }
+        }
+
+        /// Bundled photoreal cutout: `evidence_` + snake_case of the case name
+        /// (e.g. `brokenHelmetStrap` → `evidence_broken_helmet_strap`).
+        var assetName: String {
+            var snake = ""
+            for character in rawValue {
+                if character.isUppercase {
+                    snake.append("_")
+                    snake.append(contentsOf: character.lowercased())
+                } else {
+                    snake.append(character)
+                }
+            }
+            return "evidence_" + snake
+        }
+
+        /// Marks IN the turf (prints, stains, chalk) rather than objects ON it.
+        var isFieldMark: Bool {
+            switch self {
+            case .muddyFootprints, .skidMarks, .tornTurf, .grassStain, .cleatMarks,
+                 .divot, .chalkMark, .wetPatch, .draggedFootTrail:
+                true
+            default:
+                false
+            }
+        }
+
+        /// Render size relative to the field token so objects keep believable
+        /// proportions next to the players: a pylon or bag reads bigger than a
+        /// mouthguard; ground marks spread wider than they stand tall.
+        var renderScale: CGFloat {
+            switch self {
+            case .equipmentBag, .chainMarker, .pylon, .orangeCone, .clipboard, .markerBoard:
+                1.55
+            case .skidMarks, .draggedFootTrail, .muddyFootprints, .wetPatch, .grassStain, .tornTurf:
+                1.6
+            case .mouthguard, .whistle, .wristband, .chinStrap, .brokenHelmetStrap, .tapeRoll, .visorCloth:
+                1.05
+            default:
+                1.3
             }
         }
     }
