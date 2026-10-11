@@ -207,7 +207,7 @@ struct FranchiseRosterTests {
         )
         let placement = PlacedPlayer(
             player: puzzlePlayer,
-            variant: .fast,
+            profile: .fast,
             slot: PlacementSlot(id: "s1", x: 0.5, y: 0.5)
         )
 
@@ -245,7 +245,7 @@ struct FranchiseRosterTests {
         )
         #expect(fallback.map(\.stat) == [.successfulRuns])
         #expect(fallback == StatAwardEngine.events(
-            from: [PlacedPlayer(player: puzzlePlayer, variant: .veteran, slot: placement.slot)],
+            from: [PlacedPlayer(player: puzzlePlayer, profile: .veteran, slot: placement.slot)],
             identities: [placement.player.id: rb]
         ))
     }
@@ -282,15 +282,15 @@ struct FranchiseRosterTests {
         var statsByDemand: [String: Set<PlayerStat>] = [:]
         for puzzleCase in CaseLibrary.all {
             let caseStats = CaseStatEvents.table[puzzleCase.id] ?? [:]
-            let variantByKey = Dictionary(
-                uniqueKeysWithValues: puzzleCase.solution.map { ($0.playerKey, $0.variant) }
+            let profileByKey = Dictionary(
+                uniqueKeysWithValues: puzzleCase.solution.map { ($0.playerKey, $0.profile) }
             )
             let positionByKey = Dictionary(
                 uniqueKeysWithValues: puzzleCase.missing.map { ($0.key, $0.position) }
             )
             for (playerKey, stat) in caseStats {
-                guard let variant = variantByKey[playerKey], let position = positionByKey[playerKey] else { continue }
-                statsByDemand["\(position.rawValue)-\(variant.rawValue)", default: []].insert(stat)
+                guard let profile = profileByKey[playerKey], let position = positionByKey[playerKey] else { continue }
+                statsByDemand["\(position.rawValue)-\(profile.rawValue)", default: []].insert(stat)
             }
         }
 
@@ -308,7 +308,7 @@ struct FranchiseRosterTests {
         let placements = [
             PlacedPlayer(
                 player: FootballPlayer(id: "unknown", name: "Milo Mudd", position: .lb, cardAsset: "football_player_linebacker"),
-                variant: .fast,
+                profile: .fast,
                 slot: PlacementSlot(id: "s1", x: 0.5, y: 0.5)
             )
         ]

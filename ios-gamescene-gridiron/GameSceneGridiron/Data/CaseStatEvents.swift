@@ -215,6 +215,19 @@ nonisolated enum CaseStatEvents {
         "case_victory_formation_10": [
             "wr": .receptions, "te": .successfulAssignments, "dl": .stops,
             "cb": .passBreakups, "fs": .interceptions
+        ],
+
+        // MARK: Band 6 (Phase 11.5 — expanded profile pool)
+        "case_hype_island_31": [
+            "wr": .receptions, "cb": .coverageWins, "ol": .blocks, "fs": .tackles
+        ],
+        "case_highlight_trap_41": [
+            "rb": .successfulRuns, "te": .successfulAssignments, "qb2": .scrambleOpportunities,
+            "lb": .tackles, "ss": .tackles
+        ],
+        "case_reputation_blindside_51": [
+            "te": .successfulAssignments, "wr": .receptions, "ol": .blocks,
+            "dl": .pressures, "fs": .tackles
         ]
     ]
 }

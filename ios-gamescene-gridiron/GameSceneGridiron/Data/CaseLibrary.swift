@@ -86,7 +86,7 @@ nonisolated enum Formation {
 /// case is authored, constraint-checked and converted to the runtime engine.
 nonisolated enum CaseLibrary {
     static let all: [QuarterCase] =
-        CasePack1.all + CasePack2.all + CasePack3.all + CasePack4.all + CasePack5.all
+        CasePack1.all + CasePack2.all + CasePack3.all + CasePack4.all + CasePack5.all + CasePack6.all
 
     /// All cases of one quarter band (1...5).
     static func band(_ band: Int) -> [QuarterCase] {
@@ -122,7 +122,7 @@ nonisolated enum CaseLibrary {
         slots: [(key: String, x: Double, y: Double)],
         clues: [(player: String, family: ClueFamily, difficulty: ClueDifficulty, text: String, constraints: [CaseConstraint], evidence: [String])],
         hints: [(player: String, text: String)],
-        solution: [(player: String, slot: String, variant: PlayerVariant)]
+        solution: [(player: String, slot: String, profile: PlayerProfile)]
     ) -> QuarterCase {
         QuarterCase(
             id: id,
@@ -146,7 +146,7 @@ nonisolated enum CaseLibrary {
                 )
             },
             hints: hints.map { CaseHint(playerKey: $0.player, text: $0.text) },
-            solution: solution.map { CaseSolution(playerKey: $0.player, slotKey: $0.slot, variant: $0.variant) }
+            solution: solution.map { CaseSolution(playerKey: $0.player, slotKey: $0.slot, profile: $0.profile) }
         )
     }
 
@@ -192,7 +192,7 @@ nonisolated enum CaseLibrary {
         for entry in puzzleCase.solution {
             solutions["\(puzzleCase.id)-\(entry.playerKey)"] = PlacementSolution(
                 slotID: "\(puzzleCase.id)-s-\(entry.slotKey)",
-                variant: entry.variant
+                profile: entry.profile
             )
         }
 

@@ -304,7 +304,7 @@ struct ClueNotebookView: View {
                         noteLine(
                             marker: "✓",
                             markerTint: Theme.easy,
-                            text: "\(placement.player.shortName) — \(placement.player.position.rawValue) · \(placement.variant.title.uppercased())"
+                            text: "\(placement.player.shortName) — \(placement.player.position.rawValue) · \(placement.profile.title.uppercased())"
                         )
                     }
                 }

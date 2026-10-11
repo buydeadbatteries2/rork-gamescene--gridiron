@@ -32,9 +32,9 @@ struct PlayerAssetAndPuzzleUniquenessTests {
 
     @Test func bodyAssetMappingCoversAllPositionsAndProfiles() {
         for position in FootballPosition.allCases {
-            for variant in PlayerVariant.allCases {
-                let asset = PlayerBodyCatalog.bodyAsset(for: position, variant: variant)
-                #expect(PlayerBodyCatalog.contains(asset), "\(position)/\(variant) mapped outside the library")
+            for profile in PlayerProfile.allCases {
+                let asset = PlayerBodyCatalog.bodyAsset(for: position, profile: profile)
+                #expect(PlayerBodyCatalog.contains(asset), "\(position)/\(profile) mapped outside the library")
             }
             #expect(PlayerBodyCatalog.contains(PlayerBodyCatalog.bodyAsset(for: position)))
         }

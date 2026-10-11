@@ -218,7 +218,7 @@ struct MatchViewModelTests {
                 Issue.record("Missing slot \(solution.slotID) in \(viewModel.puzzle.id)")
                 continue
             }
-            viewModel.selectVariant(solution.variant, for: playerID)
+            viewModel.selectProfile(solution.profile, for: playerID)
             let point = viewModel.point(x: slot.x, y: slot.y)
             let dropLocation = CGPoint(x: point.x, y: point.y + GameViewModel.dragLift)
             #expect(viewModel.beginDrag(playerID: playerID, at: dropLocation))
@@ -262,7 +262,7 @@ struct MatchViewModelTests {
         quarterViewModel.fieldFrame = CGRect(x: 0, y: 0, width: 360, height: 480)
 
         let decoy = SampleQuarter.puzzle.slot(id: "s-left-backfield")!
-        quarterViewModel.selectVariant(.fast, for: "p-rb")
+        quarterViewModel.selectProfile(.fast, for: "p-rb")
         let point = quarterViewModel.point(x: decoy.x, y: decoy.y)
         let dropLocation = CGPoint(x: point.x, y: point.y + GameViewModel.dragLift)
         #expect(quarterViewModel.beginDrag(playerID: "p-rb", at: dropLocation))

@@ -10,5 +10,5 @@ nonisolated struct PlacementSlot: Identifiable, Hashable, Sendable {
 /// The single correct answer for one missing player.
 nonisolated struct PlacementSolution: Hashable, Sendable {
     let slotID: String
-    let variant: PlayerVariant
+    let profile: PlayerProfile
 }

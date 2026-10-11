@@ -9,7 +9,7 @@ import UIKit
 struct FootballPlayerView: View {
     let position: FootballPosition
     var size: CGFloat = 24
-    var variant: PlayerVariant?
+    var profile: PlayerProfile?
     var isHighlighted: Bool = false
     /// Team uniform colors; nil keeps the default house kit.
     var kit: TeamKit?
@@ -73,8 +73,8 @@ struct FootballPlayerView: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            if let variant {
-                Image(systemName: variant.symbol)
+            if let profile {
+                Image(systemName: profile.symbol)
                     .font(.system(size: size * 0.26, weight: .bold))
                     .foregroundStyle(Theme.ink)
                     .frame(width: size * 0.44, height: size * 0.44)
@@ -205,7 +205,7 @@ struct FootballPlayerView: View {
     private var accessibilityText: String {
         let side = isOffense ? "Offense" : "Defense"
         let facing = figure.facing == .back ? "seen from behind" : "facing the offense"
-        if let variant { return "\(side) \(position.fullName), \(variant.title), \(facing)" }
+        if let profile { return "\(side) \(position.fullName), \(profile.title), \(facing)" }
         return "\(side) \(position.fullName), \(facing)"
     }
 }
@@ -213,7 +213,7 @@ struct FootballPlayerView: View {
 /// The avatar that follows the finger while dragging a missing player.
 struct DraggedPlayerToken: View {
     let player: FootballPlayer
-    let variant: PlayerVariant?
+    let profile: PlayerProfile?
     let isOverSlot: Bool
     /// Team primary tint over the controlled body asset.
     var tint: Color?
@@ -234,8 +234,8 @@ struct DraggedPlayerToken: View {
                     Circle().strokeBorder(isOverSlot ? Theme.success : Theme.gold, lineWidth: 2.5)
                 }
                 .overlay(alignment: .topTrailing) {
-                    if let variant {
-                        Image(systemName: variant.symbol)
+                    if let profile {
+                        Image(systemName: profile.symbol)
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(Theme.ink)
                             .frame(width: 20, height: 20)

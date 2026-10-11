@@ -24,20 +24,20 @@ nonisolated enum DifficultyLevel: String, Codable, CaseIterable, Hashable, Senda
     /// One-line card copy for the selection screen.
     var blurb: String {
         switch self {
-        case .rookie: "Clearer clues • fewer players • stronger hints"
-        case .pro: "Balanced GameScene experience"
-        case .allPro: "More relationships • tougher deductions"
-        case .hallOfFamer: "Maximum logical challenge"
+        case .rookie: "Clearer clues • Rookie/Veteran profiles • untimed"
+        case .pro: "Balanced GameScene experience • untimed"
+        case .allPro: "All five profiles • Overrated introduced • untimed"
+        case .hallOfFamer: "40-second play clock • 2 timeouts • maximum challenge"
         }
     }
 
     /// Short description for Settings.
     var summary: String {
         switch self {
-        case .rookie: "Welcoming — direct clues, strong hints, fewer decoys."
-        case .pro: "The intended standard experience."
-        case .allPro: "Subtle clues, extra decoys, chained deductions."
-        case .hallOfFamer: "Elite — minimal hints, maximum decoys, no guessing."
+        case .rookie: "Welcoming — direct clues, strong hints, fewer decoys, untimed."
+        case .pro: "The intended standard experience — untimed."
+        case .allPro: "Subtle clues, extra decoys, chained deductions, untimed."
+        case .hallOfFamer: "Elite — minimal hints, maximum decoys, a 40-second play clock per placement and two 25-second timeouts per quarter."
         }
     }
 
@@ -158,6 +158,9 @@ nonisolated struct DifficultyTarget: Hashable, Sendable {
     /// Missing players are trimmed down to this cap (Rookie trims 5 → 4 when
     /// the solver allows).
     let maxMissingPlayers: Int
+    /// Player profiles the selected game difficulty allows. Rookie cases
+    /// never require Fast/Powerful/Overrated; Pro never requires Overrated.
+    let profilePool: [PlayerProfile]
     /// Effective rating 0...3.5 this target was resolved from.
     let rating: Double
 }
@@ -179,6 +182,10 @@ nonisolated enum DifficultyResolver {
 
     static func target(selected: DifficultyLevel, stage: SeasonStage) -> DifficultyTarget {
         var resolved = target(forRating: effectiveRating(selected: selected, stage: stage))
+        // Profile availability follows the SELECTED level, not the resolved
+        // tier — the Rookie tier an early Pro game resolves to never silently
+        // changes which profile options the player is shown.
+        let pool = PlayerProfile.pool(for: selected)
         if selected == .rookie {
             // Rookie never inherits Hall-of-Famer-level zone counts late in the
             // season: decoy zones stay capped at 2 and the missing-player trim
@@ -190,6 +197,18 @@ nonisolated enum DifficultyResolver {
                 maxDecoys: min(resolved.maxDecoys ?? 2, 2),
                 addedDecoys: resolved.addedDecoys,
                 maxMissingPlayers: min(resolved.maxMissingPlayers, 4),
+                profilePool: pool,
+                rating: resolved.rating
+            )
+        } else {
+            resolved = DifficultyTarget(
+                tier: resolved.tier,
+                hintStrength: resolved.hintStrength,
+                clueOrdering: resolved.clueOrdering,
+                maxDecoys: resolved.maxDecoys,
+                addedDecoys: resolved.addedDecoys,
+                maxMissingPlayers: resolved.maxMissingPlayers,
+                profilePool: pool,
                 rating: resolved.rating
             )
         }
@@ -206,22 +225,26 @@ nonisolated enum DifficultyResolver {
         case ..<1.0:
             DifficultyTarget(
                 tier: .rookie, hintStrength: .direct, clueOrdering: .easiestFirst,
-                maxDecoys: 2, addedDecoys: 0, maxMissingPlayers: 4, rating: rating
+                maxDecoys: 2, addedDecoys: 0, maxMissingPlayers: 4,
+                profilePool: PlayerProfile.pool(for: .rookie), rating: rating
             )
         case ..<2.0:
             DifficultyTarget(
                 tier: .pro, hintStrength: .balanced, clueOrdering: .authored,
-                maxDecoys: nil, addedDecoys: 0, maxMissingPlayers: .max, rating: rating
+                maxDecoys: nil, addedDecoys: 0, maxMissingPlayers: .max,
+                profilePool: PlayerProfile.pool(for: .pro), rating: rating
             )
         case ..<3.0:
             DifficultyTarget(
                 tier: .allPro, hintStrength: .subtle, clueOrdering: .authored,
-                maxDecoys: nil, addedDecoys: 1, maxMissingPlayers: .max, rating: rating
+                maxDecoys: nil, addedDecoys: 1, maxMissingPlayers: .max,
+                profilePool: PlayerProfile.pool(for: .allPro), rating: rating
             )
         default:
             DifficultyTarget(
                 tier: .hallOfFamer, hintStrength: .minimal, clueOrdering: .hardestFirst,
-                maxDecoys: nil, addedDecoys: 2, maxMissingPlayers: .max, rating: rating
+                maxDecoys: nil, addedDecoys: 2, maxMissingPlayers: .max,
+                profilePool: PlayerProfile.pool(for: .hallOfFamer), rating: rating
             )
         }
     }

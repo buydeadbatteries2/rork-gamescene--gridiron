@@ -67,18 +67,13 @@ nonisolated enum PlayerBodyCatalog {
     }
 
     /// Position-appropriate body asset, biased toward the player's profile:
-    /// FAST → lean/agile bodies, POWER → broad/heavy bodies, VETERAN → the
-    /// composed balanced body of that position group.
-    static func bodyAsset(for position: FootballPosition, variant: PlayerVariant? = nil) -> String {
+    /// FAST → lean/agile bodies, POWERFUL → broad/heavy bodies, VETERAN (and
+    /// the Rookie/Overrated profiles) → the composed balanced body.
+    static func bodyAsset(for position: FootballPosition, profile: PlayerProfile? = nil) -> String {
         let candidates = pool(for: position)
         guard let first = candidates.first else { return "football_player_render" }
-        guard let variant else { return first.id }
-        let archetype: BodyArchetype = switch variant {
-        case .fast: .fast
-        case .power: .power
-        case .veteran: .veteran
-        }
-        return candidates.first { $0.archetype == archetype }?.id ?? first.id
+        guard let profile else { return first.id }
+        return candidates.first { $0.archetype == profile.bodyArchetype }?.id ?? first.id
     }
 
     /// True when the asset belongs to the controlled library.

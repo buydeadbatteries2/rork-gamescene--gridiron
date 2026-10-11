@@ -9,10 +9,12 @@ struct PlayerCardView: View {
     /// fictional franchise recolors its players. Nil keeps the neutral base.
     var tint: Color?
     let isExpanded: Bool
-    let selectedVariant: PlayerVariant?
+    let selectedProfile: PlayerProfile?
+    /// Profiles valid at the active game difficulty — only these render.
+    var availableProfiles: [PlayerProfile] = PlayerProfile.pool(for: .pro)
     let isBeingDragged: Bool
     let onToggle: () -> Void
-    let onSelectVariant: (PlayerVariant) -> Void
+    let onSelectProfile: (PlayerProfile) -> Void
 
     private var accent: Color { Theme.positionAccent(player.position) }
     private var cardWidth: CGFloat { isExpanded ? 192 : 112 }
@@ -29,8 +31,8 @@ struct PlayerCardView: View {
             }
             .buttonStyle(PressableButtonStyle(scale: 0.97))
             .accessibilityLabel("\(player.position.fullName), \(player.shortName)")
-            .accessibilityValue(selectedVariant.map { "\($0.title) selected" } ?? "No profile selected")
-            .accessibilityHint(isExpanded ? "Collapse" : "Show Fast, Power and Veteran profiles")
+            .accessibilityValue(selectedProfile.map { "\($0.title) selected" } ?? "No profile selected")
+            .accessibilityHint(isExpanded ? "Collapse" : "Show the available profiles")
 
             if isExpanded {
                 variantChips
@@ -101,8 +103,8 @@ struct PlayerCardView: View {
                     .allowsHitTesting(false)
             }
             .overlay(alignment: .topTrailing) {
-                if let selectedVariant {
-                    Image(systemName: selectedVariant.symbol)
+                if let selectedProfile {
+                    Image(systemName: selectedProfile.symbol)
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(Theme.ink)
                         .frame(width: 22, height: 22)
@@ -141,16 +143,23 @@ struct PlayerCardView: View {
         .background(Color(hex: 0x0F0D0A))
     }
 
-    // MARK: Variant selection
+    // MARK: Profile selection
 
+    /// Profile chips wrap in a clean adaptive grid — five options never clip
+    /// and never shrink below a comfortable tap target.
     private var variantChips: some View {
-        HStack(spacing: 5) {
-            ForEach(PlayerVariant.allCases) { variant in
-                let isSelected = selectedVariant == variant
-                Button { onSelectVariant(variant) } label: {
-                    Text(variant.title.uppercased())
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 78), spacing: 5)],
+            spacing: 5
+        ) {
+            ForEach(availableProfiles) { profile in
+                let isSelected = selectedProfile == profile
+                Button { onSelectProfile(profile) } label: {
+                    Text(profile.title.uppercased())
                         .font(.system(size: 10.5, weight: .bold).width(.condensed))
                         .tracking(0.6)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .foregroundStyle(isSelected ? Theme.ink : Color.white.opacity(0.75))
                         .frame(maxWidth: .infinity)
                         .frame(height: 30)
@@ -163,7 +172,7 @@ struct PlayerCardView: View {
                         .contentShape(.capsule)
                 }
                 .buttonStyle(PressableButtonStyle(scale: 0.92))
-                .accessibilityLabel("\(variant.title): \(variant.summary)")
+                .accessibilityLabel("\(profile.title): \(profile.summary)")
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
@@ -172,7 +181,7 @@ struct PlayerCardView: View {
     }
 
     private var instruction: some View {
-        Text(selectedVariant == nil ? "Pick a profile, then hold to drag" : "Hold & drag up to the field")
+        Text(selectedProfile == nil ? "Pick a profile, then hold to drag" : "Hold & drag up to the field")
             .font(Theme.typewriter(9.5, relativeTo: .caption2))
             .foregroundStyle(Theme.goldLight.opacity(0.7))
             .padding(.bottom, 7)

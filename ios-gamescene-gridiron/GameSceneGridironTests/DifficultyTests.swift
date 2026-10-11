@@ -110,7 +110,17 @@ struct DifficultyTests {
 
     @Test("Pro presents the authored case unchanged")
     func proIsTheAuthoredCase() {
+        // Phase 11.5: cases authored with profiles the Pro pool hides (e.g.
+        // Overrated) legitimately re-pin at Pro — everything else is untouched.
+        let proPool = Set(PlayerProfile.pool(for: .pro))
         for puzzleCase in CaseLibrary.all {
+            let referenced = Set(puzzleCase.clues.flatMap(\.constraints).compactMap { constraint -> PlayerProfile? in
+                switch constraint {
+                case .profileIs(_, let profile), .profileIsNot(_, let profile): profile
+                default: nil
+                }
+            })
+            guard referenced.isSubset(of: proPool) else { continue }
             let adapted = CaseDifficultyAdapter.adapt(puzzleCase, to: Self.proTarget)
             #expect(adapted == puzzleCase, "\(puzzleCase.id): Pro must be the authored case")
         }

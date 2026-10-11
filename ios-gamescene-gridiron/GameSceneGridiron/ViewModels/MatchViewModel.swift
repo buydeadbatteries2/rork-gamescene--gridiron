@@ -32,7 +32,7 @@ final class MatchViewModel {
     private let isChampionship: Bool
     /// The difficulty actually active for this game — every achievement that
     /// references difficulty reads this, never the live selection.
-    private let activeDifficulty: DifficultyLevel
+    let activeDifficulty: DifficultyLevel
     /// Stable identity for this game's reward transaction. A fresh game (replay)
     /// gets a new id, so its reward can be claimed exactly once.
     private(set) var matchID = UUID()

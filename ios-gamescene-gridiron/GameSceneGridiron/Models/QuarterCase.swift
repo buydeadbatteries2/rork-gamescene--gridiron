@@ -45,9 +45,9 @@ nonisolated enum CaseConstraint: Hashable, Sendable {
     /// Players on opposite sides of the ball.
     case oppositeSideOfBall(a: String, b: String)
     /// Player must be deployed with this profile.
-    case variantIs(player: String, variant: PlayerVariant)
+    case profileIs(player: String, profile: PlayerProfile)
     /// Player must NOT be deployed with this profile.
-    case variantIsNot(player: String, variant: PlayerVariant)
+    case profileIsNot(player: String, profile: PlayerProfile)
 }
 
 nonisolated struct CasePlayer: Hashable, Sendable {
@@ -89,7 +89,7 @@ nonisolated struct CaseHint: Hashable, Sendable {
 nonisolated struct CaseSolution: Hashable, Sendable {
     let playerKey: String
     let slotKey: String
-    let variant: PlayerVariant
+    let profile: PlayerProfile
 }
 
 /// One validated case definition in the local library.
@@ -126,7 +126,7 @@ nonisolated enum CaseSolver {
         /// Number of valid player→slot assignments (capped for safety).
         let validAssignments: Int
         /// Profiles each player may take under the profile constraints.
-        let allowedVariants: [String: Set<PlayerVariant>]
+        let allowedVariants: [String: Set<PlayerProfile>]
         /// Slots each player may take under their single-player constraints.
         let allowedSlots: [String: Set<String>]
         /// Up to two valid assignments (playerKey → slotKey) for diagnosis.
@@ -161,11 +161,11 @@ nonisolated enum CaseSolver {
 
         var singleConstraints: [String: [CaseConstraint]] = [:]
         var multiConstraints: [CaseConstraint] = []
-        var variantConstraints: [String: [CaseConstraint]] = [:]
+        var profileConstraints: [String: [CaseConstraint]] = [:]
         for constraint in puzzleCase.clues.flatMap(\.constraints) {
             switch constraint {
-            case .variantIs(let player, _), .variantIsNot(let player, _):
-                variantConstraints[player, default: []].append(constraint)
+            case .profileIs(let player, _), .profileIsNot(let player, _):
+                profileConstraints[player, default: []].append(constraint)
             case .nearEvidence, .depthBand, .xBand:
                 singleConstraints[subject(of: constraint), default: []].append(constraint)
             default:
@@ -173,14 +173,28 @@ nonisolated enum CaseSolver {
             }
         }
 
-        // Per-player profile options.
-        var allowedVariants: [String: Set<PlayerVariant>] = [:]
-        for key in playerKeys {
-            var options = Set(PlayerVariant.allCases)
-            for constraint in variantConstraints[key] ?? [] {
+        // Per-player profile options. The candidate universe is the legacy
+        // three-archetype dialect plus any profile the case explicitly
+        // references: older cases that pin by exclusion ("not the veteran,
+        // not the power build") must keep reading as a three-option question,
+        // while cases that name Rookie/Overrated bring those into play.
+        let referencedProfiles = Set(
+            puzzleCase.clues.flatMap(\.constraints).compactMap { constraint -> PlayerProfile? in
                 switch constraint {
-                case .variantIs(_, let variant): options = [variant]
-                case .variantIsNot(_, let variant): options.remove(variant)
+                case .profileIs(_, let profile), .profileIsNot(_, let profile): profile
+                default: nil
+                }
+            }
+        )
+        let profileUniverse = Set([PlayerProfile.fast, .powerful, .veteran]).union(referencedProfiles)
+
+        var allowedVariants: [String: Set<PlayerProfile>] = [:]
+        for key in playerKeys {
+            var options = profileUniverse
+            for constraint in profileConstraints[key] ?? [] {
+                switch constraint {
+                case .profileIs(_, let profile): options = [profile]
+                case .profileIsNot(_, let profile): options.remove(profile)
                 default: break
                 }
             }
@@ -210,12 +224,12 @@ nonisolated enum CaseSolver {
         // Intended solution check.
         var intendedViolations: [String] = []
         var intendedAssignment: [String: Position] = [:]
-        var intendedVariants: [String: PlayerVariant] = [:]
+        var intendedVariants: [String: PlayerProfile] = [:]
         for entry in puzzleCase.solution {
             if let slot = puzzleCase.slot(withKey: entry.slotKey) {
                 intendedAssignment[entry.playerKey] = (slot.x, slot.y)
             }
-            intendedVariants[entry.playerKey] = entry.variant
+            intendedVariants[entry.playerKey] = entry.profile
         }
         let allConstraints = puzzleCase.clues.flatMap(\.constraints)
         for constraint in allConstraints {
@@ -223,8 +237,8 @@ nonisolated enum CaseSolver {
                 intendedViolations.append(String(describing: constraint))
             }
         }
-        for entry in puzzleCase.solution where allowedVariants[entry.playerKey]?.contains(entry.variant) != true {
-            intendedViolations.append("variant not allowed for \(entry.playerKey)")
+        for entry in puzzleCase.solution where allowedVariants[entry.playerKey]?.contains(entry.profile) != true {
+            intendedViolations.append("profile not allowed for \(entry.playerKey)")
         }
         for entry in puzzleCase.solution
         where allowedSlots[entry.playerKey]?.contains(entry.slotKey) != true {
@@ -288,7 +302,7 @@ nonisolated enum CaseSolver {
     static func isSatisfied(
         _ constraint: CaseConstraint,
         assignment: [String: Position],
-        variants: [String: PlayerVariant],
+        variants: [String: PlayerProfile],
         evidence: [String: Position]
     ) -> Bool {
         func position(_ key: String) -> Position? { assignment[key] }
@@ -324,11 +338,11 @@ nonisolated enum CaseSolver {
         case .oppositeSideOfBall(let a, let b):
             guard let pa = position(a), let pb = position(b) else { return false }
             return (pa.x < 0.5) != (pb.x < 0.5)
-        case .variantIs(let player, let variant):
-            return variants[player] == variant
-        case .variantIsNot(let player, let variant):
+        case .profileIs(let player, let profile):
+            return variants[player] == profile
+        case .profileIsNot(let player, let profile):
             guard let chosen = variants[player] else { return true }
-            return chosen != variant
+            return chosen != profile
         }
     }
 
@@ -370,8 +384,8 @@ nonisolated enum CaseSolver {
              .farthestFromEvidence(let player, _),
              .depthBand(let player, _, _),
              .xBand(let player, _, _),
-             .variantIs(let player, _),
-             .variantIsNot(let player, _):
+             .profileIs(let player, _),
+             .profileIsNot(let player, _):
             [player]
         case .yAbove(let a, let b, _),
              .yBelow(let a, let b, _),

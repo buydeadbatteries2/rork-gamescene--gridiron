@@ -54,27 +54,27 @@ nonisolated enum CasePack4 {
             clues: [
                 (player: "qb", family: .scenario, difficulty: .easy,
                  text: "The chalk mark four yards behind the line, dead center, is the passer's office — and with the blitz pressure this late, whoever stands there has to be able to leave it in a heartbeat.",
-                 constraints: [.nearEvidence(player: "qb", evidence: "chalk", radius: 0.08), .variantIs(player: "qb", variant: .fast)],
+                 constraints: [.nearEvidence(player: "qb", evidence: "chalk", radius: 0.08), .profileIs(player: "qb", profile: .fast)],
                  evidence: ["chalk"]),
                 (player: "ol", family: .footballResponsibility, difficulty: .medium,
                  text: "The right tackle spot is vacant, and the kicking tee parked in front of it marks the replacement. Against this front he will eat double teams or the quarterback eats turf.",
-                 constraints: [.nearEvidence(player: "ol", evidence: "tee", radius: 0.08), .variantIs(player: "ol", variant: .power)],
+                 constraints: [.nearEvidence(player: "ol", evidence: "tee", radius: 0.08), .profileIs(player: "ol", profile: .powerful)],
                  evidence: ["tee"]),
                 (player: "cb", family: .evidenceRelationship, difficulty: .medium,
                  text: "The grass stain on the left island shows where the corner back-pedaled all game — across from the visible receiver, no help coming, only recovery speed as insurance.",
-                 constraints: [.nearEvidence(player: "cb", evidence: "stain", radius: 0.08), .variantIs(player: "cb", variant: .fast)],
+                 constraints: [.nearEvidence(player: "cb", evidence: "stain", radius: 0.08), .profileIs(player: "cb", profile: .fast)],
                  evidence: ["stain"]),
                 (player: "ss", family: .orderDepth, difficulty: .medium,
                  text: "The whistle on the left second level marks the unders safety: below the deep men, above the backers, the first hat into every box count.",
-                 constraints: [.nearEvidence(player: "ss", evidence: "whistle", radius: 0.08), .variantIs(player: "ss", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "ss", evidence: "whistle", radius: 0.08), .profileIs(player: "ss", profile: .veteran)],
                  evidence: ["whistle"]),
                 (player: "fs", family: .profileDeduction, difficulty: .hard,
                  text: "The water bottle at the top right marks the post half. With the middle of the field wide open behind him, the job is pure erasure — range first, instincts second, neither optional.",
-                 constraints: [.nearEvidence(player: "fs", evidence: "bottle", radius: 0.08), .variantIs(player: "fs", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "fs", evidence: "bottle", radius: 0.08), .profileIs(player: "fs", profile: .veteran)],
                  evidence: ["bottle"]),
                 (player: "lb", family: .chainedDeduction, difficulty: .medium,
                  text: "The challenge flag at the right stack spot marks the run-and-hit backer: below the deep post, on the tight end's side of the field, where the hole closes fastest.",
-                 constraints: [.nearEvidence(player: "lb", evidence: "flag", radius: 0.08), .yBelow(a: "lb", b: "fs", gap: 0.15), .variantIs(player: "lb", variant: .power)],
+                 constraints: [.nearEvidence(player: "lb", evidence: "flag", radius: 0.08), .yBelow(a: "lb", b: "fs", gap: 0.15), .profileIs(player: "lb", profile: .powerful)],
                  evidence: ["flag"])
             ],
             hints: [
@@ -86,12 +86,12 @@ nonisolated enum CasePack4 {
                 (player: "lb", text: "Right stack spot, below the deep post — at the challenge flag.")
             ],
             solution: [
-                (player: "qb", slot: "qb-gun", variant: .fast),
-                (player: "ol", slot: "ol-rt", variant: .power),
-                (player: "cb", slot: "cb-left", variant: .fast),
-                (player: "ss", slot: "ss-box", variant: .veteran),
-                (player: "fs", slot: "fs-deep-right", variant: .veteran),
-                (player: "lb", slot: "lb-right", variant: .power)
+                (player: "qb", slot: "qb-gun", profile: .fast),
+                (player: "ol", slot: "ol-rt", profile: .powerful),
+                (player: "cb", slot: "cb-left", profile: .fast),
+                (player: "ss", slot: "ss-box", profile: .veteran),
+                (player: "fs", slot: "fs-deep-right", profile: .veteran),
+                (player: "lb", slot: "lb-right", profile: .powerful)
             ]
         ),
 
@@ -142,27 +142,27 @@ nonisolated enum CasePack4 {
             clues: [
                 (player: "qb", family: .scenario, difficulty: .easy,
                  text: "A three-level flood lives on the throw, and the loose football four yards behind the line marks the thrower — in the gun, with his eyes already downfield.",
-                 constraints: [.nearEvidence(player: "qb", evidence: "ball", radius: 0.08), .variantIs(player: "qb", variant: .fast)],
+                 constraints: [.nearEvidence(player: "qb", evidence: "ball", radius: 0.08), .profileIs(player: "qb", profile: .fast)],
                  evidence: ["ball"]),
                 (player: "wr1", family: .relativePosition, difficulty: .medium,
                  text: "The sports drink cup at the far right numbers marks the deep third — the receiver who runs past the corner's cushion and keeps going until the safety flinches.",
-                 constraints: [.nearEvidence(player: "wr1", evidence: "cup", radius: 0.08), .variantIs(player: "wr1", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "wr1", evidence: "cup", radius: 0.08), .profileIs(player: "wr1", profile: .veteran)],
                  evidence: ["cup"]),
                 (player: "wr2", family: .formationKnowledge, difficulty: .medium,
                  text: "The wristband inside of him marks the intermediate threat: off the tackle, at the depth where zones get soft, always the second read.",
-                 constraints: [.nearEvidence(player: "wr2", evidence: "band", radius: 0.08), .variantIs(player: "wr2", variant: .fast)],
+                 constraints: [.nearEvidence(player: "wr2", evidence: "band", radius: 0.08), .profileIs(player: "wr2", profile: .fast)],
                  evidence: ["band"]),
                 (player: "cb", family: .elimination, difficulty: .medium,
                  text: "The grass stain at the right corner's post marks the man on the deep third — and the staff's note says no veteran, no power build. That island is a footrace.",
-                 constraints: [.nearEvidence(player: "cb", evidence: "stain", radius: 0.08), .variantIsNot(player: "cb", variant: .power), .variantIsNot(player: "cb", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "cb", evidence: "stain", radius: 0.08), .profileIsNot(player: "cb", profile: .powerful), .profileIsNot(player: "cb", profile: .veteran)],
                  evidence: ["stain"]),
                 (player: "fs", family: .evidenceRelationship, difficulty: .hard,
                  text: "The cleat marks at the very top of the picture, dead center, are the last line's post. Everything this concept does is designed to make him wrong exactly once.",
-                 constraints: [.nearEvidence(player: "fs", evidence: "marks", radius: 0.08), .variantIs(player: "fs", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "fs", evidence: "marks", radius: 0.08), .profileIs(player: "fs", profile: .veteran)],
                  evidence: ["marks"]),
                 (player: "ss", family: .orderDepth, difficulty: .medium,
                  text: "The shoulder-pad strap on the right second level marks the box safety: below the deep post, above the backers, selling out against the run the flood is pretending to be.",
-                 constraints: [.nearEvidence(player: "ss", evidence: "strap", radius: 0.08), .variantIs(player: "ss", variant: .power)],
+                 constraints: [.nearEvidence(player: "ss", evidence: "strap", radius: 0.08), .profileIs(player: "ss", profile: .powerful)],
                  evidence: ["strap"])
             ],
             hints: [
@@ -174,12 +174,12 @@ nonisolated enum CasePack4 {
                 (player: "ss", text: "Right second level, below the deep post — at the shoulder-pad strap.")
             ],
             solution: [
-                (player: "qb", slot: "qb-gun", variant: .fast),
-                (player: "wr1", slot: "wr1-right", variant: .veteran),
-                (player: "wr2", slot: "wr2-slot", variant: .fast),
-                (player: "cb", slot: "cb-right", variant: .fast),
-                (player: "fs", slot: "fs-center", variant: .veteran),
-                (player: "ss", slot: "ss-box", variant: .power)
+                (player: "qb", slot: "qb-gun", profile: .fast),
+                (player: "wr1", slot: "wr1-right", profile: .veteran),
+                (player: "wr2", slot: "wr2-slot", profile: .fast),
+                (player: "cb", slot: "cb-right", profile: .fast),
+                (player: "fs", slot: "fs-center", profile: .veteran),
+                (player: "ss", slot: "ss-box", profile: .powerful)
             ]
         ),
 
@@ -230,23 +230,23 @@ nonisolated enum CasePack4 {
             clues: [
                 (player: "rb", family: .orderDepth, difficulty: .easy,
                  text: "The knee brace at the deepest backfield spot marks the wedge back: straight ahead, behind two tight bodies, moving the pile with his shoulders.",
-                 constraints: [.nearEvidence(player: "rb", evidence: "brace", radius: 0.08), .variantIs(player: "rb", variant: .power)],
+                 constraints: [.nearEvidence(player: "rb", evidence: "brace", radius: 0.08), .profileIs(player: "rb", profile: .powerful)],
                  evidence: ["brace"]),
                 (player: "te", family: .footballResponsibility, difficulty: .medium,
                  text: "The chin strap flung outside the right tackle marks the second giant — in a wedge, he does not block a man, he moves a wall.",
-                 constraints: [.nearEvidence(player: "te", evidence: "strap", radius: 0.08), .variantIs(player: "te", variant: .power)],
+                 constraints: [.nearEvidence(player: "te", evidence: "strap", radius: 0.08), .profileIs(player: "te", profile: .powerful)],
                  evidence: ["strap"]),
                 (player: "ol", family: .formationKnowledge, difficulty: .medium,
                  text: "The kicking tee in front of the vacant right tackle spot marks the sixth body across. He fires low, stays square, and is forbidden from standing up.",
-                 constraints: [.nearEvidence(player: "ol", evidence: "tee", radius: 0.08), .variantIs(player: "ol", variant: .power)],
+                 constraints: [.nearEvidence(player: "ol", evidence: "tee", radius: 0.08), .profileIs(player: "ol", profile: .powerful)],
                  evidence: ["tee"]),
                 (player: "dl", family: .scenario, difficulty: .medium,
                  text: "The defense slams a slanter over the new blocker — the divot at the right end marks his first step, straight down the line to wreck the wedge before it forms.",
-                 constraints: [.nearEvidence(player: "dl", evidence: "divot", radius: 0.08), .variantIs(player: "dl", variant: .power)],
+                 constraints: [.nearEvidence(player: "dl", evidence: "divot", radius: 0.08), .profileIs(player: "dl", profile: .powerful)],
                  evidence: ["divot"]),
                 (player: "lb", family: .evidenceRelationship, difficulty: .hard,
                  text: "The challenge flag at the right stack spot marks the plugger. In this pile, lateral speed is useless — the man who wins is the one who has done this a hundred times and never moved backward once.",
-                 constraints: [.nearEvidence(player: "lb", evidence: "flag", radius: 0.08), .variantIs(player: "lb", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "lb", evidence: "flag", radius: 0.08), .profileIs(player: "lb", profile: .veteran)],
                  evidence: ["flag"])
             ],
             hints: [
@@ -257,11 +257,11 @@ nonisolated enum CasePack4 {
                 (player: "lb", text: "Right stack spot — at the challenge flag.")
             ],
             solution: [
-                (player: "rb", slot: "rb-deep", variant: .power),
-                (player: "te", slot: "te-right", variant: .power),
-                (player: "ol", slot: "ol-rt", variant: .power),
-                (player: "dl", slot: "de-right", variant: .power),
-                (player: "lb", slot: "lb-right", variant: .veteran)
+                (player: "rb", slot: "rb-deep", profile: .powerful),
+                (player: "te", slot: "te-right", profile: .powerful),
+                (player: "ol", slot: "ol-rt", profile: .powerful),
+                (player: "dl", slot: "de-right", profile: .powerful),
+                (player: "lb", slot: "lb-right", profile: .veteran)
             ]
         ),
 
@@ -312,23 +312,23 @@ nonisolated enum CasePack4 {
             clues: [
                 (player: "qb", family: .scenario, difficulty: .easy,
                  text: "The pocket broke right, and the orange cone out past the tackle marks where the passer escaped to — running hard to the right sideline, buying time with his legs.",
-                 constraints: [.nearEvidence(player: "qb", evidence: "cone", radius: 0.08), .variantIs(player: "qb", variant: .fast)],
+                 constraints: [.nearEvidence(player: "qb", evidence: "cone", radius: 0.08), .profileIs(player: "qb", profile: .fast)],
                  evidence: ["cone"]),
                 (player: "wr", family: .relativePosition, difficulty: .medium,
                  text: "The sports drink cup at the far right numbers marks the receiver who works back toward the scrambling passer — shallower than the corner chasing him, wider than the tight end below. He has run this drill a thousand times.",
-                 constraints: [.nearEvidence(player: "wr", evidence: "cup", radius: 0.08), .variantIs(player: "wr", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "wr", evidence: "cup", radius: 0.08), .profileIs(player: "wr", profile: .veteran)],
                  evidence: ["cup"]),
                 (player: "te", family: .footballResponsibility, difficulty: .medium,
                  text: "The chin strap near the right tackle marks the blocker still working: on a scramble, the tight end's job is to keep moving his feet and wall off whoever dares the edge.",
-                 constraints: [.nearEvidence(player: "te", evidence: "strap", radius: 0.08), .variantIs(player: "te", variant: .power)],
+                 constraints: [.nearEvidence(player: "te", evidence: "strap", radius: 0.08), .profileIs(player: "te", profile: .powerful)],
                  evidence: ["strap"]),
                 (player: "dl", family: .evidenceRelationship, difficulty: .medium,
                  text: "The skid marks at the right end mark the pursuer — the rusher who lost the pocket and now chases the play from behind. His first three steps decide everything.",
-                 constraints: [.nearEvidence(player: "dl", evidence: "skid", radius: 0.08), .variantIs(player: "dl", variant: .power)],
+                 constraints: [.nearEvidence(player: "dl", evidence: "skid", radius: 0.08), .profileIs(player: "dl", profile: .powerful)],
                  evidence: ["skid"]),
                 (player: "ss", family: .profileDeduction, difficulty: .hard,
                  text: "The shoulder-pad strap in the right second level marks the auxiliary rusher — but against a running quarterback, the staff wants pursuit, not power. Quickest second-level man on the roster.",
-                 constraints: [.nearEvidence(player: "ss", evidence: "strap2", radius: 0.08), .variantIs(player: "ss", variant: .fast)],
+                 constraints: [.nearEvidence(player: "ss", evidence: "strap2", radius: 0.08), .profileIs(player: "ss", profile: .fast)],
                  evidence: ["strap2"])
             ],
             hints: [
@@ -339,11 +339,11 @@ nonisolated enum CasePack4 {
                 (player: "ss", text: "Right second level — at the shoulder-pad strap. Pursuit speed is the requirement.")
             ],
             solution: [
-                (player: "qb", slot: "qb-scramble", variant: .fast),
-                (player: "wr", slot: "wr-right", variant: .veteran),
-                (player: "te", slot: "te-right", variant: .power),
-                (player: "dl", slot: "de-right", variant: .power),
-                (player: "ss", slot: "ss-box", variant: .fast)
+                (player: "qb", slot: "qb-scramble", profile: .fast),
+                (player: "wr", slot: "wr-right", profile: .veteran),
+                (player: "te", slot: "te-right", profile: .powerful),
+                (player: "dl", slot: "de-right", profile: .powerful),
+                (player: "ss", slot: "ss-box", profile: .fast)
             ]
         ),
 
@@ -395,23 +395,23 @@ nonisolated enum CasePack4 {
             clues: [
                 (player: "rb", family: .scenario, difficulty: .easy,
                  text: "The orange cone in the right backfield lane marks the screen back: he sells the block for a count, then leaks out behind the traffic with the whole right side in front of him.",
-                 constraints: [.nearEvidence(player: "rb", evidence: "cone", radius: 0.08), .variantIs(player: "rb", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "rb", evidence: "cone", radius: 0.08), .profileIs(player: "rb", profile: .veteran)],
                  evidence: ["cone"]),
                 (player: "wr", family: .formationKnowledge, difficulty: .medium,
                  text: "The sports drink cup in the right slot marks the blocker-receiver: he wedges the nickel for one full count, then slips him — timing, not wheels.",
-                 constraints: [.nearEvidence(player: "wr", evidence: "cup", radius: 0.08), .variantIs(player: "wr", variant: .fast)],
+                 constraints: [.nearEvidence(player: "wr", evidence: "cup", radius: 0.08), .profileIs(player: "wr", profile: .fast)],
                  evidence: ["cup"]),
                 (player: "ol", family: .footballResponsibility, difficulty: .medium,
                  text: "The kicking tee in front of the vacant right tackle spot is where the puller starts his path — three steps down the line, then turn uphill and lead through the hole.",
-                 constraints: [.nearEvidence(player: "ol", evidence: "tee", radius: 0.08), .variantIs(player: "ol", variant: .power)],
+                 constraints: [.nearEvidence(player: "ol", evidence: "tee", radius: 0.08), .profileIs(player: "ol", profile: .powerful)],
                  evidence: ["tee"]),
                 (player: "lb", family: .profileDeduction, difficulty: .hard,
                  text: "The challenge flag at the right stack spot marks the force player. Everyone in this concept is fast; the defense needs the one who can blow up the lead block instead of running around it.",
-                 constraints: [.nearEvidence(player: "lb", evidence: "flag", radius: 0.08), .variantIs(player: "lb", variant: .power)],
+                 constraints: [.nearEvidence(player: "lb", evidence: "flag", radius: 0.08), .profileIs(player: "lb", profile: .powerful)],
                  evidence: ["flag"]),
                 (player: "cb", family: .evidenceRelationship, difficulty: .medium,
                  text: "The grass stain at the slot's heel marks the nickel corner. He has to beat the receiver's wedge block at full speed — hands first, never dive.",
-                 constraints: [.nearEvidence(player: "cb", evidence: "stain", radius: 0.08), .variantIs(player: "cb", variant: .fast)],
+                 constraints: [.nearEvidence(player: "cb", evidence: "stain", radius: 0.08), .profileIs(player: "cb", profile: .fast)],
                  evidence: ["stain"])
             ],
             hints: [
@@ -422,11 +422,11 @@ nonisolated enum CasePack4 {
                 (player: "cb", text: "At the slot receiver's heel — the grass stain. Hands first.")
             ],
             solution: [
-                (player: "rb", slot: "rb-right", variant: .veteran),
-                (player: "wr", slot: "wr-slot", variant: .fast),
-                (player: "ol", slot: "ol-rt", variant: .power),
-                (player: "lb", slot: "lb-right", variant: .power),
-                (player: "cb", slot: "cb-slot", variant: .fast)
+                (player: "rb", slot: "rb-right", profile: .veteran),
+                (player: "wr", slot: "wr-slot", profile: .fast),
+                (player: "ol", slot: "ol-rt", profile: .powerful),
+                (player: "lb", slot: "lb-right", profile: .powerful),
+                (player: "cb", slot: "cb-slot", profile: .fast)
             ]
         ),
 
@@ -477,23 +477,23 @@ nonisolated enum CasePack4 {
             clues: [
                 (player: "qb", family: .scenario, difficulty: .easy,
                  text: "Zero coverage means everyone comes, and the muddy footprints four yards behind the line mark the passer who has exactly one beat to punish it. His legs are the answer key.",
-                 constraints: [.nearEvidence(player: "qb", evidence: "mud", radius: 0.08), .variantIs(player: "qb", variant: .fast)],
+                 constraints: [.nearEvidence(player: "qb", evidence: "mud", radius: 0.08), .profileIs(player: "qb", profile: .fast)],
                  evidence: ["mud"]),
                 (player: "wr", family: .formationKnowledge, difficulty: .medium,
                  text: "The water bottle at the far right numbers marks the man one-on-one with no safety. Against zero, the isolated receiver is the whole plan — he beats his man clean or the play never happened.",
-                 constraints: [.nearEvidence(player: "wr", evidence: "bottle", radius: 0.08), .variantIs(player: "wr", variant: .fast)],
+                 constraints: [.nearEvidence(player: "wr", evidence: "bottle", radius: 0.08), .profileIs(player: "wr", profile: .fast)],
                  evidence: ["bottle"]),
                 (player: "de", family: .footballResponsibility, difficulty: .medium,
                  text: "The divot beyond the left tackle marks the edge sellout — standing up, wide, first man off the bus. The tight end cannot possibly reach him in time.",
-                 constraints: [.nearEvidence(player: "de", evidence: "divot", radius: 0.08), .variantIs(player: "de", variant: .power)],
+                 constraints: [.nearEvidence(player: "de", evidence: "divot", radius: 0.08), .profileIs(player: "de", profile: .powerful)],
                  evidence: ["divot"]),
                 (player: "dl2", family: .evidenceRelationship, difficulty: .medium,
                  text: "The chain marker dragged to dead center in the front marks the A-gap blitzer. He does not read anything — the count is his entire world.",
-                 constraints: [.nearEvidence(player: "dl2", evidence: "chain", radius: 0.08), .variantIs(player: "dl2", variant: .power)],
+                 constraints: [.nearEvidence(player: "dl2", evidence: "chain", radius: 0.08), .profileIs(player: "dl2", profile: .powerful)],
                  evidence: ["chain"]),
                 (player: "fs", family: .orderDepth, difficulty: .hard,
                  text: "The cleat marks at the very top of the picture are the lone deep defender's post — the one man the blitz left standing between a beaten coverage and six points.",
-                 constraints: [.nearEvidence(player: "fs", evidence: "marks", radius: 0.08), .variantIs(player: "fs", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "fs", evidence: "marks", radius: 0.08), .profileIs(player: "fs", profile: .veteran)],
                  evidence: ["marks"])
             ],
             hints: [
@@ -504,11 +504,11 @@ nonisolated enum CasePack4 {
                 (player: "fs", text: "Top center, the only deep man — at the cleat marks.")
             ],
             solution: [
-                (player: "qb", slot: "qb-gun", variant: .fast),
-                (player: "wr", slot: "wr-right", variant: .fast),
-                (player: "de", slot: "de-edge", variant: .power),
-                (player: "dl2", slot: "dt-nose", variant: .power),
-                (player: "fs", slot: "fs-center", variant: .veteran)
+                (player: "qb", slot: "qb-gun", profile: .fast),
+                (player: "wr", slot: "wr-right", profile: .fast),
+                (player: "de", slot: "de-edge", profile: .powerful),
+                (player: "dl2", slot: "dt-nose", profile: .powerful),
+                (player: "fs", slot: "fs-center", profile: .veteran)
             ]
         ),
 
@@ -560,23 +560,23 @@ nonisolated enum CasePack4 {
             clues: [
                 (player: "rb", family: .orderDepth, difficulty: .easy,
                  text: "The knee brace at the deepest backfield spot marks the runner: one cut, downhill, and he tests the first gap that shows him daylight.",
-                 constraints: [.nearEvidence(player: "rb", evidence: "brace", radius: 0.08), .variantIs(player: "rb", variant: .power)],
+                 constraints: [.nearEvidence(player: "rb", evidence: "brace", radius: 0.08), .profileIs(player: "rb", profile: .powerful)],
                  evidence: ["brace"]),
                 (player: "ol", family: .formationKnowledge, difficulty: .medium,
                  text: "The kicking tee in front of the vacant right tackle spot marks the gap defender's nightmare — a sixth blocker across the line of scrimmage who exists only to keep the pocket square.",
-                 constraints: [.nearEvidence(player: "ol", evidence: "tee", radius: 0.08), .variantIs(player: "ol", variant: .power)],
+                 constraints: [.nearEvidence(player: "ol", evidence: "tee", radius: 0.08), .profileIs(player: "ol", profile: .powerful)],
                  evidence: ["tee"]),
                 (player: "dl", family: .evidenceRelationship, difficulty: .medium,
                  text: "The muddy footprints at the three-technique mark the slanter: he shoots the guard's outside shoulder so the back's first cut has nowhere to go.",
-                 constraints: [.nearEvidence(player: "dl", evidence: "mud", radius: 0.08), .variantIs(player: "dl", variant: .fast)],
+                 constraints: [.nearEvidence(player: "dl", evidence: "mud", radius: 0.08), .profileIs(player: "dl", profile: .fast)],
                  evidence: ["mud"]),
                 (player: "lb", family: .chainedDeduction, difficulty: .hard,
                  text: "The challenge flag at the right stack spot marks the fill player — below the box safety, above nothing. When the slant spills the run outside, he is the last gap between the ball carrier and the second level.",
-                 constraints: [.nearEvidence(player: "lb", evidence: "flag", radius: 0.08), .yBelow(a: "lb", b: "ss", gap: 0.05), .variantIs(player: "lb", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "lb", evidence: "flag", radius: 0.08), .yBelow(a: "lb", b: "ss", gap: 0.05), .profileIs(player: "lb", profile: .veteran)],
                  evidence: ["flag"]),
                 (player: "ss", family: .profileDeduction, difficulty: .medium,
                  text: "The shoulder-pad strap at the right box safety's alignment marks the extra hat. The staff does not need range from this spot — it needs a battering ram that ends the play in the hole.",
-                 constraints: [.nearEvidence(player: "ss", evidence: "strap", radius: 0.08), .variantIs(player: "ss", variant: .power)],
+                 constraints: [.nearEvidence(player: "ss", evidence: "strap", radius: 0.08), .profileIs(player: "ss", profile: .powerful)],
                  evidence: ["strap"])
             ],
             hints: [
@@ -587,11 +587,11 @@ nonisolated enum CasePack4 {
                 (player: "ss", text: "Right box alignment — at the shoulder-pad strap. A battering ram.")
             ],
             solution: [
-                (player: "rb", slot: "rb-deep", variant: .power),
-                (player: "ol", slot: "ol-rt", variant: .power),
-                (player: "dl", slot: "dt-3tech", variant: .fast),
-                (player: "lb", slot: "lb-right", variant: .veteran),
-                (player: "ss", slot: "ss-box", variant: .power)
+                (player: "rb", slot: "rb-deep", profile: .powerful),
+                (player: "ol", slot: "ol-rt", profile: .powerful),
+                (player: "dl", slot: "dt-3tech", profile: .fast),
+                (player: "lb", slot: "lb-right", profile: .veteran),
+                (player: "ss", slot: "ss-box", profile: .powerful)
             ]
         ),
 
@@ -642,23 +642,23 @@ nonisolated enum CasePack4 {
             clues: [
                 (player: "te", family: .footballResponsibility, difficulty: .easy,
                  text: "While the corner chases the bait, the right side still needs blocking: the wrist playbook outside the right tackle marks the tight end who turns the edge into a wall.",
-                 constraints: [.nearEvidence(player: "te", evidence: "playbook", radius: 0.08), .variantIs(player: "te", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "te", evidence: "playbook", radius: 0.08), .profileIs(player: "te", profile: .veteran)],
                  evidence: ["playbook"]),
                 (player: "wr", family: .scenario, difficulty: .medium,
                  text: "The dropped play card at the far right numbers marks the salesman himself — the receiver who snapped off the fake out and is now running free behind everyone who believed it.",
-                 constraints: [.nearEvidence(player: "wr", evidence: "card", radius: 0.08), .variantIs(player: "wr", variant: .fast)],
+                 constraints: [.nearEvidence(player: "wr", evidence: "card", radius: 0.08), .profileIs(player: "wr", profile: .fast)],
                  evidence: ["card"]),
                 (player: "cb", family: .elimination, difficulty: .medium,
                  text: "The orange cone inside the receiver's alignment marks the defender in the trail — and the call sheet says neither the power build nor the veteran. Only legs that can flip and run survive the double move.",
-                 constraints: [.nearEvidence(player: "cb", evidence: "cone", radius: 0.08), .variantIsNot(player: "cb", variant: .power), .variantIsNot(player: "cb", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "cb", evidence: "cone", radius: 0.08), .profileIsNot(player: "cb", profile: .powerful), .profileIsNot(player: "cb", profile: .veteran)],
                  evidence: ["cone"]),
                 (player: "fs", family: .evidenceRelationship, difficulty: .hard,
                  text: "The wet patch at the very top of the picture, dead center, is the deep half's post. The double move is aimed directly at him — he has to read the receiver's hips, not his eyes.",
-                 constraints: [.nearEvidence(player: "fs", evidence: "wet", radius: 0.08), .variantIs(player: "fs", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "fs", evidence: "wet", radius: 0.08), .profileIs(player: "fs", profile: .veteran)],
                  evidence: ["wet"]),
                 (player: "lb", family: .profileDeduction, difficulty: .medium,
                  text: "The chain marker dragged to the left inside backer spot marks the hook player. With everyone chasing the deep bait, his job is the exact opposite: sit, wait, and take away the comeback route underneath.",
-                 constraints: [.nearEvidence(player: "lb", evidence: "chain", radius: 0.08), .variantIs(player: "lb", variant: .power)],
+                 constraints: [.nearEvidence(player: "lb", evidence: "chain", radius: 0.08), .profileIs(player: "lb", profile: .powerful)],
                  evidence: ["chain"])
             ],
             hints: [
@@ -669,11 +669,11 @@ nonisolated enum CasePack4 {
                 (player: "lb", text: "Left inside backer spot — where the chain marker sits. Sit on the comeback.")
             ],
             solution: [
-                (player: "wr", slot: "wr-right", variant: .fast),
-                (player: "te", slot: "te-right", variant: .veteran),
-                (player: "cb", slot: "cb-right", variant: .fast),
-                (player: "fs", slot: "fs-center", variant: .veteran),
-                (player: "lb", slot: "lb-left", variant: .power)
+                (player: "wr", slot: "wr-right", profile: .fast),
+                (player: "te", slot: "te-right", profile: .veteran),
+                (player: "cb", slot: "cb-right", profile: .fast),
+                (player: "fs", slot: "fs-center", profile: .veteran),
+                (player: "lb", slot: "lb-left", profile: .powerful)
             ]
         ),
 
@@ -724,23 +724,23 @@ nonisolated enum CasePack4 {
             clues: [
                 (player: "qb", family: .scenario, difficulty: .easy,
                  text: "The muddy footprints four yards behind the line, dead center, mark the hurry-up passer — he is in the gun calling his own plays, and with this little time left, every second he holds the ball is a second he does not have.",
-                 constraints: [.nearEvidence(player: "qb", evidence: "mud", radius: 0.08), .variantIs(player: "qb", variant: .fast)],
+                 constraints: [.nearEvidence(player: "qb", evidence: "mud", radius: 0.08), .profileIs(player: "qb", profile: .fast)],
                  evidence: ["mud"]),
                 (player: "wr1", family: .relativePosition, difficulty: .medium,
                  text: "The sports drink cup at the far right numbers marks the sideline worker — wider than the slot, shallower than the corner. In two-minute, his job is to get out of bounds, always.",
-                 constraints: [.nearEvidence(player: "wr1", evidence: "cup", radius: 0.08), .variantIs(player: "wr1", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "wr1", evidence: "cup", radius: 0.08), .profileIs(player: "wr1", profile: .veteran)],
                  evidence: ["cup"]),
                 (player: "wr2", family: .formationKnowledge, difficulty: .medium,
                  text: "The wristband inside of him marks the chain mover: off the tackle, at the sticks, the quick throw that keeps the clock running while the defense scrambles to substitute.",
-                 constraints: [.nearEvidence(player: "wr2", evidence: "band", radius: 0.08), .variantIs(player: "wr2", variant: .fast)],
+                 constraints: [.nearEvidence(player: "wr2", evidence: "band", radius: 0.08), .profileIs(player: "wr2", profile: .fast)],
                  evidence: ["band"]),
                 (player: "ol", family: .footballResponsibility, difficulty: .medium,
                  text: "The kicking tee in front of the vacant right tackle spot marks the pass protector — in this package he backpedals forever and touches nobody, and the one time he lunges, the drive dies.",
-                 constraints: [.nearEvidence(player: "ol", evidence: "tee", radius: 0.08), .variantIs(player: "ol", variant: .power)],
+                 constraints: [.nearEvidence(player: "ol", evidence: "tee", radius: 0.08), .profileIs(player: "ol", profile: .powerful)],
                  evidence: ["tee"]),
                 (player: "de", family: .evidenceRelationship, difficulty: .hard,
                  text: "The broken helmet strap beyond the tackle marks the designated rusher — while his teammates drop into walls, he has one job: the fastest possible path to the quarterback's blind side.",
-                 constraints: [.nearEvidence(player: "de", evidence: "strap", radius: 0.08), .variantIs(player: "de", variant: .fast)],
+                 constraints: [.nearEvidence(player: "de", evidence: "strap", radius: 0.08), .profileIs(player: "de", profile: .fast)],
                  evidence: ["strap"])
             ],
             hints: [
@@ -751,11 +751,11 @@ nonisolated enum CasePack4 {
                 (player: "de", text: "Right edge — at the broken helmet strap. The designated rusher.")
             ],
             solution: [
-                (player: "qb", slot: "qb-gun", variant: .fast),
-                (player: "wr1", slot: "wr1-right", variant: .veteran),
-                (player: "wr2", slot: "wr2-slot", variant: .fast),
-                (player: "ol", slot: "ol-rt", variant: .power),
-                (player: "de", slot: "de-edge", variant: .fast)
+                (player: "qb", slot: "qb-gun", profile: .fast),
+                (player: "wr1", slot: "wr1-right", profile: .veteran),
+                (player: "wr2", slot: "wr2-slot", profile: .fast),
+                (player: "ol", slot: "ol-rt", profile: .powerful),
+                (player: "de", slot: "de-edge", profile: .fast)
             ]
         ),
 
@@ -807,23 +807,23 @@ nonisolated enum CasePack4 {
             clues: [
                 (player: "te", family: .footballResponsibility, difficulty: .medium,
                  text: "The laminated play sheet dropped outside the right tackle is the goal-line package — an eligible giant attaches there, and the throw to his corner of the end zone is the whole plan B.",
-                 constraints: [.nearEvidence(player: "te", evidence: "sheet", radius: 0.08), .variantIs(player: "te", variant: .veteran)],
+                 constraints: [.nearEvidence(player: "te", evidence: "sheet", radius: 0.08), .profileIs(player: "te", profile: .veteran)],
                  evidence: ["sheet"]),
                 (player: "rb", family: .orderDepth, difficulty: .easy,
                  text: "The knee brace at the deepest backfield spot marks the punch-back: behind the fullback, one cut, and the pile decides the rest.",
-                 constraints: [.nearEvidence(player: "rb", evidence: "brace", radius: 0.08), .variantIs(player: "rb", variant: .power)],
+                 constraints: [.nearEvidence(player: "rb", evidence: "brace", radius: 0.08), .profileIs(player: "rb", profile: .powerful)],
                  evidence: ["brace"]),
                 (player: "dl", family: .scenario, difficulty: .medium,
                  text: "The skid marks at the right end mark the crunch defender — he takes on the new blocker head-on so nobody reaches the second level.",
-                 constraints: [.nearEvidence(player: "dl", evidence: "skid", radius: 0.08), .variantIs(player: "dl", variant: .power)],
+                 constraints: [.nearEvidence(player: "dl", evidence: "skid", radius: 0.08), .profileIs(player: "dl", profile: .powerful)],
                  evidence: ["skid"]),
                 (player: "cb", family: .evidenceRelationship, difficulty: .medium,
                  text: "The visor cloth at the right corner's post marks the man on the lone wide receiver. In the red zone he plays with his hands at the line — the fade dies at the release.",
-                 constraints: [.nearEvidence(player: "cb", evidence: "visor", radius: 0.08), .variantIs(player: "cb", variant: .fast)],
+                 constraints: [.nearEvidence(player: "cb", evidence: "visor", radius: 0.08), .profileIs(player: "cb", profile: .fast)],
                  evidence: ["visor"]),
                 (player: "ss", family: .profileDeduction, difficulty: .hard,
                  text: "The shoulder-pad strap at the right roamer's alignment marks the stamp itself: a body in the box that arrives angry. Range is irrelevant from eight yards — mass is everything.",
-                 constraints: [.nearEvidence(player: "ss", evidence: "strap", radius: 0.08), .variantIs(player: "ss", variant: .power)],
+                 constraints: [.nearEvidence(player: "ss", evidence: "strap", radius: 0.08), .profileIs(player: "ss", profile: .powerful)],
                  evidence: ["strap"])
             ],
             hints: [
@@ -834,11 +834,11 @@ nonisolated enum CasePack4 {
                 (player: "ss", text: "Right box alignment — at the shoulder-pad strap. Mass over range.")
             ],
             solution: [
-                (player: "te", slot: "te-right", variant: .veteran),
-                (player: "rb", slot: "rb-deep", variant: .power),
-                (player: "dl", slot: "de-right", variant: .power),
-                (player: "cb", slot: "cb-right", variant: .fast),
-                (player: "ss", slot: "ss-box", variant: .power)
+                (player: "te", slot: "te-right", profile: .veteran),
+                (player: "rb", slot: "rb-deep", profile: .powerful),
+                (player: "dl", slot: "de-right", profile: .powerful),
+                (player: "cb", slot: "cb-right", profile: .fast),
+                (player: "ss", slot: "ss-box", profile: .powerful)
             ]
         )
     ]

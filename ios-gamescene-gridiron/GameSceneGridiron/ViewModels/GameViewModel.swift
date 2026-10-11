@@ -11,6 +11,10 @@ final class GameViewModel {
 
     let puzzle: QuarterPuzzle
 
+    /// The GAME difficulty this quarter is played at — decides the available
+    /// player-profile pool and whether the Hall of Famer pressure clock runs.
+    let difficulty: DifficultyLevel
+
     /// Position of this puzzle within the match (0-based; 4 = overtime).
     var puzzleIndex: Int { puzzle.index }
 
@@ -24,7 +28,12 @@ final class GameViewModel {
     var isHintOfferPresented = false
     /// Uniquely identifies this quarter for the Last Chance ledger:
     /// "\(matchID)-q\(quarterIndex)" during a match, standalone otherwise.
-    var lastChanceKey: String = "standalone-quarter"
+    /// Setting it is the moment the quarter's timing snapshot (if any) is
+    /// restored — a resumed quarter never gets consumed timeouts, lost lives
+    /// or a reset clock back.
+    var lastChanceKey: String = "standalone-quarter" {
+        didSet { restoreClockSnapshotIfMatching() }
+    }
     /// TRAINING CASE mode: wrong placements teach the mechanic instead of
     /// costing a heart, so the tutorial can never permanently fail.
     var isTraining: Bool = false
@@ -35,9 +44,35 @@ final class GameViewModel {
     private(set) var isLastChancePending = false
     private(set) var usedHints: [UsedHint] = []
     private(set) var placements: [PlacedPlayer] = []
-    private(set) var selectedVariants: [String: PlayerVariant] = [:]
+    private(set) var selectedProfiles: [String: PlayerProfile] = [:]
     private(set) var result: PuzzleResult = .inProgress
     private(set) var feedback: FeedbackMessage?
+
+    // MARK: Hall of Famer pressure system
+
+    /// Timeouts per quarter (Hall of Famer only).
+    static let timeoutsPerQuarter = 2
+    /// Timeout duration in seconds.
+    static let timeoutDuration: TimeInterval = 25
+    /// Persisted timing-state key.
+    static let clockSnapshotKey = "gamescene.gridiron.hof.clock"
+    /// One-time explanation flag key.
+    static let clockIntroKey = "gamescene.gridiron.hofClockExplained"
+
+    /// True when the Hall of Famer pressure clock applies to this quarter.
+    /// Training is never timed, whatever the difficulty.
+    private(set) var isTimed: Bool
+    /// The per-placement 40-second clock. Nil whenever the quarter is untimed.
+    private(set) var playClock: PlayClockController?
+    /// Timeouts left this quarter (never carries over between quarters).
+    private(set) var timeoutsRemaining: Int
+    /// Non-nil while the player is in a called timeout — a separate 25s clock.
+    private(set) var timeoutClock: PlayClockController?
+    /// First Hall of Famer game: the clock does not start until GOT IT.
+    private(set) var isClockIntroPresented: Bool
+    private let defaults: UserDefaults
+    /// Clock factory (tests inject manual-tick controllers).
+    private let makeClock: (TimeInterval) -> PlayClockController
 
     var expandedPlayerID: String?
     var currentClueIndex: Int = 0
@@ -56,16 +91,50 @@ final class GameViewModel {
     /// Frame of the turf in the gameplay coordinate space; reported by the field view.
     var fieldFrame: CGRect = .zero
 
+    /// Profiles the player may choose from at this game difficulty.
+    var availableProfiles: [PlayerProfile] { PlayerProfile.pool(for: difficulty) }
+
     private var usedHintIDs: Set<String> = []
     /// Prevents repeated warnings while a blocked drag gesture keeps firing.
     private var blockedDragPlayerID: String?
     private var feedbackTask: Task<Void, Never>?
 
-    init(puzzle: QuarterPuzzle = SampleQuarter.puzzle, wallet: PlayerWallet = .shared) {
+    init(
+        puzzle: QuarterPuzzle = SampleQuarter.puzzle,
+        wallet: PlayerWallet = .shared,
+        difficulty: DifficultyLevel = .pro,
+        defaults: UserDefaults = .standard,
+        makeClock: ((TimeInterval) -> PlayClockController)? = nil
+    ) {
         self.puzzle = puzzle
         self.wallet = wallet
+        self.difficulty = difficulty
+        self.defaults = defaults
+        self.makeClock = makeClock ?? { PlayClockController(duration: $0) }
         self.lives = puzzle.startingLives
         self.hintsRemaining = wallet.hints
+        let timed = difficulty == .hallOfFamer
+        self.isTimed = timed
+        self.timeoutsRemaining = timed ? Self.timeoutsPerQuarter : 0
+        self.isClockIntroPresented = timed && !defaults.bool(forKey: Self.clockIntroKey)
+        if timed {
+            let clock = self.makeClock(40)
+            playClock = clock
+            // All stored properties are initialized — the callbacks can now
+            // safely capture self.
+            clock.onExpire = { [weak self] in self?.handlePlayClockExpiration() }
+            clock.onWarning = { [weak self] in
+                Haptics.warning()
+                self?.show(FeedbackMessage(title: "10 SECONDS", detail: nil, tone: .lead), duration: 0.9)
+            }
+            clock.onCritical = { [weak self] in
+                Haptics.warning()
+                AudioManager.shared.play(.cardSelect)
+                self?.show(FeedbackMessage(title: "5 SECONDS", detail: nil, tone: .failure), duration: 0.9)
+            }
+        } else {
+            playClock = nil
+        }
     }
 
     // MARK: Derived state
@@ -118,8 +187,8 @@ final class GameViewModel {
         usedHints.last { $0.playerID == clue.playerID }
     }
 
-    func selectedVariant(for playerID: String) -> PlayerVariant? {
-        selectedVariants[playerID]
+    func selectedProfile(for playerID: String) -> PlayerProfile? {
+        selectedProfiles[playerID]
     }
 
     /// Converts a normalized slot/evidence position into the gameplay coordinate space.
@@ -139,15 +208,18 @@ final class GameViewModel {
         expandedPlayerID = expandedPlayerID == playerID ? nil : playerID
     }
 
-    func selectVariant(_ variant: PlayerVariant, for playerID: String) {
-        guard result == .inProgress else { return }
+    /// Selects a deployment profile. Only profiles valid for the active game
+    /// difficulty are selectable — the UI never shows the others, and this
+    /// guard keeps the model airtight.
+    func selectProfile(_ profile: PlayerProfile, for playerID: String) {
+        guard result == .inProgress, availableProfiles.contains(profile) else { return }
         Haptics.tick()
         AudioManager.shared.play(.profileSelect)
         expandedPlayerID = playerID
-        if selectedVariants[playerID] == variant {
-            selectedVariants[playerID] = nil
+        if selectedProfiles[playerID] == profile {
+            selectedProfiles[playerID] = nil
         } else {
-            selectedVariants[playerID] = variant
+            selectedProfiles[playerID] = profile
         }
     }
 
@@ -166,16 +238,22 @@ final class GameViewModel {
 
     // MARK: Drag & drop
 
-    /// Returns false when a drag isn't allowed yet (e.g. no variant chosen).
+    /// Returns false when a drag isn't allowed yet (e.g. no profile chosen).
     @discardableResult
     func beginDrag(playerID: String, at location: CGPoint) -> Bool {
         guard result == .inProgress, !isPaused else { return false }
         guard blockedDragPlayerID != playerID else { return false }
-        guard selectedVariants[playerID] != nil else {
+        // A timeout is thinking/review time — no final placements while it runs.
+        guard timeoutClock == nil else {
+            show(FeedbackMessage(title: "TIMEOUT — REVIEW ONLY", detail: "Resume play to make your placement.", tone: .info))
+            return false
+        }
+        guard selectedProfiles[playerID] != nil else {
             blockedDragPlayerID = playerID
             expandedPlayerID = playerID
             Haptics.warning()
-            show(FeedbackMessage(title: "PICK A PROFILE FIRST", detail: "Choose Fast, Power or Veteran.", tone: .info))
+            let options = availableProfiles.map { $0.title.uppercased() }.joined(separator: ", ")
+            show(FeedbackMessage(title: "PICK A PROFILE FIRST", detail: "Choose \(options).", tone: .info))
             return false
         }
         expandedPlayerID = playerID
@@ -227,10 +305,10 @@ final class GameViewModel {
 
         guard let slot,
               let player = puzzle.player(id: playerID),
-              let variant = selectedVariants[playerID] else {
+              let profile = selectedProfiles[playerID] else {
             return
         }
-        evaluate(player: player, variant: variant, slot: slot)
+        evaluate(player: player, profile: profile, slot: slot)
     }
 
     func cancelDrag() {
@@ -239,13 +317,13 @@ final class GameViewModel {
         hoveredSlotID = nil
     }
 
-    private func evaluate(player: FootballPlayer, variant: PlayerVariant, slot: PlacementSlot) {
+    private func evaluate(player: FootballPlayer, profile: PlayerProfile, slot: PlacementSlot) {
         let solution = puzzle.solutions[player.id]
-        let isCorrect = solution?.slotID == slot.id && solution?.variant == variant
+        let isCorrect = solution?.slotID == slot.id && solution?.profile == profile
 
         if isCorrect {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.72)) {
-                placements.append(PlacedPlayer(player: player, variant: variant, slot: slot))
+                placements.append(PlacedPlayer(player: player, profile: profile, slot: slot))
                 expandedPlayerID = nil
                 lastPlacedPlayerID = player.id
             }
@@ -254,10 +332,16 @@ final class GameViewModel {
             show(FeedbackMessage(title: "GOOD READ", detail: "\(player.position.rawValue) \(player.shortName) is in position.", tone: .success))
             advanceClueIfSolved()
 
+            // Hall of Famer pressure: the placement's clock stops dead and the
+            // next unsolved placement gets a fresh 40 seconds.
+            playClock?.stop()
+            persistClockSnapshot()
             if remainingPlayers.isEmpty {
                 // Every player accounted for — the case itself is closed.
                 AudioManager.shared.play(.caseSolved)
                 finish(with: .won)
+            } else {
+                beginPlacementClock()
             }
         } else {
             lives = isTraining ? lives : max(0, lives - 1)
@@ -301,6 +385,8 @@ final class GameViewModel {
     }
 
     private func finish(with outcome: PuzzleResult) {
+        stopPressureClocks()
+        clearClockSnapshot()
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(1100))
             guard let self, self.result == .inProgress else { return }
@@ -319,6 +405,148 @@ final class GameViewModel {
                 )
             }
         }
+    }
+
+    // MARK: Hall of Famer pressure clock
+
+    /// Starts the fresh 40-second clock for the current placement — only when
+    /// the quarter is timed, live, and the intro has been dismissed.
+    func beginPlacementClock() {
+        guard isTimed, result == .inProgress, !isTraining, !isPaused,
+              !isLastChancePending, !isClockIntroPresented, timeoutClock == nil else { return }
+        playClock?.startFresh()
+    }
+
+    /// First-time explanation dismissed: persist that, and only now let the
+    /// first play clock run.
+    func dismissClockIntro() {
+        guard isClockIntroPresented else { return }
+        isClockIntroPresented = false
+        defaults.set(true, forKey: Self.clockIntroKey)
+        Haptics.tick()
+        AudioManager.shared.play(.buttonPress)
+        beginPlacementClock()
+    }
+
+    /// External pause (backgrounding, ads, StoreKit, achievement popups,
+    /// blocking dialogs, transitions). Freezes the exact remaining value —
+    /// an external UI event never consumes play-clock time.
+    func suspendPlayClock(for reason: PlayClockController.SuspendReason) {
+        playClock?.suspend(reason: reason)
+        timeoutClock?.suspend(reason: reason)
+        persistClockSnapshot()
+    }
+
+    /// Lifts an external pause; the clock resumes from its preserved value.
+    func resumePlayClock(for reason: PlayClockController.SuspendReason) {
+        playClock?.resume(reason: reason)
+        timeoutClock?.resume(reason: reason)
+    }
+
+    /// Calls one of the quarter's two timeouts: freezes the play clock at its
+    /// exact remaining value and starts a separate 25-second timeout clock.
+    func callTimeout() {
+        guard isTimed, result == .inProgress, !isTraining, timeoutsRemaining > 0,
+              timeoutClock == nil, let clock = playClock, clock.isActive, !isPaused,
+              !isLastChancePending, !isClockIntroPresented else { return }
+        timeoutsRemaining -= 1
+        clock.suspend(reason: .timeout)
+        let timeout = makeClock(Self.timeoutDuration)
+        timeout.onExpire = { [weak self] in self?.endTimeout(resumeClock: true) }
+        timeoutClock = timeout
+        timeout.startFresh()
+        Haptics.tick()
+        AudioManager.shared.play(.buttonPress)
+        persistClockSnapshot()
+    }
+
+    /// RESUME PLAY: ends the timeout early (or at its 25s expiry) and returns
+    /// the play clock from its preserved value — never a reset to 40.
+    func resumePlay() {
+        endTimeout(resumeClock: true)
+    }
+
+    private func endTimeout(resumeClock: Bool) {
+        guard timeoutClock != nil else { return }
+        timeoutClock?.stop()
+        timeoutClock = nil
+        if resumeClock { playClock?.resume(reason: .timeout) }
+        persistClockSnapshot()
+    }
+
+    /// The play clock hit zero: one failed attempt, exactly one life gone,
+    /// no answer revealed, the drag returned to the tray and the zone UI
+    /// cleared. A fresh 40 seconds starts while the quarter is still live.
+    private func handlePlayClockExpiration() {
+        guard result == .inProgress, !isTraining else { return }
+        cancelDrag()
+        rejectedSlotID = nil
+        lives = max(0, lives - 1)
+        rejectionCount += 1
+        BalanceTelemetry.shared.recordWrongPlacement(caseID: puzzle.id)
+        Haptics.error()
+        AudioManager.shared.play(.placementWrong)
+        show(FeedbackMessage(
+            title: "PLAY CLOCK EXPIRED",
+            detail: lives > 0 ? "The drive moved on. Pick a player and line them up again." : nil,
+            tone: .failure
+        ))
+        if lives == 0 {
+            persistClockSnapshot()
+            offerLastChanceOrFinish()
+        } else {
+            beginPlacementClock()
+            persistClockSnapshot()
+        }
+    }
+
+    private func stopPressureClocks() {
+        playClock?.stop()
+        timeoutClock?.stop()
+        timeoutClock = nil
+    }
+
+    // MARK: Timing snapshot (anti-exploit persistence)
+
+    private func persistClockSnapshot() {
+        guard isTimed, let playClock else { return }
+        let snapshot = HallOfFamerClockSnapshot(
+            matchKey: lastChanceKey,
+            caseID: puzzle.id,
+            remaining: playClock.remaining,
+            timeoutsRemaining: timeoutsRemaining,
+            lives: lives,
+            placedPlayerIDs: placements.map(\.player.id)
+        )
+        SaveStore.save(snapshot, key: Self.clockSnapshotKey, defaults: defaults)
+    }
+
+    private func clearClockSnapshot() {
+        guard isTimed else { return }
+        defaults.removeObject(forKey: Self.clockSnapshotKey)
+    }
+
+    /// Restores consumed timeouts, lost lives, solved placements and the
+    /// frozen remaining clock for the same match+quarter — a force-quit can
+    /// never respawn them fresh.
+    private func restoreClockSnapshotIfMatching() {
+        guard isTimed,
+              let snapshot = SaveStore.load(
+                  HallOfFamerClockSnapshot.self,
+                  key: Self.clockSnapshotKey,
+                  defaults: defaults
+              ),
+              snapshot.matchKey == lastChanceKey,
+              snapshot.caseID == puzzle.id else { return }
+        lives = min(puzzle.startingLives, snapshot.lives)
+        timeoutsRemaining = snapshot.timeoutsRemaining
+        placements = snapshot.placedPlayerIDs.compactMap { playerID in
+            guard let player = puzzle.player(id: playerID),
+                  let solution = puzzle.solutions[playerID],
+                  let slot = puzzle.slot(id: solution.slotID) else { return nil }
+            return PlacedPlayer(player: player, profile: solution.profile, slot: slot)
+        }
+        playClock?.restore(remaining: snapshot.remaining)
     }
 
     // MARK: Hints (persistent economy)
@@ -401,6 +629,9 @@ final class GameViewModel {
         guard isLastChancePending else { return }
         isLastChancePending = false
         lives = 1
+        // The earned life restarts the current placement with a fresh 40
+        // seconds. Consumed timeouts stay consumed.
+        beginPlacementClock()
         Haptics.success()
         AudioManager.shared.play(.placementCorrect)
         show(FeedbackMessage(title: "SECOND CHANCE", detail: "One more attempt. Make it count.", tone: .lead), duration: 2.4)
@@ -440,7 +671,7 @@ final class GameViewModel {
             usedHints = []
             usedHintIDs = []
             placements = []
-            selectedVariants = [:]
+            selectedProfiles = [:]
             result = .inProgress
             feedback = nil
             expandedPlayerID = nil
@@ -450,7 +681,11 @@ final class GameViewModel {
             hoveredSlotID = nil
             rejectedSlotID = nil
             lastPlacedPlayerID = nil
+            // Timeouts reset with the quarter; the clock starts fresh.
+            timeoutsRemaining = isTimed ? Self.timeoutsPerQuarter : 0
+            clearClockSnapshot()
         }
+        beginPlacementClock()
     }
 
     // MARK: Feedback

@@ -68,7 +68,7 @@ struct GameFieldView: View {
                     FootballPlayerView(
                         position: placed.player.position,
                         size: token,
-                        variant: placed.variant,
+                        profile: placed.profile,
                         isHighlighted: isInteractive && placed.id == viewModel.lastPlacedPlayerID,
                         kit: kit(for: placed.player.position)
                     )

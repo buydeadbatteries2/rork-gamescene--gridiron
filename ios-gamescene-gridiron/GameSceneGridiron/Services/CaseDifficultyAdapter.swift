@@ -10,17 +10,207 @@ import Foundation
 // Hall of Famer is harder, not guessier.
 
 nonisolated enum CaseDifficultyAdapter {
-    /// Adapts an authored case to the resolved difficulty target. Structural
-    /// knobs apply first (so later knobs see the final field shape); present-
-    /// ation knobs (clue order, hint text) apply last.
+    /// Adapts an authored case to the resolved difficulty target. Profile
+    /// adaptation applies first (every later knob sees the final profile
+    /// pool), then structural knobs (so later knobs see the final field
+    /// shape); presentation knobs (clue order, hint text) apply last.
     static func adapt(_ puzzleCase: QuarterCase, to target: DifficultyTarget) -> QuarterCase {
         var adapted = puzzleCase
+        adapted = adaptProfiles(adapted, pool: target.profilePool)
         adapted = trimMissingPlayers(adapted, to: target.maxMissingPlayers)
         adapted = trimDecoys(adapted, to: target.maxDecoys)
         adapted = addDecoys(adapted, count: target.addedDecoys)
         adapted = reorderClues(adapted, ordering: target.clueOrdering)
         adapted = rewriteHints(adapted, strength: target.hintStrength)
         return adapted
+    }
+
+    // MARK: Profile pool adaptation
+
+    /// Remaps every profile requirement onto the difficulty's available pool.
+    /// Nothing is merely hidden: the intended answers, the pinning constraints
+    /// and the profile-dialect clue text all move together, and the solver
+    /// re-verifies uniqueness through the normal validation tests.
+    private static func adaptProfiles(_ puzzleCase: QuarterCase, pool: [PlayerProfile]) -> QuarterCase {
+        guard Set(pool) != Set(PlayerProfile.allCases) else { return puzzleCase }
+
+        // New profile per player: identity when the authored profile is
+        // available, deterministic remap otherwise.
+        var newProfileFor: [String: PlayerProfile] = [:]
+        for entry in puzzleCase.solution {
+            newProfileFor[entry.playerKey] = ProfilePoolAdapter.remap(entry.profile, into: pool)
+        }
+        let remappedSolution = puzzleCase.solution.map { entry in
+            CaseSolution(
+                playerKey: entry.playerKey,
+                slotKey: entry.slotKey,
+                profile: newProfileFor[entry.playerKey] ?? entry.profile
+            )
+        }
+
+        // Profiles the case can speak about but the difficulty's pool hides:
+        // they must be explicitly excluded per player so the deduction space
+        // truly shrinks with the pool ("not the veteran, not the power build"
+        // cannot keep pinning an answer once those options are gone).
+        let referenced = Set(puzzleCase.clues.flatMap(\.constraints).compactMap { constraint -> PlayerProfile? in
+            switch constraint {
+            case .profileIs(_, let profile), .profileIsNot(_, let profile): profile
+            default: nil
+            }
+        })
+        let caseUniverse = Set([PlayerProfile.fast, .powerful, .veteran]).union(referenced)
+        let outOfPool = caseUniverse.subtracting(pool)
+        var exclusionsPerPlayer: [String: [CaseConstraint]] = [:]
+        for playerKey in puzzleCase.missing.map(\.key) {
+            exclusionsPerPlayer[playerKey] = outOfPool.map { .profileIsNot(player: playerKey, profile: $0) }.sorted { $0.hashValue < $1.hashValue }
+        }
+        var hasAddedExclusions = Set<String>()
+
+        let remappedClues = puzzleCase.clues.map { clue in
+            var addedExclusions = exclusionsPerPlayer[clue.playerKey] ?? []
+            if hasAddedExclusions.contains(clue.playerKey) { addedExclusions = [] }
+            else if !addedExclusions.isEmpty { hasAddedExclusions.insert(clue.playerKey) }
+            return CaseClue(
+                playerKey: clue.playerKey,
+                family: clue.family,
+                difficulty: clue.difficulty,
+                text: adaptedProfileText(
+                    clue.text,
+                    oldProfile: puzzleCase.solution.first { $0.playerKey == clue.playerKey }?.profile,
+                    newProfile: newProfileFor[clue.playerKey],
+                    pool: pool
+                ),
+                constraints: clue.constraints.map { constraint in
+                    switch constraint {
+                    case .profileIs(let player, _):
+                        guard let newProfile = newProfileFor[player] else { return constraint }
+                        return .profileIs(player: player, profile: newProfile)
+                    case .profileIsNot(let player, let profile):
+                        guard let newProfile = newProfileFor[player] else { return constraint }
+                        let mapped = ProfilePoolAdapter.remap(profile, into: pool)
+                        // A collapsed mapping can land on the player's own new
+                        // answer ("not Fast" where Fast merged into Rookie);
+                        // flip it to exclude the pool's other member instead,
+                        // which preserves the pin without self-contradiction.
+                        if mapped != newProfile {
+                            return .profileIsNot(player: player, profile: mapped)
+                        }
+                        return .profileIsNot(player: player, profile: ProfilePoolAdapter.other(in: pool, of: newProfile))
+                    default:
+                        return constraint
+                    }
+                } + addedExclusions,
+                evidenceKeys: clue.evidenceKeys
+            )
+        }
+
+        return QuarterCase(
+            id: puzzleCase.id,
+            band: puzzleCase.band,
+            rosterSeed: puzzleCase.rosterSeed,
+            title: puzzleCase.title,
+            introHeading: puzzleCase.introHeading,
+            introBody: puzzleCase.introBody,
+            visible: puzzleCase.visible,
+            missing: puzzleCase.missing,
+            evidence: puzzleCase.evidence,
+            slots: puzzleCase.slots,
+            clues: remappedClues,
+            hints: puzzleCase.hints,
+            solution: remappedSolution
+        )
+    }
+
+    /// Rewrites the profile-dialect language of a clue when the player's
+    /// profile was remapped. The trailing reasoning clause (after the em
+    /// dash, or the last dialect sentence) is replaced with language that
+    /// implies the NEW profile; geometry and evidence sentences stay intact.
+    private static func adaptedProfileText(
+        _ text: String,
+        oldProfile: PlayerProfile?,
+        newProfile: PlayerProfile?,
+        pool: [PlayerProfile]
+    ) -> String {
+        guard let oldProfile, let newProfile, oldProfile != newProfile else { return text }
+        let dialect = profileDialectSentences(text)
+        guard !dialect.isEmpty else { return text + " " + profileClause(newProfile, ordinal: 0) }
+
+        var replacementIndex = 0
+        var result = text
+        for sentence in dialect {
+            guard result.contains(sentence) else { continue }
+            let replacement = profileClause(newProfile, ordinal: replacementIndex)
+            replacementIndex += 1
+            // Prefer replacing just the em-dash tail (the authored profile
+            // reasoning); fall back to the whole sentence.
+            if let dash = sentence.range(of: " — ") {
+                let kept = String(sentence[..<dash.lowerBound])
+                result = result.replacingOccurrences(of: sentence, with: kept.isEmpty ? replacement : kept + " — " + Self.lowerFirst(replacement))
+            } else {
+                result = result.replacingOccurrences(of: sentence, with: replacement)
+            }
+        }
+        return result
+    }
+
+    /// Sentences that carry profile-dialect language (speed, power, or
+    /// experience reasoning).
+    private static func profileDialectSentences(_ text: String) -> [String] {
+        let keywords = [
+            "acceleration", "speed", "burst", "quick", "sprint", "burner", "fastest",
+            "fast", "legs", "recovery", "track", "blaze", "pace", "strength", "power",
+            "bull rush", "anchor", "leverage", "physical", "force", "immovable", "seal",
+            "veteran", "seasoned", "seasons", "discipline", "steady", "composed",
+            "savvy", "experience", "film study", "decade", "run reads", "route discipline",
+        ]
+        var sentences: [String] = []
+        var current: [String] = []
+        for token in text.split(separator: " ", omittingEmptySubsequences: false) {
+            current.append(String(token))
+            if token.hasSuffix(".") || token.hasSuffix("!") || token.hasSuffix("?") {
+                sentences.append(current.joined(separator: " "))
+                current = []
+            }
+        }
+        if !current.isEmpty { sentences.append(current.joined(separator: " ")) }
+        return sentences.filter { sentence in
+            let sentenceLower = sentence.lowercased()
+            return keywords.contains { sentenceLower.contains($0) }
+        }
+    }
+
+    /// Implying (never naming) language for a remapped profile.
+    private static func profileClause(_ profile: PlayerProfile, ordinal: Int) -> String {
+        let clauses: [String] = switch profile {
+        case .rookie: [
+            "the young one is still learning the assignment — hesitant when the formation shifts.",
+            "a first-year player still developing, raw but in the right spot.",
+            "the newest jersey out there, late recognizing the look.",
+        ]
+        case .veteran: [
+            "a seasoned head who has seen this look before — calm under pressure.",
+            "years of reps show in the discipline of the assignment.",
+            "the steadiest head on the roster recognizes the situation instantly.",
+        ]
+        case .fast: [
+            "instant acceleration is the only way this spot works.",
+            "recovery speed is the whole job here.",
+        ]
+        case .powerful: [
+            "strength over everything — the spot demands someone who will not be moved.",
+            "an anchor at the point of attack, built to hold ground.",
+        ]
+        case .overrated: [
+            "the reputation is bigger than the recent tape.",
+            "the name gets the headlines; the execution has not followed.",
+        ]
+        }
+        return clauses[abs(ordinal) % clauses.count]
+    }
+
+    private static func lowerFirst(_ value: String) -> String {
+        guard let first = value.first else { return value }
+        return first.lowercased() + value.dropFirst()
     }
 
     // MARK: Missing players
@@ -273,8 +463,8 @@ nonisolated enum CaseDifficultyAdapter {
              .farthestFromEvidence(let player, _),
              .depthBand(let player, _, _),
              .xBand(let player, _, _),
-             .variantIs(let player, _),
-             .variantIsNot(let player, _):
+             .profileIs(let player, _),
+             .profileIsNot(let player, _):
             [player]
         case .yAbove(let a, let b, _),
              .yBelow(let a, let b, _),

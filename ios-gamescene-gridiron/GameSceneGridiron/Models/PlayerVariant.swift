@@ -1,6 +1,9 @@
 import Foundation
 
-/// The three archetypes every missing player can be deployed as.
+/// Legacy internal spelling for the original three archetypes. Runtime code
+/// uses `PlayerProfile` (which adds Rookie and Overrated); this type survives
+/// only as the bridge for older case data and any persisted blobs. Never
+/// extend this — add profiles to `PlayerProfile` instead.
 nonisolated enum PlayerVariant: String, Hashable, Sendable, CaseIterable, Identifiable {
     case fast
     case power
@@ -11,24 +14,11 @@ nonisolated enum PlayerVariant: String, Hashable, Sendable, CaseIterable, Identi
     var title: String {
         switch self {
         case .fast: "Fast"
-        case .power: "Power"
+        case .power: "Powerful"
         case .veteran: "Veteran"
         }
     }
 
-    var symbol: String {
-        switch self {
-        case .fast: "bolt.fill"
-        case .power: "dumbbell.fill"
-        case .veteran: "star.fill"
-        }
-    }
-
-    var summary: String {
-        switch self {
-        case .fast: "Speed and agility"
-        case .power: "Strength and physicality"
-        case .veteran: "Experience and awareness"
-        }
-    }
+    /// Bridge to the modern profile.
+    var profile: PlayerProfile { PlayerProfile(legacy: self) }
 }

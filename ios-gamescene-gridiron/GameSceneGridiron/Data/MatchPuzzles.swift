@@ -44,12 +44,12 @@ nonisolated enum MatchPuzzles {
         clues: q2Clues,
         hints: q2Hints,
         solutions: [
-            "q2-qb": PlacementSolution(slotID: "q2-s-gun", variant: .fast),
-            "q2-ol": PlacementSolution(slotID: "q2-s-right-guard", variant: .power),
-            "q2-wr": PlacementSolution(slotID: "q2-s-right-wide", variant: .veteran),
-            "q2-cb": PlacementSolution(slotID: "q2-s-right-corner", variant: .fast),
-            "q2-de": PlacementSolution(slotID: "q2-s-edge-rush", variant: .fast),
-            "q2-ss": PlacementSolution(slotID: "q2-s-box-right", variant: .veteran)
+            "q2-qb": PlacementSolution(slotID: "q2-s-gun", profile: .fast),
+            "q2-ol": PlacementSolution(slotID: "q2-s-right-guard", profile: .powerful),
+            "q2-wr": PlacementSolution(slotID: "q2-s-right-wide", profile: .veteran),
+            "q2-cb": PlacementSolution(slotID: "q2-s-right-corner", profile: .fast),
+            "q2-de": PlacementSolution(slotID: "q2-s-edge-rush", profile: .fast),
+            "q2-ss": PlacementSolution(slotID: "q2-s-box-right", profile: .veteran)
         ]
     )
 
@@ -165,12 +165,12 @@ nonisolated enum MatchPuzzles {
         clues: q3Clues,
         hints: q3Hints,
         solutions: [
-            "q3-wr": PlacementSolution(slotID: "q3-s-bunch-outside", variant: .fast),
-            "q3-te": PlacementSolution(slotID: "q3-s-right-te", variant: .power),
-            "q3-rb": PlacementSolution(slotID: "q3-s-rb-left", variant: .fast),
-            "q3-cb": PlacementSolution(slotID: "q3-s-left-corner", variant: .power),
-            "q3-slb": PlacementSolution(slotID: "q3-s-right-backer", variant: .veteran),
-            "q3-ss": PlacementSolution(slotID: "q3-s-deep-center", variant: .veteran)
+            "q3-wr": PlacementSolution(slotID: "q3-s-bunch-outside", profile: .fast),
+            "q3-te": PlacementSolution(slotID: "q3-s-right-te", profile: .powerful),
+            "q3-rb": PlacementSolution(slotID: "q3-s-rb-left", profile: .fast),
+            "q3-cb": PlacementSolution(slotID: "q3-s-left-corner", profile: .powerful),
+            "q3-slb": PlacementSolution(slotID: "q3-s-right-backer", profile: .veteran),
+            "q3-ss": PlacementSolution(slotID: "q3-s-deep-center", profile: .veteran)
         ]
     )
 
@@ -288,12 +288,12 @@ nonisolated enum MatchPuzzles {
         clues: q4Clues,
         hints: q4Hints,
         solutions: [
-            "q4-te": PlacementSolution(slotID: "q4-s-right-te", variant: .power),
-            "q4-wr": PlacementSolution(slotID: "q4-s-right-wide", variant: .veteran),
-            "q4-rb": PlacementSolution(slotID: "q4-s-backfield", variant: .fast),
-            "q4-cb": PlacementSolution(slotID: "q4-s-right-corner", variant: .fast),
-            "q4-dl": PlacementSolution(slotID: "q4-s-over-te", variant: .power),
-            "q4-fs": PlacementSolution(slotID: "q4-s-deep-left", variant: .veteran)
+            "q4-te": PlacementSolution(slotID: "q4-s-right-te", profile: .powerful),
+            "q4-wr": PlacementSolution(slotID: "q4-s-right-wide", profile: .veteran),
+            "q4-rb": PlacementSolution(slotID: "q4-s-backfield", profile: .fast),
+            "q4-cb": PlacementSolution(slotID: "q4-s-right-corner", profile: .fast),
+            "q4-dl": PlacementSolution(slotID: "q4-s-over-te", profile: .powerful),
+            "q4-fs": PlacementSolution(slotID: "q4-s-deep-left", profile: .veteran)
         ]
     )
 
@@ -411,11 +411,11 @@ nonisolated enum MatchPuzzles {
         clues: otClues,
         hints: otHints,
         solutions: [
-            "ot-te": PlacementSolution(slotID: "ot-s-left-te", variant: .power),
-            "ot-rb": PlacementSolution(slotID: "ot-s-backfield", variant: .power),
-            "ot-wr": PlacementSolution(slotID: "ot-s-right-wide", variant: .veteran),
-            "ot-mlb": PlacementSolution(slotID: "ot-s-mike", variant: .veteran),
-            "ot-ss": PlacementSolution(slotID: "ot-s-deep-center", variant: .fast)
+            "ot-te": PlacementSolution(slotID: "ot-s-left-te", profile: .powerful),
+            "ot-rb": PlacementSolution(slotID: "ot-s-backfield", profile: .powerful),
+            "ot-wr": PlacementSolution(slotID: "ot-s-right-wide", profile: .veteran),
+            "ot-mlb": PlacementSolution(slotID: "ot-s-mike", profile: .veteran),
+            "ot-ss": PlacementSolution(slotID: "ot-s-deep-center", profile: .fast)
         ]
     )
 

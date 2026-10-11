@@ -61,7 +61,7 @@ nonisolated enum TrainingCase {
                 text: "A quick back is needed beside the orange cone, in the backfield behind the quarterback.",
                 constraints: [
                     .nearEvidence(player: "rb", evidence: "cone", radius: 0.09),
-                    .variantIs(player: "rb", variant: .fast)
+                    .profileIs(player: "rb", profile: .fast)
                 ],
                 evidence: ["cone"]
             ),
@@ -72,7 +72,7 @@ nonisolated enum TrainingCase {
                 text: "Jamming the receiver at the line takes strength, not speed. He lines up right beside the pylon, where the mouthguard dropped.",
                 constraints: [
                     .nearEvidence(player: "cb", evidence: "pylon", radius: 0.09),
-                    .variantIs(player: "cb", variant: .power)
+                    .profileIs(player: "cb", profile: .powerful)
                 ],
                 evidence: ["pylon", "mouthguard"]
             ),
@@ -84,7 +84,7 @@ nonisolated enum TrainingCase {
                 constraints: [
                     .nearEvidence(player: "fs", evidence: "playsheet", radius: 0.09),
                     .yAbove(a: "fs", b: "cb", gap: 0.1),
-                    .variantIs(player: "fs", variant: .veteran)
+                    .profileIs(player: "fs", profile: .veteran)
                 ],
                 evidence: ["playsheet"]
             )
@@ -95,9 +95,9 @@ nonisolated enum TrainingCase {
             (player: "fs", text: "Experience means Veteran. The deepest spot on the field sits beside the laminated play sheet.")
         ],
         solution: [
-            (player: "rb", slot: "rb-right", variant: .fast),
-            (player: "cb", slot: "cb-right", variant: .power),
-            (player: "fs", slot: "fs-center", variant: .veteran)
+            (player: "rb", slot: "rb-right", profile: .fast),
+            (player: "cb", slot: "cb-right", profile: .powerful),
+            (player: "fs", slot: "fs-center", profile: .veteran)
         ]
     )
 

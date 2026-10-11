@@ -112,10 +112,11 @@ struct RosterTrayView: View {
                         player: player,
                         tint: tint,
                         isExpanded: viewModel.expandedPlayerID == player.id,
-                        selectedVariant: viewModel.selectedVariant(for: player.id),
+                        selectedProfile: viewModel.selectedProfile(for: player.id),
+                        availableProfiles: viewModel.availableProfiles,
                         isBeingDragged: viewModel.draggingPlayerID == player.id,
                         onToggle: { viewModel.toggleExpanded(player.id) },
-                        onSelectVariant: { viewModel.selectVariant($0, for: player.id) }
+                        onSelectProfile: { viewModel.selectProfile($0, for: player.id) }
                     )
                     .overlay {
                         if player.id == highlightedPlayerID, !viewModel.isDragging {

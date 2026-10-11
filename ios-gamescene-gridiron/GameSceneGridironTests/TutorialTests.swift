@@ -74,8 +74,8 @@ struct TutorialTests {
 
         // Every taught profile appears exactly once — the same position may
         // require a different profile in different cases, so all three are shown.
-        let variants = Set(puzzle.solutions.values.map(\.variant))
-        #expect(variants == [.fast, .power, .veteran])
+        let variants = Set(puzzle.solutions.values.map(\.profile))
+        #expect(variants == [.fast, .powerful, .veteran])
 
         // Field evidence is visually obvious: pylon, play sheet, mouthguard, cone.
         let kinds = Set(puzzle.evidence.map(\.kind))
@@ -97,7 +97,7 @@ struct TutorialTests {
 
         // The RB card: right slot, wrong profile — a genuine wrong placement.
         let runningBack = puzzle.missingPlayers.first { $0.position == .rb }!
-        gameViewModel.selectVariant(.power, for: runningBack.id)
+        gameViewModel.selectProfile(.powerful, for: runningBack.id)
 
         #expect(gameViewModel.beginDrag(playerID: runningBack.id, at: CGPoint(x: 420, y: 740)))
         gameViewModel.updateDrag(to: CGPoint(x: 420, y: 740))
@@ -268,7 +268,7 @@ struct TutorialTests {
                 Issue.record("Missing slot \(solution.slotID) in the training case")
                 continue
             }
-            gameViewModel.selectVariant(solution.variant, for: playerID)
+            gameViewModel.selectProfile(solution.profile, for: playerID)
             let point = gameViewModel.point(x: slot.x, y: slot.y)
             let dropLocation = CGPoint(x: point.x, y: point.y + GameViewModel.dragLift)
             #expect(gameViewModel.beginDrag(playerID: playerID, at: dropLocation))

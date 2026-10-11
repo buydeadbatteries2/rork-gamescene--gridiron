@@ -62,7 +62,7 @@ struct DragTargetTests {
 
     @Test func draggingARunningBackOnlyShowsBackfieldZones() {
         let viewModel = GameViewModel(puzzle: SampleQuarter.puzzle)
-        viewModel.selectVariant(.fast, for: "p-rb")
+        viewModel.selectProfile(.fast, for: "p-rb")
         #expect(viewModel.beginDrag(playerID: "p-rb", at: CGPoint(x: 180, y: 300)))
 
         let candidates = viewModel.candidateSlots
@@ -83,7 +83,7 @@ struct DragTargetTests {
     @Test func hoveringAnIrrelevantLandmarkNeverHighlightsIt() {
         let viewModel = GameViewModel(puzzle: SampleQuarter.puzzle)
         viewModel.fieldFrame = fieldFrame
-        viewModel.selectVariant(.fast, for: "p-rb")
+        viewModel.selectProfile(.fast, for: "p-rb")
         #expect(viewModel.beginDrag(playerID: "p-rb", at: .zero))
 
         // Dead center of the WR/CB sideline stack — an RB can never line up
@@ -98,7 +98,7 @@ struct DragTargetTests {
     @Test func overlappingZonesResolveToTheNearestValidTarget() {
         let viewModel = GameViewModel(puzzle: SampleQuarter.puzzle)
         viewModel.fieldFrame = fieldFrame
-        viewModel.selectVariant(.fast, for: "p-rb")
+        viewModel.selectProfile(.fast, for: "p-rb")
         #expect(viewModel.beginDrag(playerID: "p-rb", at: .zero))
 
         // s-backfield and s-left-backfield sit ~73pt apart — a drop point
@@ -116,7 +116,7 @@ struct DragTargetTests {
     @Test func releasingAwayFromAnyCandidateReturnsThePlayerToTheTray() {
         let viewModel = GameViewModel(puzzle: SampleQuarter.puzzle)
         viewModel.fieldFrame = fieldFrame
-        viewModel.selectVariant(.fast, for: "p-rb")
+        viewModel.selectProfile(.fast, for: "p-rb")
 
         // The deep-right decoy is a safety landmark — not an RB candidate —
         // and far outside the snap radius of every backfield zone.
@@ -138,7 +138,7 @@ struct DragTargetTests {
     @Test func aCorrectDropStillSnapsToItsTrueCoordinate() {
         let viewModel = GameViewModel(puzzle: SampleQuarter.puzzle)
         viewModel.fieldFrame = fieldFrame
-        viewModel.selectVariant(.fast, for: "p-rb")
+        viewModel.selectProfile(.fast, for: "p-rb")
         #expect(viewModel.beginDrag(playerID: "p-rb", at: .zero))
 
         let slot = SampleQuarter.puzzle.slot(id: "s-backfield")!

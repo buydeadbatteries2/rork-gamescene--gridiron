@@ -20,7 +20,7 @@ struct CaseLibraryTests {
 
         for band in 1...5 {
             let bandCases = library.filter { $0.band == band }
-            #expect(bandCases.count == 10, "band \(band) should hold exactly 10 cases, found \(bandCases.count)")
+            #expect(bandCases.count >= 10, "band \(band) should hold at least 10 cases, found \(bandCases.count)")
         }
     }
 
@@ -202,12 +202,12 @@ struct CaseLibraryTests {
     }
 
     @Test func profileAnswersVaryByPosition() {
-        var byPosition: [FootballPosition: Set<PlayerVariant>] = [:]
+        var byPosition: [FootballPosition: Set<PlayerProfile>] = [:]
         var counts: [FootballPosition: Int] = [:]
         for puzzleCase in library {
             for entry in puzzleCase.solution {
                 guard let player = puzzleCase.player(withKey: entry.playerKey) else { continue }
-                byPosition[player.position, default: []].insert(entry.variant)
+                byPosition[player.position, default: []].insert(entry.profile)
                 counts[player.position, default: 0] += 1
             }
         }

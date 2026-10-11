@@ -77,6 +77,12 @@ struct GameHUDView: View {
             if let matchViewModel {
                 QuarterProgressTrack(match: matchViewModel.match)
             }
+
+            // Hall of Famer pressure: play clock + timeouts. Untimed modes
+            // never see this strip.
+            if viewModel.isTimed {
+                PlayClockStrip(viewModel: viewModel)
+            }
         }
     }
 }

@@ -6,6 +6,8 @@ import SwiftUI
 struct GameplayView: View {
     static let coordinateSpace = "gameplay"
 
+    @Environment(\.scenePhase) private var scenePhase
+
     let viewModel: GameViewModel
     var matchViewModel: MatchViewModel?
     let onQuit: () -> Void
@@ -124,7 +126,7 @@ struct GameplayView: View {
             if let player = viewModel.draggingPlayer {
                 DraggedPlayerToken(
                     player: player,
-                    variant: viewModel.selectedVariant(for: player.id),
+                    profile: viewModel.selectedProfile(for: player.id),
                     isOverSlot: viewModel.hoveredSlotID != nil,
                     tint: userTeam?.primaryColor
                 )
@@ -151,6 +153,13 @@ struct GameplayView: View {
                     onQuit: onQuit
                 )
                 .transition(.opacity)
+            }
+        }
+        .overlay {
+            // First Hall of Famer game: the pressure-clock explanation. The
+            // first play clock does not start until GOT IT.
+            if viewModel.isClockIntroPresented {
+                HallOfFamerIntroOverlay(onConfirm: { viewModel.dismissClockIntro() })
             }
         }
         .overlay {
@@ -182,13 +191,49 @@ struct GameplayView: View {
         .statusBarHidden(false)
         .task {
             AudioManager.shared.playMusic(.gameplayTheme)
+            // The quarter's first placement clock starts here (or after the
+            // one-time Hall of Famer explanation is dismissed).
+            viewModel.beginPlacementClock()
         }
         .onChange(of: viewModel.isPaused) { _, isPaused in
             let audio = AudioManager.shared
             if isPaused {
                 audio.pauseMusic()
+                viewModel.suspendPlayClock(for: .dialog)
             } else if viewModel.result == .inProgress {
                 audio.resumeMusic()
+                viewModel.resumePlayClock(for: .dialog)
+            }
+        }
+        // Automatic clock pauses: anything outside the player's control —
+        // backgrounding/system interruptions, rewarded ads, StoreKit sheets,
+        // blocking offers — freezes the clock instead of consuming time.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                viewModel.resumePlayClock(for: .background)
+            } else {
+                viewModel.suspendPlayClock(for: .background)
+            }
+        }
+        .onChange(of: isWatchingAd) { _, watching in
+            if watching {
+                viewModel.suspendPlayClock(for: .ad)
+            } else {
+                viewModel.resumePlayClock(for: .ad)
+            }
+        }
+        .onChange(of: viewModel.isHintOfferPresented) { _, presented in
+            if presented {
+                viewModel.suspendPlayClock(for: .storeKit)
+            } else {
+                viewModel.resumePlayClock(for: .storeKit)
+            }
+        }
+        .onChange(of: viewModel.isLastChancePending) { _, pending in
+            if pending {
+                viewModel.suspendPlayClock(for: .transition)
+            } else {
+                viewModel.resumePlayClock(for: .transition)
             }
         }
         .onChange(of: viewModel.result) { _, result in

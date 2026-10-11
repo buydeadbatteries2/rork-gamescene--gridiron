@@ -34,12 +34,12 @@ nonisolated enum SampleQuarter {
         clues: clues,
         hints: hints,
         solutions: [
-            "p-rb": PlacementSolution(slotID: "s-backfield", variant: .fast),
-            "p-fs": PlacementSolution(slotID: "s-deep-middle", variant: .veteran),
-            "p-te": PlacementSolution(slotID: "s-right-te", variant: .power),
-            "p-wr": PlacementSolution(slotID: "s-right-wide", variant: .veteran),
-            "p-cb": PlacementSolution(slotID: "s-right-corner", variant: .power),
-            "p-lb": PlacementSolution(slotID: "s-right-backer", variant: .fast)
+            "p-rb": PlacementSolution(slotID: "s-backfield", profile: .fast),
+            "p-fs": PlacementSolution(slotID: "s-deep-middle", profile: .veteran),
+            "p-te": PlacementSolution(slotID: "s-right-te", profile: .powerful),
+            "p-wr": PlacementSolution(slotID: "s-right-wide", profile: .veteran),
+            "p-cb": PlacementSolution(slotID: "s-right-corner", profile: .powerful),
+            "p-lb": PlacementSolution(slotID: "s-right-backer", profile: .fast)
         ]
     )
 

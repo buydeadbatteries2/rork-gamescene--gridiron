@@ -123,7 +123,10 @@ struct MatchFlowView: View {
     }
 
     private func beginQuarter() {
-        quarterViewModel = GameViewModel(puzzle: matchViewModel.currentPuzzle)
+        quarterViewModel = GameViewModel(
+            puzzle: matchViewModel.currentPuzzle,
+            difficulty: matchViewModel.activeDifficulty
+        )
         // The Last Chance rewarded life is offered once per quarter, keyed to
         // this match + quarter and persisted in the wallet.
         quarterViewModel?.lastChanceKey = matchViewModel.currentLastChanceKey
