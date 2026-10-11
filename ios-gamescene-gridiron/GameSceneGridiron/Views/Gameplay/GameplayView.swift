@@ -47,7 +47,7 @@ struct GameplayView: View {
     var body: some View {
         @Bindable var viewModel = viewModel
 
-        VStack(spacing: 14) {
+        VStack(spacing: 10) {
             GameHUDView(
                 viewModel: viewModel,
                 matchViewModel: matchViewModel,
@@ -88,15 +88,16 @@ struct GameplayView: View {
                     .transition(.opacity)
             }
 
-            // Roster tray sits directly under the field so the hold-drag to
-            // a placement zone is the shortest possible travel; the case
-            // notebook (CLUES / FIELD EVIDENCE / NOTES) sits below it.
+            // Roster tray hugs its content and sits tight under the field so
+            // the hold-drag to a placement zone is the shortest possible
+            // travel; the case notebook (CLUES / FIELD EVIDENCE / NOTES)
+            // takes the space below it.
             RosterTrayView(
                 viewModel: viewModel,
                 tint: userTeam?.primaryColor,
                 highlightedPlayerID: training?.highlightedPlayerID
             )
-                .frame(height: 200, alignment: .bottom)
+                .fixedSize(horizontal: false, vertical: true)
 
             ClueNotebookView(
                 viewModel: viewModel,

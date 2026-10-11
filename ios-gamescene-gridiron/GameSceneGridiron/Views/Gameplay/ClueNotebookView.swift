@@ -67,7 +67,7 @@ struct ClueNotebookView: View {
                 .frame(maxWidth: .infinity, alignment: .topLeading)
                 .transition(.opacity)
             }
-            .frame(height: isLargerText ? 228 : 182)
+            .frame(height: isLargerText ? 290 : 240)
             .background {
                 PaperSurface(cornerRadius: 0)
                     .overlay { RuledLines().allowsHitTesting(false) }

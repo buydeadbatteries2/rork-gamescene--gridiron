@@ -56,4 +56,17 @@ struct FieldArtTests {
         #expect(ClueNotebookView.badgeColor(for: 0) == ClueNotebookView.badgeColor(for: 6))
         #expect(ClueNotebookView.badgeColor(for: -1) == ClueNotebookView.badgeColor(for: 5))
     }
+
+    @Test func offenseAlwaysDrawsOverDefenseAndNearerFiguresDrawOverFartherOnes() {
+        // Viewer looks up-field from behind the offense: any offensive figure
+        // beats any defensive figure, even one lower on the field.
+        let deepOffense = GameFieldView.figureZIndex(position: .wr, y: 0.55)
+        let lowDefense = GameFieldView.figureZIndex(position: .cb, y: 0.95)
+        #expect(deepOffense > lowDefense)
+        // Within a side, the figure closer to the bottom edge is in front.
+        #expect(GameFieldView.figureZIndex(position: .ol, y: 0.7) > GameFieldView.figureZIndex(position: .qb, y: 0.6))
+        #expect(GameFieldView.figureZIndex(position: .dl, y: 0.5) > GameFieldView.figureZIndex(position: .lb, y: 0.3))
+        // Figures never climb above the placement-zone / inspected-evidence layers.
+        #expect(GameFieldView.figureZIndex(position: .qb, y: 1.0) < 4)
+    }
 }

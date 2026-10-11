@@ -22,6 +22,16 @@ struct GameFieldView: View {
         return TeamKitResolver.kits(user: userTeam, opponent: opponent)
     }
 
+    /// Painter's order for figures: the user looks up-field from behind the
+    /// offense, so offensive players always draw OVER the defense, and within a
+    /// side the figure nearer the bottom of the field (closer to the viewer)
+    /// draws over the one behind it. Stays well below the inspected-evidence
+    /// and placement-zone layers.
+    static func figureZIndex(position: FootballPosition, y: Double) -> Double {
+        let sideBand: Double = position.side == .offense ? 2 : 1
+        return sideBand + min(max(y, 0), 1) * 0.9
+    }
+
     private func kit(for position: FootballPosition) -> TeamKit? {
         guard let kits else { return nil }
         return position.side == .offense ? kits.user : kits.opponent
@@ -50,6 +60,7 @@ struct GameFieldView: View {
                 ForEach(viewModel.puzzle.visiblePlayers) { player in
                     FootballPlayerView(position: player.position, size: token, kit: kit(for: player.position))
                         .position(x: size.width * player.x, y: size.height * player.y)
+                        .zIndex(Self.figureZIndex(position: player.position, y: player.y))
                         .allowsHitTesting(false)
                 }
 
@@ -62,6 +73,7 @@ struct GameFieldView: View {
                         kit: kit(for: placed.player.position)
                     )
                     .position(x: size.width * placed.slot.x, y: size.height * placed.slot.y)
+                    .zIndex(Self.figureZIndex(position: placed.player.position, y: placed.slot.y))
                     .transition(.scale(scale: 1.8).combined(with: .opacity))
                     .allowsHitTesting(false)
                 }
@@ -93,6 +105,7 @@ struct GameFieldView: View {
                             .modifier(ShakeEffect(animatableData: isRejected ? CGFloat(viewModel.rejectionCount) : 0))
                             .animation(.linear(duration: 0.45), value: viewModel.rejectionCount)
                             .position(markerPoints[slot.id] ?? CGPoint(x: size.width * slot.x, y: size.height * slot.y))
+                            .zIndex(4)
                             .transition(.opacity.combined(with: .scale(scale: 0.6)))
                         }
                     }
@@ -107,6 +120,7 @@ struct GameFieldView: View {
                             .background(Color.white.opacity(0.08), in: .circle)
                             .frame(width: zoneDiameter * 1.25, height: zoneDiameter * 1.25)
                             .position(x: size.width * slot.x, y: size.height * slot.y)
+                            .zIndex(4)
                             .transition(.opacity)
                     }
 
@@ -118,6 +132,7 @@ struct GameFieldView: View {
                         SnapPreviewRing(tint: Theme.success)
                             .frame(width: zoneDiameter * 1.15, height: zoneDiameter * 1.15)
                             .position(x: size.width * slot.x, y: size.height * slot.y)
+                            .zIndex(4)
                             .transition(.opacity.combined(with: .scale(scale: 0.7)))
                     }
                 }
