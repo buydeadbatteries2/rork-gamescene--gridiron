@@ -36,6 +36,7 @@ private struct SeasonHubView: View {
     @State private var celebrationPending: Bool = false
     @State private var isEditingTeam: Bool = false
     @State private var isShowingDifficultySelect: Bool = false
+    @State private var resumedRecord: ActiveMatchRecord?
 
     private enum Destination {
         case calendar
@@ -96,6 +97,7 @@ private struct SeasonHubView: View {
                     onOpenSummary: { switchDestination(.summary) }
                 ) { game in
                     Haptics.pickUp()
+                    resumedRecord = nil
                     activeMatch = .week(game)
                 }
                 .transition(pageTransition)
@@ -112,10 +114,12 @@ private struct SeasonHubView: View {
                     onBack: { switchDestination(.calendar) },
                     onPlaySemifinal: { matchup in
                         Haptics.pickUp()
+                        resumedRecord = nil
                         activeMatch = .semifinal(matchup)
                     },
                     onPlayChampionship: {
                         Haptics.pickUp()
+                        resumedRecord = nil
                         showChampionshipIntro = true
                     },
                     onViewSummary: { switchDestination(.summary) }
@@ -162,9 +166,12 @@ private struct SeasonHubView: View {
                 week: match.caseWeek,
                 onSeasonResult: { gameMatch in
                     record(match, gameMatch)
-                }
+                },
+                resumeRecord: resumedRecord
             )
         }
+        .onAppear { resumeActiveInvestigationIfNeeded() }
+        .onChange(of: destination) { _, _ in resumeActiveInvestigationIfNeeded() }
         .fullScreenCover(isPresented: $showChampionshipIntro) {
             if let matchup = seasonManager.pendingPlayoffMatchup,
                let opponent = opponentTeam(id: opponentID(in: matchup)) {
@@ -173,6 +180,7 @@ private struct SeasonHubView: View {
                     opponent: opponent,
                     onPlay: {
                         showChampionshipIntro = false
+                        resumedRecord = nil
                         activeMatch = .championship(matchup)
                     },
                     onClose: { showChampionshipIntro = false }
@@ -200,13 +208,15 @@ private struct SeasonHubView: View {
         }
         .sheet(isPresented: $isShowingDifficultySelect) {
             DifficultySelectView { level in
-                DifficultyManager.shared.select(level)
-                seasonManager.startNewSeason(userTeam: userTeam)
+                // Phase 11.6: the confirmed level starts AND locks the new
+                // season — the running season can never change difficulty.
+                seasonManager.startNewSeason(userTeam: userTeam, difficulty: level)
                 isShowingDifficultySelect = false
                 destination = .calendar
             }
         }
         .onChange(of: activeMatch) { oldValue, newValue in
+            if oldValue != nil, newValue == nil { resumedRecord = nil }
             guard oldValue != nil, newValue == nil, celebrationPending else { return }
             celebrationPending = false
             showCelebration = true
@@ -216,6 +226,44 @@ private struct SeasonHubView: View {
     private var pageTransition: AnyTransition {
         // Reduce Motion: plain fades instead of full-width page flips.
         Motion.pageTransition
+    }
+
+    // MARK: Investigation resume (Phase 11.6)
+
+    /// Reopens a game the player left mid-investigation: the saved record
+    /// must match the CURRENT season and its current game exactly. The match
+    /// then resumes at the saved quarter with the saved quarter state —
+    /// solved placements, lives, hints, timeouts, clock — never a fresh deal.
+    private func resumeActiveInvestigationIfNeeded() {
+        guard destination == .calendar, activeMatch == nil, resumedRecord == nil,
+              !showCelebration else { return }
+        guard let record = ActiveInvestigationStore.load(),
+              let season = seasonManager.season,
+              season.phase != .complete,
+              let game = season.currentGame else { return }
+        let seasonNumber = season.seasonNumber
+        if record.isPlayoff {
+            let isChampionshipPending = season.bracket?.championship?.has(teamID: season.userTeamID) == true
+                && season.bracket?.championship?.result == nil
+            guard record.seasonNumber == seasonNumber,
+                  let matchup = seasonManager.pendingPlayoffMatchup,
+                  record.isChampionship == isChampionshipPending else {
+                ActiveInvestigationStore.clear()
+                return
+            }
+            resumedRecord = record
+            activeMatch = isChampionshipPending ? .championship(matchup) : .semifinal(matchup)
+        } else {
+            guard ActiveInvestigationStore.matches(
+                record, seasonNumber: seasonNumber, week: game.week,
+                isPlayoff: false, isChampionship: false
+            ) else {
+                ActiveInvestigationStore.clear()
+                return
+            }
+            resumedRecord = record
+            activeMatch = .week(game)
+        }
     }
 
     private var championName: String? {

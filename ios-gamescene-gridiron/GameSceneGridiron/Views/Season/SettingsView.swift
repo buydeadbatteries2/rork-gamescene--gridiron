@@ -4,17 +4,23 @@ import SwiftUI
 /// GAMEPLAY (difficulty + tutorial replay), AUDIO (toggles + volumes),
 /// ACCESSIBILITY (haptics, reduce motion, larger clue text, high contrast),
 /// PURCHASES (Ad-Free status + restore) and ABOUT (version + legal links).
-/// Changing difficulty during an active season applies from the next
-/// unplayed game; completed games are never touched.
+/// Difficulty is locked while a season is running (shown, never hidden);
+/// between seasons the choice is free until the next season starts.
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var difficulty = DifficultyManager.shared
+    @State private var seasonManager = SeasonManager.shared
     @State private var purchaseManager = PurchaseManager.shared
     @State private var audio = AudioManager.shared
     @State private var tutorial = TutorialManager.shared
     @State private var hasAppeared: Bool = false
     @State private var isReplayingTutorial: Bool = false
+
+    /// Phase 11.6: while a season is running the difficulty is pinned to the
+    /// level the season was started with. The current difficulty stays fully
+    /// visible — it just can't change until the season ends.
+    private var isDifficultyLocked: Bool { seasonManager.hasSeasonInProgress }
 #if DEBUG
     @State private var isShowingDevMenu: Bool = false
 #endif
@@ -95,6 +101,9 @@ struct SettingsView: View {
     private var gameplayCard: some View {
         card(rotation: -0.5) {
             sectionHeader("GAMEPLAY", symbol: "speedometer")
+            if isDifficultyLocked, let locked = seasonManager.activeSeasonDifficulty {
+                lockedDifficultyBanner(locked)
+            }
             ForEach(DifficultyLevel.allCases, id: \.self) { level in
                 difficultyRow(level)
             }
@@ -130,6 +139,34 @@ struct SettingsView: View {
             .buttonStyle(PressableButtonStyle(scale: 0.99))
             .accessibilityLabel("Replay tutorial")
         }
+    }
+
+    /// Phase 11.6 locked-difficulty banner: DIFFICULTY / ALL-PRO with the
+    /// supporting line, shown while a season is running.
+    private func lockedDifficultyBanner(_ locked: DifficultyLevel) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(Theme.gold)
+                .frame(width: 30, height: 30)
+                .background(Color.black.opacity(0.35), in: .circle)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("DIFFICULTY — \(locked.title)")
+                    .font(.system(size: 12, weight: .black).width(.condensed))
+                    .tracking(1)
+                    .foregroundStyle(Theme.paperInk)
+                Text("Locked until the current season ends.")
+                    .font(Theme.typewriter(10.5, relativeTo: .caption))
+                    .foregroundStyle(Theme.paperInkSoft)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(Theme.gold.opacity(0.08), in: .rect(cornerRadius: 6))
+        .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.gold.opacity(0.25), lineWidth: 1) }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Difficulty \(locked.title). Locked until the current season ends.")
     }
 
     private func difficultyRow(_ level: DifficultyLevel) -> some View {
@@ -170,7 +207,9 @@ struct SettingsView: View {
             .contentShape(.rect)
         }
         .buttonStyle(PressableButtonStyle(scale: 0.99))
+        .disabled(isDifficultyLocked)
         .accessibilityLabel("\(level.title) difficulty")
+        .accessibilityHint(isDifficultyLocked ? "Locked until the current season ends" : "")
         .accessibilityAddTraits(difficulty.selected == level ? [.isSelected] : [])
     }
 
@@ -401,7 +440,9 @@ struct SettingsView: View {
 
     private var effectNote: some View {
         VStack(spacing: 10) {
-            Text("CHANGING DIFFICULTY APPLIES FROM YOUR NEXT UNPLAYED GAME. COMPLETED GAMES ARE NEVER CHANGED.")
+            Text(isDifficultyLocked
+                 ? "DIFFICULTY IS LOCKED WHILE A SEASON IS RUNNING. YOU'LL CHOOSE AGAIN BEFORE THE NEXT SEASON STARTS."
+                 : "CHANGING DIFFICULTY APPLIES FROM YOUR NEXT UNPLAYED GAME. COMPLETED GAMES ARE NEVER CHANGED.")
                 .font(.system(size: 9, weight: .heavy).width(.condensed))
                 .tracking(1.2)
                 .foregroundStyle(Theme.paperInkSoft.opacity(0.75))

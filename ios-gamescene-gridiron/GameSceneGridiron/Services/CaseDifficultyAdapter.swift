@@ -117,7 +117,8 @@ nonisolated enum CaseDifficultyAdapter {
             slots: puzzleCase.slots,
             clues: remappedClues,
             hints: puzzleCase.hints,
-            solution: remappedSolution
+            solution: remappedSolution,
+            metadata: puzzleCase.metadata
         )
     }
 
@@ -452,7 +453,8 @@ nonisolated enum CaseDifficultyAdapter {
             slots: slots ?? puzzleCase.slots,
             clues: clues ?? puzzleCase.clues,
             hints: hints ?? puzzleCase.hints,
-            solution: solution ?? puzzleCase.solution
+            solution: solution ?? puzzleCase.solution,
+            metadata: puzzleCase.metadata
         )
     }
 

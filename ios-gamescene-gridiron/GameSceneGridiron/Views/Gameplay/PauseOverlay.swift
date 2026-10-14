@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// Pause menu: resume, restart the quarter, audio settings, or return to Home.
+/// Pause menu: resume, audio settings, or leave the investigation.
+/// Phase 11.6: no restart — an investigation, once begun, is played from the
+/// current saved state (restarting could reset wrong attempts, protect
+/// accuracy stats and dodge losses).
 struct PauseOverlay: View {
     let onResume: () -> Void
-    let onRestart: () -> Void
     let onQuit: () -> Void
 
     private var audio: AudioManager { .shared }
@@ -28,16 +30,6 @@ struct PauseOverlay: View {
                 }
                 .buttonStyle(GoldCapsuleButtonStyle())
                 .padding(.top, 6)
-
-                Button(action: onRestart) {
-                    Label("Restart Quarter", systemImage: "arrow.counterclockwise")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Theme.paperInk)
-                        .frame(maxWidth: .infinity, minHeight: 46)
-                        .overlay { Capsule().strokeBorder(Theme.paperInk.opacity(0.4), lineWidth: 1.2) }
-                        .contentShape(.capsule)
-                }
-                .buttonStyle(PressableButtonStyle(playsPressSound: true))
 
                 Button(action: onQuit) {
                     Text("Leave Investigation")

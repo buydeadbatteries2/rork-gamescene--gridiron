@@ -161,6 +161,11 @@ nonisolated struct Season: Codable, Hashable, Sendable {
     var scheduledCaseIDs: [String]?
     /// Overtime case ids already consumed this season.
     var usedOvertimeCaseIDs: [String]?
+    /// The difficulty this season was STARTED with — locked for the whole
+    /// season (regular games, playoffs, championship) and stored permanently
+    /// so archive/trophy records always reflect the actual difficulty used.
+    /// nil on saves from before difficulty locking existed.
+    var difficulty: DifficultyLevel?
 
     // MARK: Queries
 

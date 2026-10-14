@@ -58,14 +58,12 @@ struct TrophyRoomView: View {
 
     /// Locked case-room atmosphere: deep dark wood, a single warm spotlight
     /// cone over the shelf, faint evidence-tag vignette at the edges.
+    /// The fill image is laid out as a decorative OVERLAY on a screen-sized
+    /// anchor — a raw `.fill` image would widen the whole layout beyond the
+    /// screen and visibly clip the left edge of every card.
     private var caseRoomBackground: some View {
         ZStack {
             Theme.ink
-            Image("detective_desk_bg")
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .opacity(0.22)
-                .allowsHitTesting(false)
             RadialGradient(
                 colors: [Theme.gold.opacity(0.14), .clear],
                 center: UnitPoint(x: 0.5, y: 0.12),
@@ -74,6 +72,14 @@ struct TrophyRoomView: View {
             )
             LinearGradient(colors: [.black.opacity(0.5), .clear, .black.opacity(0.45)], startPoint: .top, endPoint: .bottom)
         }
+        .overlay {
+            Image("detective_desk_bg")
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .opacity(0.22)
+                .allowsHitTesting(false)
+        }
+        .clipped()
         .ignoresSafeArea()
         .accessibilityHidden(true)
     }
@@ -115,7 +121,6 @@ struct TrophyRoomView: View {
                     .frame(width: 38)
             }
         }
-        .padding(.horizontal, 20)
         .accessibilityElement(children: .contain)
     }
 
@@ -221,7 +226,9 @@ struct TrophyRoomView: View {
             Text(row.label)
                 .font(Theme.typewriter(12.5, relativeTo: .footnote))
                 .foregroundStyle(Theme.paperInk)
-            Spacer()
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
             Text(row.value)
                 .font(.system(size: 13, weight: .heavy).width(.condensed))
                 .tracking(0.8)
@@ -245,7 +252,10 @@ struct TrophyRoomView: View {
         return VStack(spacing: 12) {
             sectionLabel("FRANCHISE LEGACY")
 
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            // Responsive columns: two plates side by side when the width
+            // allows, collapsing cleanly to one on smaller phones. Labels
+            // wrap to two lines instead of shrinking to illegibility.
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 142), spacing: 10)], spacing: 10) {
                 LegacyStatTile(label: "SEASONS PLAYED", value: "\(legacy.seasonsPlayed)")
                 LegacyStatTile(label: "TOTAL WINS", value: "\(legacy.totalWins)")
                 LegacyStatTile(label: "TOTAL LOSSES", value: "\(legacy.totalLosses)")
@@ -311,14 +321,15 @@ struct LegacyStatTile: View {
                 .font(.system(size: 8.5, weight: .black).width(.condensed))
                 .tracking(1.2)
                 .foregroundStyle(Theme.paperInkSoft)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .fixedSize(horizontal: false, vertical: true)
             Text(value)
                 .font(.system(size: 17, weight: .black).width(.compressed))
                 .monospacedDigit()
                 .foregroundStyle(accent ? AnyShapeStyle(Theme.goldGradient) : AnyShapeStyle(Theme.goldLight))
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
+                .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)

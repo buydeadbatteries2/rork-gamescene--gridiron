@@ -33,8 +33,11 @@ final class MatchViewModel {
     /// The difficulty actually active for this game — every achievement that
     /// references difficulty reads this, never the live selection.
     let activeDifficulty: DifficultyLevel
-    /// Stable identity for this game's reward transaction. A fresh game (replay)
-    /// gets a new id, so its reward can be claimed exactly once.
+    /// Stable identity for this game's reward transaction and its persisted
+    /// investigation record. Season games derive it deterministically from the
+    /// game context so a force-quit mid-investigation re-keys the quarter's
+    /// saved state exactly; a fresh standalone replay gets a new id, so its
+    /// reward can be claimed exactly once.
     private(set) var matchID = UUID()
     /// The game's Game Ball reward, granted once when the match completes.
     private(set) var rewardBreakdown: MatchRewardBreakdown?
@@ -48,7 +51,9 @@ final class MatchViewModel {
     ///   - seasonNumber: 0 for a standalone/quick game.
     ///   - week: 1–10 in the regular season; 11+ resolves playoff rotations.
     ///   - difficulty: overrides the persisted selection (tests/previews).
-    init(isPlayoff: Bool = false, isChampionship: Bool = false, seasonNumber: Int = 0, week: Int = 1, difficulty: DifficultyLevel? = nil) {
+    ///   - resume: a saved active-investigation record for this exact game;
+    ///     when it matches, the match resumes at the saved quarter.
+    init(isPlayoff: Bool = false, isChampionship: Bool = false, seasonNumber: Int = 0, week: Int = 1, difficulty: DifficultyLevel? = nil, resume: ActiveMatchRecord? = nil) {
         self.isPlayoff = isPlayoff
         self.isChampionship = isChampionship
         // Changing the difficulty applies from the next unplayed game:
@@ -56,6 +61,14 @@ final class MatchViewModel {
         // regenerated, so only puzzles built after the change adapt.
         let selected = difficulty ?? DifficultyManager.shared.selected
         activeDifficulty = selected
+        // Phase 11.6: season games are identity-stable — leaving and
+        // reopening resumes the same investigation, quarter for quarter.
+        if seasonNumber > 0 {
+            matchID = Self.stableMatchID(
+                seasonNumber: seasonNumber, week: week,
+                isPlayoff: isPlayoff, isChampionship: isChampionship
+            )
+        }
         let target = DifficultyResolver.target(selected: selected, stage: .forWeek(week))
         let ids = CaseScheduler.gameCaseIDs(seasonNumber: seasonNumber, week: week)
         var maps: [[String: RosterIdentity]] = []
@@ -87,6 +100,38 @@ final class MatchViewModel {
         }
         identityMaps = maps
         statEventMaps = statMaps
+        // Resume path: a saved record for this exact game restores the match
+        // (quarters already decided, running totals) instead of starting over.
+        if let resume, Self.matchesContext(resume, seasonNumber: seasonNumber, week: week, isPlayoff: isPlayoff, isChampionship: isChampionship) {
+            match = resume.match
+            matchID = resume.matchID
+        }
+    }
+
+    /// Deterministic per-game identity: stable across app launches so the
+    /// persisted investigation record and the quarter snapshot re-key exactly.
+    private static func stableMatchID(seasonNumber: Int, week: Int, isPlayoff: Bool, isChampionship: Bool) -> UUID {
+        let hash = SeededGenerator.hash([
+            "gridiron-match", String(seasonNumber), String(week),
+            isPlayoff ? "po" : "reg", isChampionship ? "final" : "semi",
+        ])
+        var bytes = [UInt8](repeating: 0, count: 16)
+        for (index, byte) in withUnsafeBytes(of: hash.bigEndian, Array.init).prefix(8).enumerated() {
+            bytes[index] = byte
+        }
+        let secondary = SeededGenerator.hash(["gridiron-match-2", String(seasonNumber), String(week)])
+        for (index, byte) in withUnsafeBytes(of: secondary.bigEndian, Array.init).prefix(8).enumerated() {
+            bytes[index + 8] = byte
+        }
+        return UUID(uuid: (bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+                           bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]))
+    }
+
+    private static func matchesContext(_ record: ActiveMatchRecord, seasonNumber: Int, week: Int, isPlayoff: Bool, isChampionship: Bool) -> Bool {
+        ActiveInvestigationStore.matches(
+            record, seasonNumber: seasonNumber, week: week,
+            isPlayoff: isPlayoff, isChampionship: isChampionship
+        )
     }
 
     /// Resolves a scheduled case id, adapts it to the difficulty target and
@@ -166,12 +211,47 @@ final class MatchViewModel {
         matchID = UUID()
         rewardBreakdown = nil
         phase = .quarterIntro
+        // A fresh standalone game supersedes any stale saved investigation.
+        ActiveInvestigationStore.clear()
     }
 
     func beginQuarter() {
         Haptics.tick()
         phase = .playing
+        persistActiveInvestigation()
     }
+
+    /// Persists the live game so leaving mid-investigation (pause → Leave,
+    /// app exit) resumes this exact game and quarter on return. Standalone
+    /// games persist too; only context-matched records ever resume.
+    private func persistActiveInvestigation() {
+        guard let seasonNumber = matchSeasonNumber, let week = matchWeek else { return }
+        ActiveInvestigationStore.save(ActiveMatchRecord(
+            seasonNumber: seasonNumber,
+            week: week,
+            isPlayoff: isPlayoff,
+            isChampionship: isChampionship,
+            matchID: matchID,
+            match: match
+        ))
+    }
+
+    /// Records match progress after each quarter so a mid-match exit resumes
+    /// at the right point. Cleared once the game completes — a finished game
+    /// is never re-entered.
+    private func persistActiveInvestigation(afterAdvance: Bool) {
+        guard matchSeasonNumber != nil else { return }
+        if match.isComplete {
+            ActiveInvestigationStore.clear()
+        } else {
+            persistActiveInvestigation()
+        }
+    }
+
+    /// Season context for the persisted record (nil = standalone). Supplied
+    /// by the flow that created this view model.
+    var matchSeasonNumber: Int?
+    var matchWeek: Int?
 
     /// Called when `GameViewModel` reaches a verdict. Reads the finished quarter's
     /// stats from the puzzle view model and stores them at match level. Stat
@@ -213,6 +293,9 @@ final class MatchViewModel {
         withAnimation(.easeInOut(duration: 0.3)) {
             phase = match.isComplete ? .gameResult : .quarterResult
         }
+        // The quarter snapshot is cleared by the finished GameViewModel; the
+        // match record advances (or clears on completion) for a clean resume.
+        persistActiveInvestigation(afterAdvance: true)
     }
 
     /// Grants the game's Game Ball reward exactly once — losing never

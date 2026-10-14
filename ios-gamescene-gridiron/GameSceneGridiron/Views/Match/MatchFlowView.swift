@@ -19,6 +19,10 @@ struct MatchFlowView: View {
     /// Called exactly once when a season game finishes. When set, the replay
     /// option is hidden — completed season games are never replayed.
     var onSeasonResult: ((GameMatch) -> Void)?
+    /// A saved active-investigation record for this exact game: when present
+    /// and context-matched, the game resumes at the saved quarter with the
+    /// saved quarter state (placements, lives, hints, clock, timeouts).
+    var resumeRecord: ActiveMatchRecord?
 
     @State private var matchViewModel: MatchViewModel
     @State private var quarterViewModel: GameViewModel?
@@ -31,7 +35,8 @@ struct MatchFlowView: View {
         isChampionship: Bool = false,
         seasonNumber: Int? = nil,
         week: Int? = nil,
-        onSeasonResult: ((GameMatch) -> Void)? = nil
+        onSeasonResult: ((GameMatch) -> Void)? = nil,
+        resumeRecord: ActiveMatchRecord? = nil
     ) {
         self.userTeam = userTeam
         self.opponent = opponent
@@ -39,12 +44,16 @@ struct MatchFlowView: View {
         self.seasonNumber = seasonNumber
         self.week = week
         self.onSeasonResult = onSeasonResult
+        self.resumeRecord = resumeRecord
         _matchViewModel = State(initialValue: MatchViewModel(
             isPlayoff: isPlayoff,
             isChampionship: isChampionship,
             seasonNumber: seasonNumber ?? 0,
-            week: week ?? 1
+            week: week ?? 1,
+            resume: resumeRecord
         ))
+        matchViewModel.matchSeasonNumber = seasonNumber
+        matchViewModel.matchWeek = week
     }
 
     var body: some View {

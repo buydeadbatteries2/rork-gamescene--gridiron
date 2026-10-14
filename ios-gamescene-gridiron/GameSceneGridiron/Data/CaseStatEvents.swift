@@ -12,7 +12,12 @@ import Foundation
 // roster, leaders and Player of the Game.
 nonisolated enum CaseStatEvents {
 
-    static let table: [String: [String: PlayerStat]] = [
+    /// The full table: hand-authored entries below plus the Phase 11.6
+    /// expansion's authored entries. The legacy table wins on conflict.
+    static let table: [String: [String: PlayerStat]] =
+        legacyTable.merging(generatedTable) { current, _ in current }
+
+    private static let legacyTable: [String: [String: PlayerStat]] = [
 
         // MARK: Band 1
         "case_spread_sideline_01": [

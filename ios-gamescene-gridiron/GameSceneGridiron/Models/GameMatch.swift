@@ -1,7 +1,7 @@
 import Foundation
 
 /// Outcome of one quarter within the larger game. Losing a quarter never ends the match.
-nonisolated enum QuarterOutcome: String, Hashable, Sendable {
+nonisolated enum QuarterOutcome: String, Hashable, Sendable, Codable {
     case solved
     case failed
 
@@ -14,7 +14,7 @@ nonisolated enum QuarterOutcome: String, Hashable, Sendable {
 }
 
 /// Everything the match remembers about one finished quarter (including overtime).
-nonisolated struct QuarterRecord: Hashable, Sendable, Identifiable {
+nonisolated struct QuarterRecord: Hashable, Sendable, Identifiable, Codable {
     /// 0-based index; 4 = overtime.
     let id: Int
     let label: String
@@ -53,7 +53,7 @@ nonisolated enum MatchResult: Hashable, Sendable {
 
 /// Match-level state for one full game: quarter results, running statistics and
 /// the final verdict. Individual puzzle state stays inside `GameViewModel`.
-nonisolated struct GameMatch: Hashable, Sendable {
+nonisolated struct GameMatch: Hashable, Sendable, Codable {
     static let regulationQuarters = 4
     /// Quarters the player must solve to win in regulation.
     static let quartersToWin = 3

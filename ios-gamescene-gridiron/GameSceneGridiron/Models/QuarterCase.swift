@@ -93,6 +93,23 @@ nonisolated struct CaseSolution: Hashable, Sendable {
 }
 
 /// One validated case definition in the local library.
+// MARK: - Case metadata (Phase 11.6)
+
+/// Authored library metadata for one case. `tier` is the difficulty the case
+/// was written for (the primary matchmaking bucket); `difficultyScore` is the
+/// 1–100 numeric rating used for fair competitive case assignment;
+/// `isCompetitiveEligible` marks cases validated for future ranked play.
+nonisolated struct CaseMetadata: Hashable, Sendable {
+    /// Authored primary difficulty tier.
+    var tier: DifficultyLevel
+    /// 1...100 authored difficulty score (competitive matchmaking input).
+    var difficultyScore: Int
+    /// True when the case is validated for future competitive play: exactly
+    /// one solution, no ambiguous clues, supported profiles, a validated
+    /// difficulty score and stable deterministic content.
+    var isCompetitiveEligible: Bool
+}
+
 nonisolated struct QuarterCase: Hashable, Sendable {
     /// Unique id, e.g. "case_trips_coverage_03".
     let id: String
@@ -110,6 +127,26 @@ nonisolated struct QuarterCase: Hashable, Sendable {
     let clues: [CaseClue]
     let hints: [CaseHint]
     let solution: [CaseSolution]
+    /// Authored library metadata. nil only on adapted copies built before the
+    /// metadata existed — every `CaseLibrary.all` case carries it.
+    var metadata: CaseMetadata?
+
+    var tier: DifficultyLevel? { metadata?.tier }
+    var difficultyScore: Int? { metadata?.difficultyScore }
+    var isCompetitiveEligible: Bool { metadata?.isCompetitiveEligible ?? true }
+
+    /// The difficulties this case genuinely plays at: the authored case
+    /// adapted to each level's profile pool must still solve to exactly one
+    /// answer, with every authored solution profile available. Derived — never
+    /// assumed — so a case that only works at its own tier reports just that.
+    var supportedDifficulties: Set<DifficultyLevel> {
+        Set(DifficultyLevel.allCases.filter { level in
+            let pool = PlayerProfile.pool(for: level)
+            let adapted = CaseDifficultyAdapter.adapt(self, to: DifficultyResolver.target(selected: level, stage: .midSeason))
+            return adapted.solution.allSatisfy { pool.contains($0.profile) }
+                && CaseSolver.isUnique(adapted)
+        })
+    }
 
     func slot(withKey key: String) -> CaseSlot? { slots.first { $0.key == key } }
     func evidence(withKey key: String) -> CaseEvidence? { evidence.first { $0.key == key } }

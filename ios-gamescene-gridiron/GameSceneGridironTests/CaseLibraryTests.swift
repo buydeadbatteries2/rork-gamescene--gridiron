@@ -12,8 +12,8 @@ struct CaseLibraryTests {
 
     // MARK: Library shape
 
-    @Test func libraryHasAtLeastFiftyUniqueCases() {
-        #expect(library.count >= 50, "library must hold at least 50 case definitions")
+    @Test func libraryHasExactlyOneHundredFiftyUniqueCases() {
+        #expect(library.count == 150, "library must hold exactly 150 case definitions, found \(library.count)")
         let ids = library.map(\.id)
         #expect(Set(ids).count == ids.count, "duplicate case ids present")
         #expect(ids.allSatisfy { $0.hasPrefix("case_") }, "case ids must use the case_ prefix")

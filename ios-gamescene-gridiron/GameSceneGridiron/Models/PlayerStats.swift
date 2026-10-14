@@ -179,7 +179,7 @@ nonisolated struct PlayerStatLine: Codable, Hashable, Sendable {
 
 /// One stat award tied to a specific franchise player, produced from a solved
 /// puzzle placement. Only positive accomplishments — never negative marks.
-nonisolated struct PlayerStatEvent: Hashable, Sendable {
+nonisolated struct PlayerStatEvent: Hashable, Sendable, Codable {
     let franchisePlayerID: UUID
     let playerName: String
     let position: FootballPosition

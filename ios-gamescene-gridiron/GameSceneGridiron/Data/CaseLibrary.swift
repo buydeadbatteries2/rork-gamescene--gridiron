@@ -41,10 +41,15 @@ nonisolated enum CaseRoster {
 
     /// Deterministic names for one case: a consecutive window of the pool,
     /// offset by the case's roster seed. Never repeats inside a case and never
-    /// collides with another case scheduled in the same game.
+    /// collides with another case scheduled in the same game: with the 900-name
+    /// combined pool, every seed in 0...149 owns a disjoint six-name window.
     static func names(forRosterSeed seed: Int, count: Int) -> [String] {
-        (0..<count).map { pool[((seed * 6 + $0) % pool.count + pool.count) % pool.count] }
+        (0..<count).map { fullPool[((seed * 6 + $0) % fullPool.count + fullPool.count) % fullPool.count] }
     }
+
+    /// The original 150 names plus the Phase 11.6 extension (the 150-case
+    /// library needs 900 collision-free window slots).
+    static let fullPool: [String] = pool + extraNames
 }
 
 // MARK: - Formation building
@@ -81,12 +86,13 @@ nonisolated enum Formation {
 
 // MARK: - Library
 
-/// The local puzzle library: 50 validated case definitions across five quarter
+/// The local puzzle library: 150 validated case definitions across five quarter
 /// bands (Q1–Q4 + overtime). Nothing here is generated at play time — every
 /// case is authored, constraint-checked and converted to the runtime engine.
 nonisolated enum CaseLibrary {
     static let all: [QuarterCase] =
         CasePack1.all + CasePack2.all + CasePack3.all + CasePack4.all + CasePack5.all + CasePack6.all
+            + CasePack7.all + CasePack8.all + CasePack9.all + CasePack10.all + CasePack11.all + CasePack12.all
 
     /// All cases of one quarter band (1...5).
     static func band(_ band: Int) -> [QuarterCase] {
@@ -122,9 +128,14 @@ nonisolated enum CaseLibrary {
         slots: [(key: String, x: Double, y: Double)],
         clues: [(player: String, family: ClueFamily, difficulty: ClueDifficulty, text: String, constraints: [CaseConstraint], evidence: [String])],
         hints: [(player: String, text: String)],
-        solution: [(player: String, slot: String, profile: PlayerProfile)]
+        solution: [(player: String, slot: String, profile: PlayerProfile)],
+        tier: DifficultyLevel? = nil,
+        difficultyScore: Int? = nil,
+        isCompetitiveEligible: Bool = true
     ) -> QuarterCase {
-        QuarterCase(
+        // Authored metadata when supplied; otherwise derived from real case
+        // content so every library case always carries complete metadata.
+        var prototype = QuarterCase(
             id: id,
             band: band,
             rosterSeed: seed,
@@ -148,6 +159,25 @@ nonisolated enum CaseLibrary {
             hints: hints.map { CaseHint(playerKey: $0.player, text: $0.text) },
             solution: solution.map { CaseSolution(playerKey: $0.player, slotKey: $0.slot, profile: $0.profile) }
         )
+        let profile = CaseDifficultyProfile(of: prototype)
+        prototype.metadata = CaseMetadata(
+            tier: tier ?? Self.tier(forBand: band),
+            difficultyScore: min(100, max(1, difficultyScore ?? Int((profile.rating * 100).rounded()))),
+            isCompetitiveEligible: isCompetitiveEligible
+        )
+        return prototype
+    }
+
+    /// Band-to-tier mapping for cases authored before tiers existed. The
+    /// legacy bands speak the fast/power/veteran dialect, so they bucket as
+    /// Pro (bands 1–2), All-Pro (band 3) and Hall of Famer (bands 4–5);
+    /// Rookie-tier cases are fully authored in the Phase 11.6 expansion.
+    private static func tier(forBand band: Int) -> DifficultyLevel {
+        switch band {
+        case 1, 2: .pro
+        case 3: .allPro
+        default: .hallOfFamer
+        }
     }
 
     // MARK: Runtime conversion

@@ -2,10 +2,12 @@ import Foundation
 
 // MARK: - User difficulty levels
 
-/// The four difficulty modes. The player picks one when starting a season and
-/// can change it later in Settings; the selection persists locally and
-/// combines with the season stage to resolve the effective difficulty of
-/// every game.
+/// The four difficulty modes. The player picks one when starting a season —
+/// the choice is then LOCKED until that season completes (all regular games,
+/// playoffs and the championship play at it). Between seasons the player
+/// chooses again before starting the next one. The selection persists
+/// locally and combines with the season stage to resolve the effective
+/// difficulty of every game.
 nonisolated enum DifficultyLevel: String, Codable, CaseIterable, Hashable, Sendable, Comparable {
     case rookie
     case pro

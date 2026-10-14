@@ -158,19 +158,22 @@ final class PlayClockController {
     }
 }
 
-// MARK: - Anti-exploit snapshot
+// MARK: - Investigation snapshot
 //
-// Active Hall of Famer timing state survives lifecycle changes safely: the
-// frozen remaining clock, consumed timeouts, lost lives and solved placements
-// are persisted under the match+quarter key, so a force-quit can never
-// restore consumed timeouts or lives, reset an almost-expired clock, or
-// duplicate solved placements.
+// Active quarter state survives lifecycle changes safely: solved placements,
+// remaining lives, consumed hint leads, Hall of Famer timeouts and the frozen
+// remaining play clock are persisted under the match+quarter key, so a
+// force-quit can never restore consumed timeouts or lives, reset an
+// almost-expired clock, or duplicate solved placements — and reopening the
+// app resumes the same investigation instead of dealing a fresh puzzle.
 
-nonisolated struct HallOfFamerClockSnapshot: Codable, Sendable, Hashable {
+nonisolated struct InvestigationSnapshot: Codable, Sendable, Hashable {
     let matchKey: String
     let caseID: String
+    let isTimed: Bool
     let remaining: TimeInterval
     let timeoutsRemaining: Int
     let lives: Int
     let placedPlayerIDs: [String]
+    let usedHintIDs: [String]
 }

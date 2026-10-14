@@ -149,7 +149,6 @@ struct GameplayView: View {
             if viewModel.isPaused {
                 PauseOverlay(
                     onResume: { withAnimation(.easeOut(duration: 0.2)) { viewModel.isPaused = false } },
-                    onRestart: { viewModel.restart() },
                     onQuit: onQuit
                 )
                 .transition(.opacity)

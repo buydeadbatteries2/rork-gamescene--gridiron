@@ -139,7 +139,13 @@ final class SeasonManager {
         self.defaults = defaults
         let loaded = Self.load(from: defaults)
         if let repaired = loaded.map(Self.repairCorruptedSeason) {
-            let scheduled = Self.withCaseSchedule(repaired)
+            var scheduled = Self.withCaseSchedule(repaired)
+            // Migrate pre-lock saves: stamp the season with the difficulty
+            // currently selected (which is what it has been playing at).
+            if scheduled.difficulty == nil {
+                scheduled.difficulty = DifficultyManager.shared.selected
+                persist()
+            }
             season = scheduled
             if scheduled != loaded {
                 // Persist the repair/schedule immediately so it survives restarts.
@@ -196,15 +202,30 @@ final class SeasonManager {
 
     var hasActiveSeason: Bool { season != nil }
 
-    /// Starts a new season (or advances to the next one). The user's franchise
-    /// identity is never touched — only competition data resets. The finished
-    /// season's player stats roll into career totals via the roster manager.
-    func startNewSeason(userTeam: GameTeam) {
+    /// True while a season is running (regular season or postseason) — the
+    /// window in which the difficulty selection is locked. A completed
+    /// season waiting for the next one does NOT lock.
+    var hasSeasonInProgress: Bool { (season?.phase ?? .complete) != .complete }
+
+    /// The difficulty the active (or most recent) season was started with.
+    var activeSeasonDifficulty: DifficultyLevel? { season?.difficulty }
+
+    /// Starts a new season (or advances to the next one) at `difficulty` —
+    /// the choice made on the SELECT DIFFICULTY screen. The choice is stored
+    /// on the season (locking it until the season completes) and persisted as
+    /// the live selection. The user's franchise identity is never touched —
+    /// only competition data resets. The finished season's player stats roll
+    /// into career totals via the roster manager.
+    func startNewSeason(userTeam: GameTeam, difficulty: DifficultyLevel? = nil) {
         if let finished = season {
             RosterManager.shared.completeSeason(finishedSeasonNumber: finished.seasonNumber)
         }
+        let resolved = difficulty ?? DifficultyManager.shared.selected
         let nextNumber = (season?.seasonNumber ?? 0) + 1
-        season = Self.generateSeason(userTeamID: userTeam.id, seasonNumber: nextNumber)
+        var next = Self.generateSeason(userTeamID: userTeam.id, seasonNumber: nextNumber)
+        next.difficulty = resolved
+        season = next
+        DifficultyManager.shared.selectUnlocked(resolved)
         persist()
     }
 
@@ -332,7 +353,10 @@ final class SeasonManager {
     /// the player's actual achievement/trophy records.
     private func emitSeasonEvents(for updated: Season) {
         guard isLiveInstance, updated.phase == .complete else { return }
-        AchievementCoordinator.seasonCompleted(season: updated, difficulty: DifficultyManager.shared.selected)
+        // The season's OWN difficulty — never the live selection — feeds the
+        // permanent archive/trophy records.
+        let difficulty = updated.difficulty ?? DifficultyManager.shared.selected
+        AchievementCoordinator.seasonCompleted(season: updated, difficulty: difficulty)
     }
 
     private var isLiveInstance: Bool { defaults === UserDefaults.standard }

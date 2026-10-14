@@ -54,8 +54,8 @@ final class GameViewModel {
     static let timeoutsPerQuarter = 2
     /// Timeout duration in seconds.
     static let timeoutDuration: TimeInterval = 25
-    /// Persisted timing-state key.
-    static let clockSnapshotKey = "gamescene.gridiron.hof.clock"
+    /// Persisted investigation-state key (all difficulties).
+    static let clockSnapshotKey = "gamescene.gridiron.investigation"
     /// One-time explanation flag key.
     static let clockIntroKey = "gamescene.gridiron.hofClockExplained"
 
@@ -347,6 +347,7 @@ final class GameViewModel {
             lives = isTraining ? lives : max(0, lives - 1)
             rejectedSlotID = slot.id
             rejectionCount += 1
+            persistClockSnapshot()
             BalanceTelemetry.shared.recordWrongPlacement(caseID: puzzle.id)
             Haptics.error()
             AudioManager.shared.play(.placementWrong)
@@ -506,33 +507,36 @@ final class GameViewModel {
         timeoutClock = nil
     }
 
-    // MARK: Timing snapshot (anti-exploit persistence)
+    // MARK: Investigation snapshot (anti-exploit persistence)
 
+    /// Persists the whole live quarter state — solved placements, lives,
+    /// consumed hint leads, timeouts and the frozen remaining play clock —
+    /// for every difficulty, so leaving mid-investigation resumes exactly
+    /// where things stood (a force-quit can never respawn consumed state).
     private func persistClockSnapshot() {
-        guard isTimed, let playClock else { return }
-        let snapshot = HallOfFamerClockSnapshot(
+        let snapshot = InvestigationSnapshot(
             matchKey: lastChanceKey,
             caseID: puzzle.id,
-            remaining: playClock.remaining,
+            isTimed: isTimed,
+            remaining: playClock?.remaining ?? 0,
             timeoutsRemaining: timeoutsRemaining,
             lives: lives,
-            placedPlayerIDs: placements.map(\.player.id)
+            placedPlayerIDs: placements.map(\.player.id),
+            usedHintIDs: Array(usedHintIDs)
         )
         SaveStore.save(snapshot, key: Self.clockSnapshotKey, defaults: defaults)
     }
 
     private func clearClockSnapshot() {
-        guard isTimed else { return }
         defaults.removeObject(forKey: Self.clockSnapshotKey)
     }
 
-    /// Restores consumed timeouts, lost lives, solved placements and the
-    /// frozen remaining clock for the same match+quarter — a force-quit can
-    /// never respawn them fresh.
+    /// Restores lost lives, solved placements, consumed hint leads, consumed
+    /// timeouts and the frozen remaining clock for the same match+quarter —
+    /// a force-quit can never respawn them fresh.
     private func restoreClockSnapshotIfMatching() {
-        guard isTimed,
-              let snapshot = SaveStore.load(
-                  HallOfFamerClockSnapshot.self,
+        guard let snapshot = SaveStore.load(
+                  InvestigationSnapshot.self,
                   key: Self.clockSnapshotKey,
                   defaults: defaults
               ),
@@ -546,7 +550,10 @@ final class GameViewModel {
                   let slot = puzzle.slot(id: solution.slotID) else { return nil }
             return PlacedPlayer(player: player, profile: solution.profile, slot: slot)
         }
-        playClock?.restore(remaining: snapshot.remaining)
+        usedHintIDs.formUnion(snapshot.usedHintIDs)
+        if snapshot.isTimed {
+            playClock?.restore(remaining: snapshot.remaining)
+        }
     }
 
     // MARK: Hints (persistent economy)
@@ -584,6 +591,7 @@ final class GameViewModel {
         guard let hint = nextHint, result == .inProgress else { return }
         BalanceTelemetry.shared.recordHintUsed(caseID: puzzle.id)
         usedHintIDs.insert(hint.id)
+        persistClockSnapshot()
         usedHints.append(UsedHint(id: hint.id, playerID: hint.playerID, text: hint.text, date: .now))
         if let index = puzzle.clues.firstIndex(where: { $0.playerID == hint.playerID }) {
             currentClueIndex = index
@@ -660,6 +668,11 @@ final class GameViewModel {
 
     // MARK: Flow
 
+    /// Resets the quarter to its opening state. DEBUG/QA ONLY — production
+    /// gameplay never exposes a restart (compiled out of Release builds).
+    /// Restarting a live investigation would let a player dodge losses,
+    /// reset wrong attempts and protect accuracy stats.
+#if DEBUG
     func restart() {
         feedbackTask?.cancel()
         withAnimation(.easeInOut) {
@@ -687,6 +700,7 @@ final class GameViewModel {
         }
         beginPlacementClock()
     }
+#endif
 
     // MARK: Feedback
 
