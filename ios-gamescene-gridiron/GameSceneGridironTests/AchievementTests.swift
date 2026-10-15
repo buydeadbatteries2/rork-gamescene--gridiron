@@ -267,11 +267,12 @@ struct AchievementTests {
     }
 
     @Test func rewardValuesComeFromEconomyConfig() {
-        #expect(AchievementCatalog.achievement(for: .firstCase).reward == 25)
-        #expect(AchievementCatalog.achievement(for: .perfectGame).reward == 50)
-        #expect(AchievementCatalog.achievement(for: .caseClosed).reward == 100)
-        #expect(AchievementCatalog.achievement(for: .undefeated).reward == 150)
-        #expect(AchievementCatalog.achievement(for: .hallWorthy).reward == 250)
+        // Phase 11.7 rebalance — Game Balls are purchase currency now.
+        #expect(AchievementCatalog.achievement(for: .firstCase).reward == EconomyConfig.standard.achievementRewardFirstCase)
+        #expect(AchievementCatalog.achievement(for: .perfectGame).reward == EconomyConfig.standard.achievementRewardPerfectGame)
+        #expect(AchievementCatalog.achievement(for: .caseClosed).reward == EconomyConfig.standard.achievementRewardFirstChampionship)
+        #expect(AchievementCatalog.achievement(for: .undefeated).reward == EconomyConfig.standard.achievementRewardUndefeated)
+        #expect(AchievementCatalog.achievement(for: .hallWorthy).reward == EconomyConfig.standard.achievementRewardHallWorthy)
     }
 
     // MARK: 4. Popup queue: one at a time, never stacked

@@ -84,4 +84,10 @@ enum ClueHighlighter {
             .matches(in: text, range: NSRange(location: 0, length: nsText.length))
             .compactMap { Range($0.range, in: text) }
     }
+
+    /// All case-insensitive occurrences of one literal phrase, in reading
+    /// order. Used by the simplified-hint phrase emphasis.
+    static func ranges(of phrase: String, in text: String) -> [Range<String.Index>] {
+        matches(in: text, pattern: NSRegularExpression.escapedPattern(for: phrase))
+    }
 }

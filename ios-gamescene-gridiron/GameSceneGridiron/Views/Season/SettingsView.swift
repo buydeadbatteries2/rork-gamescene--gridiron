@@ -321,11 +321,11 @@ struct SettingsView: View {
                     .frame(width: 36, height: 36)
                     .background(Color.black.opacity(0.4), in: .circle)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(purchaseManager.hasAdFree ? "AD-FREE OWNED" : "ADS ENABLED")
+                    Text(purchaseManager.hasAdFree ? "FORCED ADS REMOVED" : "ADS ENABLED")
                         .font(.system(size: 15, weight: .black).width(.compressed))
                         .tracking(1)
                         .foregroundStyle(Theme.paperInk)
-                    Text(purchaseManager.hasAdFree ? "No banner or interstitial ads" : "Ad-Free removes them permanently")
+                    Text(purchaseManager.hasAdFree ? "No forced ads. Optional rewarded videos remain available." : "Remove Forced Ads strips them permanently")
                         .font(Theme.typewriter(11, relativeTo: .caption))
                         .foregroundStyle(Theme.paperInkSoft)
                 }

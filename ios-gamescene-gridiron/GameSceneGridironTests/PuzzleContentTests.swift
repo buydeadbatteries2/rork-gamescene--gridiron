@@ -114,12 +114,13 @@ struct PlayerAssetAndPuzzleUniquenessTests {
         let wallet = PlayerWallet(defaults: UserDefaults(suiteName: "hints-\(UUID().uuidString)")!)
         wallet.addHints(5)
 
-        // Using a hint inside Q1 only ever surfaces a Q1 hint.
+        // Using a hint inside Q1 only ever surfaces a Q1 hint. The revealed
+        // text is the simplified plain-language lead (Phase 11.7).
         let q1 = GameViewModel(puzzle: MatchPuzzles.regulation[0], wallet: wallet)
         #expect(q1.canUseHint)
         q1.useHint()
         #expect(!q1.usedHints.isEmpty)
-        let q1HintTexts = Set(MatchPuzzles.regulation[0].hints.map(\.text))
+        let q1HintTexts = Set(MatchPuzzles.regulation[0].hints.map { q1.simplifiedHint(for: $0).text })
         #expect(q1.usedHints.allSatisfy { q1HintTexts.contains($0.text) })
 
         // Starting the next quarter resets the used-hint sequence but keeps
@@ -130,12 +131,12 @@ struct PlayerAssetAndPuzzleUniquenessTests {
         #expect(q2.hintsRemaining == balanceAfterQ1)
         q2.useHint()
         #expect(wallet.hints == balanceAfterQ1 - 1)
-        let q2HintTexts = Set(MatchPuzzles.regulation[1].hints.map(\.text))
+        let q2HintTexts = Set(MatchPuzzles.regulation[1].hints.map { q2.simplifiedHint(for: $0).text })
         #expect(q2.usedHints.allSatisfy { q2HintTexts.contains($0.text) })
 
         // And that first Q2 hint genuinely belongs to Q2's puzzle data.
         let otherQuarterHints = Set(
-            (MatchPuzzles.regulation.dropFirst(2) + [MatchPuzzles.overtime]).flatMap(\.hints).map(\.text)
+            (MatchPuzzles.regulation.dropFirst(2) + [MatchPuzzles.overtime]).flatMap(\.hints).map { q2.simplifiedHint(for: $0).text }
         )
         #expect(q2.usedHints.allSatisfy { !otherQuarterHints.contains($0.text) })
     }

@@ -23,10 +23,12 @@ nonisolated struct PuzzleHint: Identifiable, Hashable, Sendable {
     let text: String
 }
 
-/// A hint the player has already spent.
+/// A hint the player has already spent. `text` is the simplified plain-
+/// language lead; `highlightPhrases` are the key phrases to emphasize.
 nonisolated struct UsedHint: Identifiable, Hashable, Sendable {
     let id: String
     let playerID: String
     let text: String
+    var highlightPhrases: [String] = []
     let date: Date
 }

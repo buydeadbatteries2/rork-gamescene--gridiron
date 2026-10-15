@@ -65,34 +65,25 @@ struct EconomyTests {
         )
     }
 
-    // MARK: 1–3. Reward values
+    // MARK: 1–3. Reward values (Phase 11.7 final economy)
 
-    @Test func quarterSolvedAndRegulationWinRewardsMatchTheConfig() {
+    @Test func solvedQuartersPayExactlyOneGameBallEach() {
         let breakdown = self.breakdown(for: makeMatch())
-        #expect(breakdown.lines.map(\.label) == ["3 Quarters Solved", "Game Victory"])
-        #expect(breakdown.lines.map(\.amount) == [
-            EconomyConfig.standard.quarterSolvedReward * 3,
-            EconomyConfig.standard.regulationWinReward
-        ])
-        #expect(breakdown.total == 70)
+        #expect(breakdown.lines.map(\.label) == ["3 Quarters Solved"])
+        #expect(breakdown.lines.map(\.amount) == [EconomyConfig.standard.quarterSolvedReward * 3])
+        #expect(breakdown.total == 3)
     }
 
-    @Test func overtimeWinPaysTheOvertimeReward() {
-        // 2 regulation solves + the OT solve = 3 quarters solved, paid at the
-        // overtime win rate instead of the regulation one.
-        let breakdown = self.breakdown(for: makeMatch(solvedQuarters: [0, 1], wentToOvertime: true, overtimeSolved: true))
-        #expect(breakdown.lines.map(\.label) == ["3 Quarters Solved", "Overtime Victory"])
-        #expect(breakdown.total == 30 + EconomyConfig.standard.overtimeWinReward)
-    }
-
-    @Test func playoffAndChampionshipBonusesStackOnTop() {
-        let playoff = breakdown(for: makeMatch(), isPlayoff: true)
-        #expect(playoff.lines.map(\.label) == ["3 Quarters Solved", "Game Victory", "Playoff Win"])
-        #expect(playoff.total == 70 + EconomyConfig.standard.playoffWinBonus)
-
-        let championship = breakdown(for: makeMatch(), isPlayoff: true, isChampionship: true)
-        #expect(championship.lines.map(\.label) == ["3 Quarters Solved", "Game Victory", "Playoff Win", "Gridiron Champions"])
-        #expect(championship.total == 70 + EconomyConfig.standard.playoffWinBonus + EconomyConfig.standard.championshipWinBonus)
+    @Test func noLegacyWinBonusesRemain() {
+        // The old +40 regulation / +50 OT / playoff / championship stacks are
+        // gone — only per-quarter payouts remain, capped at 4 in regulation.
+        let clean = self.breakdown(for: makeMatch(solvedQuarters: [0, 1, 2, 3]))
+        #expect(clean.total == 4)
+        let playoff = self.breakdown(for: makeMatch(solvedQuarters: [0, 1, 2, 3]), isPlayoff: true, isChampionship: true)
+        #expect(playoff.total == 4)
+        let ot = self.breakdown(for: makeMatch(solvedQuarters: [0, 1], wentToOvertime: true, overtimeSolved: true))
+        #expect(ot.lines.map(\.label) == ["2 Quarters Solved", "Overtime Solved"])
+        #expect(ot.total == 3)
     }
 
     @Test func losingAGameNeverSubtractsAndStillPaysSolvedQuarters() {
@@ -101,15 +92,27 @@ struct EconomyTests {
         #expect(breakdown.total == EconomyConfig.standard.quarterSolvedReward)
     }
 
-    // MARK: 4. Claim safety
+    // MARK: 4. Per-quarter claim safety (Phase 11.7)
 
-    @Test func matchRewardCannotBeClaimedTwice() {
+    @Test func quarterRewardCannotBeClaimedTwice() {
         let wallet = makeWallet()
-        let breakdown = self.breakdown(for: makeMatch(), transactionID: "match-abc")
-        #expect(wallet.claimMatchReward(breakdown))
-        #expect(wallet.gameBalls == breakdown.total)
-        #expect(!wallet.claimMatchReward(breakdown))
-        #expect(wallet.gameBalls == breakdown.total)
+        #expect(wallet.earn(amount: 1, kind: .quarterSolved, transactionID: "quarter-m1-q0"))
+        #expect(wallet.gameBalls == 1)
+        #expect(!wallet.earn(amount: 1, kind: .quarterSolved, transactionID: "quarter-m1-q0"))
+        #expect(wallet.gameBalls == 1)
+        // A different quarter pays normally.
+        #expect(wallet.earn(amount: 1, kind: .quarterSolved, transactionID: "quarter-m1-q1"))
+        #expect(wallet.gameBalls == 2)
+    }
+
+    @Test func losingQuarterGrantsNothing() {
+        let wallet = makeWallet()
+        let before = wallet.gameBalls
+        // Failed quarters only ever reach awardQuarterReward as .solved ==
+        // false — the call is skipped entirely; the ledger confirms nothing
+        // was credited under .quarterSolved.
+        #expect(!wallet.transactions.contains { $0.kind == .quarterSolved })
+        #expect(wallet.gameBalls == before)
     }
 
     // MARK: 5. Hint persistence (16. full persistence lives here too)
@@ -171,27 +174,42 @@ struct EconomyTests {
         #expect(result == .granted)
     }
 
-    // MARK: 10. Last Chance
+    // MARK: 10. Last Chance rescues (Phase 11.7)
 
-    @Test func lastChanceIsOfferedExactlyOncePerQuarter() {
+    @Test func videoRescueIsOfferedExactlyOncePerQuarter() {
         let wallet = makeWallet()
         let key = "match-abc-q1"
-        #expect(!wallet.hasUsedLastChance(for: key))
-        #expect(wallet.markLastChanceUsed(for: key))
-        #expect(wallet.hasUsedLastChance(for: key))
-        #expect(!wallet.markLastChanceUsed(for: key))
+        #expect(wallet.canUseVideoRescue(for: key))
+        #expect(wallet.markVideoRescueUsed(for: key))
+        #expect(!wallet.canUseVideoRescue(for: key))
+        #expect(!wallet.markVideoRescueUsed(for: key))
 
-        // A different quarter still gets its own offer.
-        #expect(wallet.markLastChanceUsed(for: "match-abc-q2"))
+        // A different quarter still gets its own rescue.
+        #expect(wallet.canUseVideoRescue(for: "match-abc-q2"))
     }
 
-    @Test func lastChanceUsageSurvivesRestarts() {
+    @Test func rescueUsageSurvivesRestarts() {
         let defaults = UserDefaults(suiteName: "economy-restart-\(UUID().uuidString)")!
         let first = PlayerWallet(defaults: defaults)
-        #expect(first.markLastChanceUsed(for: "match-xyz-q3"))
+        #expect(first.markVideoRescueUsed(for: "match-xyz-q3"))
+        #expect(first.markHintRescueUsed(for: "match-xyz-q4"))
         let reloaded = PlayerWallet(defaults: defaults)
-        #expect(reloaded.hasUsedLastChance(for: "match-xyz-q3"))
-        #expect(!reloaded.markLastChanceUsed(for: "match-xyz-q3"))
+        #expect(!reloaded.canUseVideoRescue(for: "match-xyz-q3"))
+        #expect(!reloaded.markVideoRescueUsed(for: "match-xyz-q3"))
+        #expect(reloaded.usedHintRescue(for: "match-xyz-q4"))
+        #expect(!reloaded.markHintRescueUsed(for: "match-xyz-q4"))
+    }
+
+    @Test func hintRescueRequiresAPayableHint() {
+        let wallet = makeWallet()
+        let key = "match-pay-q1"
+        // Starting inventory covers it.
+        #expect(wallet.canUseHintRescue(for: key))
+        while wallet.consumeHint() {}
+        // No inventory, no Game Balls — no hint rescue offered.
+        #expect(!wallet.canUseHintRescue(for: key))
+        wallet.earn(amount: EconomyConfig.standard.hintCost, kind: .matchReward, transactionID: "pay1")
+        #expect(wallet.canUseHintRescue(for: key))
     }
 
     // MARK: 11. Postgame 2×
@@ -199,7 +217,7 @@ struct EconomyTests {
     @Test func doublingWorksExactlyOncePerMatch() {
         let wallet = makeWallet()
         let breakdown = self.breakdown(for: makeMatch(), transactionID: "match-double")
-        #expect(wallet.claimMatchReward(breakdown))
+        wallet.earn(amount: breakdown.total, kind: .matchReward, transactionID: "match-double")
         let afterClaim = wallet.gameBalls
 
         #expect(!wallet.hasDoubledMatchReward(transactionID: breakdown.transactionID))
@@ -210,9 +228,10 @@ struct EconomyTests {
         #expect(wallet.gameBalls == afterClaim + breakdown.total)
     }
 
-    @Test func doublingRequiresAClaimedBaseReward() {
+    @Test func doublingAZeroRewardIsRejected() {
         let wallet = makeWallet()
-        let breakdown = self.breakdown(for: makeMatch(), transactionID: "match-unclaimed")
+        let breakdown = self.breakdown(for: makeMatch(solvedQuarters: []), transactionID: "match-empty")
+        #expect(breakdown.total == 0)
         #expect(!wallet.doubleMatchReward(breakdown))
         #expect(wallet.gameBalls == 0)
     }
@@ -231,7 +250,7 @@ struct EconomyTests {
     // MARK: Interstitial frequency
 
     @Test func interstitialAppearsAtMostOnceEveryTwoCompletedGames() {
-        let ads = AdManager(interstitialEveryNGames: EconomyConfig.standard.interstitialEveryNGames)
+        let ads = AdManager()
         ads.recordCompletedGame()
         #expect(!ads.canShowInterstitial())
         ads.recordCompletedGame()

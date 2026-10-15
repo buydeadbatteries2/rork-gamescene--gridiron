@@ -207,10 +207,13 @@ struct ClueNotebookView: View {
 
                     if let hint = viewModel.usedHint(for: clue), !isSolved {
                         Label {
-                            Text(ClueHighlighter.highlighted(hint.text, highContrast: isHighContrast))
-                                .font(.system(size: isLargerText ? 14 : 11.5, weight: .medium))
-                                .lineSpacing(2)
-                                .fixedSize(horizontal: false, vertical: true)
+                            Text(HintSimplifier.attributed(
+                                SimplifiedHint(text: hint.text, highlightPhrases: hint.highlightPhrases),
+                                highContrast: isHighContrast
+                            ))
+                            .font(.system(size: isLargerText ? 14 : 11.5, weight: .medium))
+                            .lineSpacing(2)
+                            .fixedSize(horizontal: false, vertical: true)
                         } icon: {
                             Image(systemName: "lightbulb.fill")
                                 .font(.system(size: 10, weight: .bold))

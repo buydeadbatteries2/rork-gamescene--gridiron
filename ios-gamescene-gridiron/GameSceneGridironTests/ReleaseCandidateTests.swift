@@ -131,15 +131,15 @@ struct ReleaseCandidateTests {
         #expect(!wallet.earn(amount: 25, kind: .matchReward, transactionID: "tx-1"))
         #expect(wallet.gameBalls == afterFirst)
 
-        // A reward double requires the base claim and fires once.
+        // A reward double fires once per match.
         let breakdown = MatchRewardBreakdown(transactionID: "tx-2", lines: [], total: 20)
-        #expect(wallet.claimMatchReward(breakdown))
+        #expect(wallet.earn(amount: 20, kind: .matchReward, transactionID: "tx-2"))
         #expect(wallet.doubleMatchReward(breakdown))
         #expect(!wallet.doubleMatchReward(breakdown), "double reward paid twice")
 
-        // One rewarded life per quarter, ever.
-        #expect(wallet.markLastChanceUsed(for: "w3-q2"))
-        #expect(!wallet.markLastChanceUsed(for: "w3-q2"))
+        // One video rescue per quarter, ever.
+        #expect(wallet.markVideoRescueUsed(for: "w3-q2"))
+        #expect(!wallet.markVideoRescueUsed(for: "w3-q2"))
 
         // An unaffordable hint purchase is atomic: nothing deducted, none granted.
         let brokeWallet = PlayerWallet(defaults: UserDefaults(suiteName: "rc-economy2.\(UUID().uuidString)")!)

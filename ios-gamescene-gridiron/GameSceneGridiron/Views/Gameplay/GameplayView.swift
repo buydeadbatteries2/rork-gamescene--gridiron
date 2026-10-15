@@ -162,15 +162,29 @@ struct GameplayView: View {
             }
         }
         .overlay {
-            // Rewarded-video offers. Nothing is granted unless the ad's reward
-            // callback fires (`.granted`); an early close just returns here.
+            // Rescue offers + rewarded-video offers. Nothing is granted unless
+            // the ad's reward callback fires (`.granted`); an early close just
+            // returns here.
             if viewModel.isLastChancePending {
-                LastChanceOverlay(
-                    isWatching: isWatchingAd,
-                    onWatch: { watchRewarded(.lastChanceLife) { viewModel.grantLastChanceLife() } },
-                    onAccept: { viewModel.acceptLastChanceLoss() }
-                )
-                .transition(.opacity)
+                if viewModel.isPostVideoRescue {
+                    // The rewarded rescue already failed: hint or loss — never
+                    // a second video.
+                    PostVideoRescueOverlay(
+                        canOfferHint: viewModel.canPayForHint,
+                        onUseHint: { viewModel.grantRescueHintLife() },
+                        onAccept: { viewModel.acceptLastChanceLoss() }
+                    )
+                    .transition(.opacity)
+                } else {
+                    LastChanceOverlay(
+                        isWatching: isWatchingAd,
+                        canOfferHint: viewModel.canPayForHint,
+                        onWatch: { watchRewarded(.lastChanceLife) { viewModel.grantLastChanceLife() } },
+                        onUseHint: { viewModel.grantRescueHintLife() },
+                        onAccept: { viewModel.acceptLastChanceLoss() }
+                    )
+                    .transition(.opacity)
+                }
             } else if viewModel.isHintOfferPresented {
                 HintOfferOverlay(
                     isWatching: isWatchingAd,
@@ -178,6 +192,7 @@ struct GameplayView: View {
                     hintCost: EconomyConfig.standard.hintCost,
                     onWatch: { watchRewarded(.hint) { viewModel.grantRewardedHint() } },
                     onBuy: { buyHintFromOffer() },
+                    onOpenShop: { isShopPresented = true },
                     onCancel: { withAnimation(.easeOut(duration: 0.2)) { viewModel.isHintOfferPresented = false } }
                 )
                 .transition(.opacity)
@@ -185,6 +200,9 @@ struct GameplayView: View {
         }
         .sheet(isPresented: $viewModel.isNotebookPresented) {
             CaseFileSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $isShopPresented) {
+            ShopView()
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isDragging)
         .statusBarHidden(false)
@@ -271,6 +289,8 @@ struct GameplayView: View {
     // MARK: Rewarded offers
 
     @State private var isWatchingAd = false
+    /// Shop path from the hint offer when the wallet can't cover the price.
+    @State private var isShopPresented = false
     /// Blocks a rapid double-tap from buying two hints in one gesture.
     @State private var buyHintThrottle = TapThrottle()
 

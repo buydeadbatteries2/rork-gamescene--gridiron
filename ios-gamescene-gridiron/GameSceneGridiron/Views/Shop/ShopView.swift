@@ -1,21 +1,27 @@
 import SwiftUI
 
-/// The SHOP: manila case-file supplies. Game Balls are earned through play —
-/// no real-money Game Ball packs. Hints are bought with earned Game Balls
-/// (small confirmation before spending), and Ad-Free is the one-time StoreKit
-/// purchase at its localized App Store price, never a hard-coded number.
+/// The SHOP: manila case-file supplies. Game Balls are earned through play
+/// and topped up through verified store consumables; the SPECIAL section
+/// carries the one-time Starter Pack and Remove Forced Ads. Every store
+/// price comes from RevenueCat/StoreKit metadata — never a hard-coded
+/// number. Entitlement identifiers never surface in the UI.
 struct ShopView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var isConfirmingHint = false
-    @State private var isPurchasing = false
     @State private var isRestoring = false
     @State private var toast: String?
     /// Blocks a rapid double-tap from buying two hints in one gesture.
     @State private var hintThrottle = TapThrottle()
+    /// Blocks a rapid double-tap from starting two store purchases.
+    @State private var purchaseThrottle = TapThrottle()
 
     private var wallet: PlayerWallet { PlayerWallet.shared }
+    private var store: PurchaseManager { PurchaseManager.shared }
     private var config: EconomyConfig { .standard }
+
+    /// The product whose purchase is currently in flight (progress state).
+    @State private var purchasingProductID: String?
 
     var body: some View {
         ZStack {
@@ -30,13 +36,11 @@ struct ShopView: View {
 
                         hintsSection
 
-                        adFreeSection
+                        gameBallsSection
 
-                        Text("GAME BALLS ARE EARNED THROUGH PLAY.")
-                            .font(Theme.typewriter(10, relativeTo: .caption2))
-                            .tracking(2)
-                            .foregroundStyle(Theme.paperInkSoft.opacity(0.8))
-                            .padding(.top, 4)
+                        specialSection
+
+                        restoreButton
                     }
                     .padding(.horizontal, 22)
                     .padding(.top, 8)
@@ -66,6 +70,7 @@ struct ShopView: View {
             }
         }
         .animation(.easeOut(duration: 0.22), value: isConfirmingHint)
+        .task { await store.loadOfferings() }
     }
 
     // MARK: Header
@@ -115,7 +120,7 @@ struct ShopView: View {
         .padding(.top, 8)
     }
 
-    // MARK: Hints
+    // MARK: Hints (Game Ball economy)
 
     private var hintsSection: some View {
         VStack(spacing: 12) {
@@ -136,7 +141,7 @@ struct ShopView: View {
                     Text("1 HINT")
                         .font(.system(size: 17, weight: .heavy).width(.condensed))
                         .foregroundStyle(Theme.paperInk)
-                    Text("A fresh lead on the case, whenever you need it.")
+                    Text("A simplified lead on the case, whenever you need it.")
                         .font(Theme.typewriter(10, relativeTo: .caption2))
                         .foregroundStyle(Theme.paperInkSoft)
                 }
@@ -171,85 +176,149 @@ struct ShopView: View {
         .rotationEffect(.degrees(0.4))
     }
 
-    // MARK: Ad-Free
+    // MARK: Game Balls (store consumables)
 
-    private var adFreeSection: some View {
+    private var gameBallsSection: some View {
         VStack(spacing: 12) {
-            sectionHeader("AD-FREE", symbol: "eye.slash.fill")
+            sectionHeader("GAME BALLS", symbol: "football.fill")
 
-            Text("Removes banner and automatic ads permanently. Optional reward videos remain available when you choose to use them.")
-                .font(Theme.typewriter(12, relativeTo: .footnote))
-                .foregroundStyle(Theme.paperInk)
-                .multilineTextAlignment(.leading)
-                .lineSpacing(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            adFreeButton
-
-            Button {
-                restorePurchases()
-            } label: {
-                Text("RESTORE PURCHASES")
-                    .font(.system(size: 12, weight: .heavy).width(.condensed))
-                    .tracking(2)
-                    .foregroundStyle(Theme.paperInkSoft)
-                    .frame(maxWidth: .infinity, minHeight: 40)
-                    .overlay {
-                        Capsule().strokeBorder(Theme.paperInkSoft.opacity(0.4), lineWidth: 1)
-                    }
-                    .contentShape(.capsule)
+            ForEach(PurchaseManager.gameBallProductIDs, id: \.self) { productID in
+                storeRow(
+                    title: "\(PurchaseManager.gameBallAmounts[productID] ?? 0) GAME BALLS",
+                    detail: "A top-up of earned assistance currency.",
+                    price: store.localizedPrice(forProductID: productID),
+                    priceFallback: "GAME BALL PACK",
+                    isOwned: false,
+                    isWorking: store.isPurchasing && purchasingProductID == productID
+                ) {
+                    purchase(productID) { await store.purchaseGameBalls(productID: productID) }
+                }
             }
-            .buttonStyle(PressableButtonStyle())
-            .disabled(isRestoring)
         }
         .padding(14)
         .paperCard(cornerRadius: 6)
         .rotationEffect(.degrees(-0.3))
     }
 
-    @ViewBuilder
-    private var adFreeButton: some View {
-        if PurchaseManager.shared.hasAdFree {
-            Label("AD-FREE OWNED — THANK YOU", systemImage: "checkmark.seal.fill")
-                .font(.system(size: 14, weight: .heavy).width(.condensed))
-                .tracking(1.5)
-                .foregroundStyle(Theme.success)
-                .frame(maxWidth: .infinity, minHeight: 48)
-                .overlay {
-                    Capsule().strokeBorder(Theme.success.opacity(0.5), lineWidth: 1.4)
-                }
-                .accessibilityAddTraits(.isSelected)
-        } else if let price = PurchaseManager.shared.adFreePrice {
-            Button {
-                purchaseAdFree(price: price)
-            } label: {
-                HStack(spacing: 10) {
-                    if isPurchasing {
-                        ProgressView()
-                            .tint(Theme.goldLight)
-                    } else {
-                        Image(systemName: "checkmark.seal")
-                            .font(.system(size: 16, weight: .bold))
-                    }
-                    Text("AD-FREE — \(price)")
-                        .font(.system(size: 16, weight: .heavy).width(.condensed))
-                        .tracking(1)
-                }
-                .frame(maxWidth: .infinity, minHeight: 48)
+    // MARK: Special (non-consumables)
+
+    private var specialSection: some View {
+        VStack(spacing: 12) {
+            sectionHeader("SPECIAL", symbol: "seal.fill")
+
+            storeRow(
+                title: "STARTER PACK",
+                detail: "\(config.starterPackHints) Hints plus \(config.starterPackGameBalls) Game Balls — a one-time kit.",
+                price: store.localizedPrice(forProductID: PurchaseManager.starterPackProductID),
+                priceFallback: "ONE-TIME KIT",
+                isOwned: store.hasStarterPack,
+                ownedLabel: "OWNED",
+                isWorking: store.isPurchasing && purchasingProductID == PurchaseManager.starterPackProductID
+            ) {
+                purchase(PurchaseManager.starterPackProductID) { await store.purchaseStarterPack() }
             }
-            .buttonStyle(GoldCapsuleButtonStyle())
-            .disabled(isPurchasing)
-            .accessibilityHint("One-time purchase. Removes banner and automatic ads permanently.")
-        } else {
-            Text("STORE NOT CONNECTED IN THIS BUILD")
-                .font(.system(size: 12, weight: .heavy).width(.condensed))
-                .tracking(1.5)
-                .foregroundStyle(Theme.paperInkSoft)
-                .frame(maxWidth: .infinity, minHeight: 48)
-                .overlay {
-                    Capsule().strokeBorder(Theme.paperInkSoft.opacity(0.35), lineWidth: 1.2)
-                }
+
+            storeRow(
+                title: "REMOVE FORCED ADS",
+                detail: "Permanently removes forced full-screen ads. Optional rewarded videos remain available.",
+                price: store.localizedPrice(forProductID: PurchaseManager.removeAdsProductID),
+                priceFallback: "ONE-TIME PURCHASE",
+                isOwned: store.hasRemoveAds,
+                ownedLabel: "OWNED",
+                isWorking: store.isPurchasing && purchasingProductID == PurchaseManager.removeAdsProductID
+            ) {
+                purchase(PurchaseManager.removeAdsProductID) { await store.purchaseRemoveAds() }
+            }
         }
+        .padding(14)
+        .paperCard(cornerRadius: 6)
+        .rotationEffect(.degrees(0.3))
+    }
+
+    // MARK: Restore
+
+    private var restoreButton: some View {
+        Button {
+            restorePurchases()
+        } label: {
+            Text("RESTORE PURCHASES")
+                .font(.system(size: 12, weight: .heavy).width(.condensed))
+                .tracking(2)
+                .foregroundStyle(Theme.paperInkSoft)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .overlay {
+                    Capsule().strokeBorder(Theme.paperInkSoft.opacity(0.4), lineWidth: 1)
+                }
+                .contentShape(.capsule)
+        }
+        .buttonStyle(PressableButtonStyle())
+        .disabled(isRestoring || !store.isAdFreeAvailable)
+        .padding(.bottom, 8)
+    }
+
+    // MARK: Store rows
+
+    private func storeRow(
+        title: String,
+        detail: String,
+        price: String?,
+        priceFallback: String,
+        isOwned: Bool,
+        ownedLabel: String = "OWNED",
+        isWorking: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 16, weight: .heavy).width(.condensed))
+                    .foregroundStyle(Theme.paperInk)
+                Text(detail)
+                    .font(Theme.typewriter(10, relativeTo: .caption2))
+                    .foregroundStyle(Theme.paperInkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            if isOwned {
+                Label(ownedLabel, systemImage: "checkmark.seal.fill")
+                    .font(.system(size: 12, weight: .heavy).width(.condensed))
+                    .tracking(1)
+                    .foregroundStyle(Theme.success)
+                    .accessibilityAddTraits(.isSelected)
+            } else if let price {
+                Button(action: action) {
+                    HStack(spacing: 6) {
+                        if isWorking {
+                            ProgressView()
+                                .tint(Theme.goldLight)
+                        } else {
+                            Text(price)
+                                .font(.system(size: 15, weight: .black).width(.condensed))
+                        }
+                    }
+                    .foregroundStyle(Theme.ink)
+                    .padding(.horizontal, 14)
+                    .frame(minWidth: 74, minHeight: 40)
+                }
+                .buttonStyle(GoldCapsuleButtonStyle())
+                .frame(height: 40)
+                .disabled(isWorking)
+                .accessibilityLabel("Buy \(title) for \(price)")
+            } else {
+                Text(store.isConfigured ? "UNAVAILABLE" : priceFallback)
+                    .font(.system(size: 11, weight: .heavy).width(.condensed))
+                    .tracking(1)
+                    .foregroundStyle(Theme.paperInkSoft)
+                    .frame(minWidth: 74, minHeight: 40)
+                    .overlay {
+                        Capsule().strokeBorder(Theme.paperInkSoft.opacity(0.35), lineWidth: 1.2)
+                    }
+                    .accessibilityLabel("\(title) unavailable in this build")
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     // MARK: Actions
@@ -266,20 +335,34 @@ struct ShopView: View {
         showToast("+1 HINT")
     }
 
-    private func purchaseAdFree(price: String) {
-        guard !isPurchasing else { return }
-        isPurchasing = true
+    /// Runs one store purchase with double-tap protection and full state
+    /// handling. Success toasts only after RevenueCat verifies the
+    /// transaction; cancellation resolves quietly.
+    private func purchase(_ productID: String, _ flow: @escaping () async -> PurchaseManager.PurchaseFlowState) {
+        guard purchaseThrottle.accept() else { return }
         Haptics.pickUp()
+        purchasingProductID = productID
         Task { @MainActor in
-            let granted = await PurchaseManager.shared.purchaseAdFree()
-            isPurchasing = false
-            if granted {
+            let outcome = await flow()
+            switch outcome {
+            case .success:
                 Haptics.success()
                 AudioManager.shared.play(.hintPurchaseConfirm)
-                showToast("AD-FREE UNLOCKED")
-            } else if let message = PurchaseManager.shared.statusMessage {
-                showToast(message)
+                if let message = store.statusMessage { showToast(message) }
+            case .cancelled:
+                break // quiet — the user backed out
+            case .pending:
+                showToast("PURCHASE PENDING APPROVAL")
+            case .failed:
+                Haptics.warning()
+                showToast(store.statusMessage ?? "PURCHASE FAILED — TRY AGAIN")
+            case .unavailable:
+                Haptics.warning()
+                showToast("STORE NOT CONNECTED IN THIS BUILD")
+            case .idle, .purchasing:
+                break
             }
+            purchasingProductID = nil
         }
     }
 
@@ -287,14 +370,12 @@ struct ShopView: View {
         Haptics.tick()
         Task { @MainActor in
             isRestoring = true
-            await PurchaseManager.shared.restorePurchases()
+            let restored = await store.restorePurchases()
             isRestoring = false
-            if let message = PurchaseManager.shared.statusMessage {
-                showToast(message)
-                if message.contains("RESTORED") {
-                    Haptics.success()
-                    AudioManager.shared.play(.hintPurchaseConfirm)
-                }
+            if let message = store.statusMessage { showToast(message) }
+            if restored {
+                Haptics.success()
+                AudioManager.shared.play(.hintPurchaseConfirm)
             }
         }
     }

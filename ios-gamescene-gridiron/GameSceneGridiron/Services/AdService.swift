@@ -11,6 +11,14 @@ enum RewardedAdResult: Sendable, Equatable {
     case dismissed
 }
 
+/// Outcome of a forced full-screen presentation. `.shown` means an ad
+/// actually played; `.unavailable` means nothing was presented (no SDK, no
+/// inventory, or an ad-free owner) and the player continues for free.
+enum ForcedAdResult: Sendable, Equatable {
+    case shown
+    case unavailable
+}
+
 /// The rewarded-ad placements this game offers. Rewarded videos are always
 /// voluntary and stay available to Ad-Free owners.
 enum RewardedAdPlacement: String, Sendable {
@@ -75,7 +83,7 @@ final class AdManager {
     /// meaning the banner slot stays collapsed, showing no fake strip.
     private(set) var isBannerAdLoaded = false
 
-    init(interstitialEveryNGames: Int = EconomyConfig.standard.interstitialEveryNGames) {
+    init(interstitialEveryNGames: Int = 2) {
         self.interstitialEveryNGames = max(1, interstitialEveryNGames)
     }
 
@@ -169,6 +177,30 @@ final class AdManager {
         // Ad SDK integration point: present the interstitial here.
         #if DEBUG
         print("[AdManager] interstitial presented (development placeholder)")
+        #endif
+    }
+
+    // MARK: Forced full-screen gates (between quarters / overtime)
+
+    /// Presents one forced full-screen ad at a between-quarter or overtime
+    /// transition. Resolves `.shown` only when an ad actually played — the
+    /// caller then records it against the per-game cap. Release builds
+    /// without the live AdMob integration resolve `.unavailable`: never a
+    /// fake ad, never a fake success, and the player continues for free.
+    func showForcedAd() async -> ForcedAdResult {
+        guard showsInterstitialAds else { return .unavailable }
+
+        #if DEBUG
+        // Development placeholder: simulates a short forced ad so the gate
+        // flow (watch/skip/cap) is exercisable end to end.
+        try? await Task.sleep(for: .seconds(1.2))
+        print("[AdManager] forced full-screen ad shown (development placeholder)")
+        return .shown
+        #else
+        // Ad SDK integration point (production): present the AdMob full-screen
+        // interstitial here and return `.shown` from its completion callback.
+        // Until that integration ships, release builds never fake an ad.
+        return .unavailable
         #endif
     }
 

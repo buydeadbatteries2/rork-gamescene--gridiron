@@ -42,6 +42,9 @@ final class GameViewModel {
     /// True while the final heart is gone but the Last Chance offer is up —
     /// the quarter verdict waits for the player's choice.
     private(set) var isLastChancePending = false
+    /// Last Chance stage after the rewarded rescue already failed: the
+    /// NEED SOME HELP? sheet (hint or loss — never a second video).
+    private(set) var isPostVideoRescue = false
     private(set) var usedHints: [UsedHint] = []
     private(set) var placements: [PlacedPlayer] = []
     private(set) var selectedProfiles: [String: PlayerProfile] = [:]
@@ -559,8 +562,12 @@ final class GameViewModel {
     // MARK: Hints (persistent economy)
 
     var canUseHint: Bool {
-        hintsRemaining > 0 && result == .inProgress && nextHint != nil
+        wallet.canConsumeHint && result == .inProgress && nextHint != nil
     }
+
+    /// True when the wallet can pay for a hint (inventory first, then Game
+    /// Balls) — decides whether the USE HINT rescue option is offered.
+    var canPayForHint: Bool { wallet.canConsumeHint }
 
     private var nextHint: PuzzleHint? {
         let solved = solvedPlayerIDs
@@ -570,8 +577,11 @@ final class GameViewModel {
             .min { (order.firstIndex(of: $0.playerID) ?? 0) < (order.firstIndex(of: $1.playerID) ?? 0) }
     }
 
-    /// Consumes one persistent hint and reveals the next lead. With an empty
-    /// wallet this opens the NEED A HINT? offer instead of a dead-end warning.
+    /// Reveals the next lead. One owned hint from inventory is consumed
+    /// first; with an empty inventory the NEED A HINT? offer opens, where the
+    /// player charges the standard Game Ball price (EconomyConfig.hintCost —
+    /// never hard-coded in views), watches a rewarded video, or opens the
+    /// Shop when the balance can't cover it.
     func useHint() {
         guard hintsRemaining > 0 else {
             Haptics.warning()
@@ -592,13 +602,30 @@ final class GameViewModel {
         BalanceTelemetry.shared.recordHintUsed(caseID: puzzle.id)
         usedHintIDs.insert(hint.id)
         persistClockSnapshot()
-        usedHints.append(UsedHint(id: hint.id, playerID: hint.playerID, text: hint.text, date: .now))
+        // Phase 11.7: the revealed lead is the simplified version — plain
+        // language plus highlighted phrases, never the profile's name.
+        let simplified = simplifiedHint(for: hint)
+        usedHints.append(UsedHint(
+            id: hint.id,
+            playerID: hint.playerID,
+            text: simplified.text,
+            highlightPhrases: simplified.highlightPhrases,
+            date: .now
+        ))
         if let index = puzzle.clues.firstIndex(where: { $0.playerID == hint.playerID }) {
             currentClueIndex = index
         }
         Haptics.soft()
         AudioManager.shared.play(.hintUsed)
-        show(FeedbackMessage(title: "NEW LEAD", detail: hint.text, tone: .lead), duration: 4.2)
+        show(FeedbackMessage(title: "NEW LEAD", detail: simplified.text, tone: .lead), duration: 4.2)
+    }
+
+    /// Deterministic, offline simplification of one authored hint against
+    /// this case's context (player position + authored profile).
+    func simplifiedHint(for hint: PuzzleHint) -> SimplifiedHint {
+        let player = puzzle.missingPlayers.first { $0.id == hint.playerID }
+        let profile = puzzle.solutions[hint.playerID]?.profile
+        return HintSimplifier.simplify(text: hint.text, positionName: player?.position.fullName, profile: profile)
     }
 
     /// Grants exactly one rewarded-ad hint and immediately reveals the lead —
@@ -620,24 +647,47 @@ final class GameViewModel {
         withAnimation(.easeOut(duration: 0.2)) { isHintOfferPresented = false }
     }
 
-    // MARK: Last Chance (rewarded life)
+    // MARK: Last Chance (rescue path)
 
-    /// The final heart is gone. Each quarter may offer exactly one rewarded
-    /// extra life; otherwise the verdict lands immediately.
+    // Exactly one rescue sequence per quarter, then the loss — no loops:
+    //   normal lives → optional video rescue → optional hint rescue → loss.
+    // Choosing USE HINT at the first offer skips the video for good: after a
+    // hint rescue fails, no ad is offered either.
+
+    /// The final heart is gone. Present LAST CHANCE while any rescue remains
+    /// (the video rescue, or a payable hint rescue); otherwise the verdict
+    /// lands immediately.
     private func offerLastChanceOrFinish() {
-        if wallet.markLastChanceUsed(for: lastChanceKey) {
-            withAnimation(.easeInOut(duration: 0.3)) { isLastChancePending = true }
-        } else {
+        // A used hint rescue is always terminal — it was the final attempt;
+        // neither another ad nor another hint may follow it.
+        if wallet.usedHintRescue(for: lastChanceKey) {
             finish(with: .lost)
+            return
         }
+        let videoAvailable = wallet.canUseVideoRescue(for: lastChanceKey)
+        let hintAvailable = wallet.canUseHintRescue(for: lastChanceKey)
+        guard videoAvailable || hintAvailable else {
+            finish(with: .lost)
+            return
+        }
+        // Video already spent → NEED SOME HELP? stage (hint or loss only).
+        isPostVideoRescue = !videoAvailable
+        withAnimation(.easeInOut(duration: 0.3)) { isLastChancePending = true }
     }
 
     /// Only ever called after the rewarded ad's reward callback fired.
+    /// Grants exactly one extra attempt — never three lives, never the
+    /// answer, never Hall of Famer timeouts.
     func grantLastChanceLife() {
         guard isLastChancePending else { return }
+        guard wallet.markVideoRescueUsed(for: lastChanceKey) else {
+            acceptLastChanceLoss()
+            return
+        }
         isLastChancePending = false
+        isPostVideoRescue = false
         lives = 1
-        // The earned life restarts the current placement with a fresh 40
+        // The earned attempt restarts the current placement with a fresh 40
         // seconds. Consumed timeouts stay consumed.
         beginPlacementClock()
         Haptics.success()
@@ -645,8 +695,31 @@ final class GameViewModel {
         show(FeedbackMessage(title: "SECOND CHANCE", detail: "One more attempt. Make it count.", tone: .lead), duration: 2.4)
     }
 
+    /// USE HINT rescue: consumes an owned hint (inventory first, otherwise
+    /// the standard Game Ball price), reveals the simplified lead and grants
+    /// exactly one additional attempt. If that attempt also fails, the
+    /// quarter ends — no second ad, no second rescue hint.
+    func grantRescueHintLife() {
+        guard isLastChancePending, nextHint != nil else { return }
+        guard wallet.consumeHintOrCharge() else { return }
+        guard wallet.markHintRescueUsed(for: lastChanceKey) else {
+            acceptLastChanceLoss()
+            return
+        }
+        hintsRemaining = wallet.hints
+        isLastChancePending = false
+        isPostVideoRescue = false
+        revealNextHint()
+        lives = 1
+        beginPlacementClock()
+        Haptics.success()
+        AudioManager.shared.play(.placementCorrect)
+        show(FeedbackMessage(title: "ONE MORE READ", detail: "Use the simplified lead — one attempt left.", tone: .lead), duration: 2.6)
+    }
+
     func acceptLastChanceLoss() {
         isLastChancePending = false
+        isPostVideoRescue = false
         finish(with: .lost)
     }
 

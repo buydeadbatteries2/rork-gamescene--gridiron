@@ -414,7 +414,7 @@ struct MatchResultView: View {
                 Button {
                     Haptics.pickUp()
                     onPlayAgain()
-                    AdManager.shared.maybeShowInterstitial()
+                    showPostGameInterstitial()
                 } label: {
                     HStack {
                         Spacer()
@@ -442,9 +442,17 @@ struct MatchResultView: View {
 
     /// Leaving the finished game is a natural break — the forced interstitial
     /// runs its frequency gate here (never during play, and never immediately
-    /// after a rewarded video).
+    /// after a rewarded video), and counts toward the same per-game cap.
     private func leave() {
         onHome()
+        showPostGameInterstitial()
+    }
+
+    /// The post-game interstitial respects the same 2-per-game forced-ad cap
+    /// as the between-quarter gates.
+    private func showPostGameInterstitial() {
+        guard matchViewModel.canShowPostGameInterstitial else { return }
+        matchViewModel.recordForcedAdShown()
         AdManager.shared.maybeShowInterstitial()
     }
 

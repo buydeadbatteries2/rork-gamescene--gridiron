@@ -39,8 +39,16 @@ final class MatchViewModel {
     /// saved state exactly; a fresh standalone replay gets a new id, so its
     /// reward can be claimed exactly once.
     private(set) var matchID = UUID()
-    /// The game's Game Ball reward, granted once when the match completes.
+    /// The game's Game Ball reward summary, built when the match completes.
+    /// Display-only: each solved quarter was credited exactly once through
+    /// the per-quarter transaction ledger the moment it was solved.
     private(set) var rewardBreakdown: MatchRewardBreakdown?
+    /// Season context for the persisted record (nil = standalone). Supplied
+    /// by the flow that created this view model.
+    var matchSeasonNumber: Int?
+    var matchWeek: Int?
+    private let seasonNumber: Int
+    private let week: Int
 
     /// Draws the game's case files from the local puzzle library via the
     /// deterministic scheduler: no case repeats within a game, and across a
@@ -56,6 +64,8 @@ final class MatchViewModel {
     init(isPlayoff: Bool = false, isChampionship: Bool = false, seasonNumber: Int = 0, week: Int = 1, difficulty: DifficultyLevel? = nil, resume: ActiveMatchRecord? = nil) {
         self.isPlayoff = isPlayoff
         self.isChampionship = isChampionship
+        self.seasonNumber = seasonNumber
+        self.week = week
         // Changing the difficulty applies from the next unplayed game:
         // schedules are already persisted and completed games are never
         // regenerated, so only puzzles built after the change adapt.
@@ -248,11 +258,6 @@ final class MatchViewModel {
         }
     }
 
-    /// Season context for the persisted record (nil = standalone). Supplied
-    /// by the flow that created this view model.
-    var matchSeasonNumber: Int?
-    var matchWeek: Int?
-
     /// Called when `GameViewModel` reaches a verdict. Reads the finished quarter's
     /// stats from the puzzle view model and stores them at match level. Stat
     /// events are only produced for solved quarters — wrong answers never
@@ -277,8 +282,16 @@ final class MatchViewModel {
             statEvents: events,
             appearedFranchiseIDs: Set(map.values.map(\.franchisePlayerID))
         )
+        if outcome == .solved {
+            awardQuarterReward(quarterIndex: viewModel.puzzleIndex)
+        }
         if match.isComplete {
-            grantMatchReward()
+            rewardBreakdown = MatchRewardBreakdown.forMatch(
+                match,
+                isPlayoff: isPlayoff,
+                isChampionship: isChampionship,
+                transactionID: "match-\(matchID.uuidString)"
+            )
         }
         // Safe-break achievement event (quarter result): a solved quarter in a
         // real game — training never reaches MatchViewModel.
@@ -298,18 +311,60 @@ final class MatchViewModel {
         persistActiveInvestigation(afterAdvance: true)
     }
 
-    /// Grants the game's Game Ball reward exactly once — losing never
-    /// subtracts anything, and the wallet's transaction ledger makes a double
-    /// claim impossible.
-    private func grantMatchReward() {
-        let breakdown = MatchRewardBreakdown.forMatch(
-            match,
-            isPlayoff: isPlayoff,
-            isChampionship: isChampionship,
-            transactionID: "match-\(matchID.uuidString)"
+    // MARK: Game Ball economy (Phase 11.7)
+
+    /// Awards the solved quarter's +1 Game Ball exactly once — the wallet's
+    /// transaction ledger keys on this match + quarter, so a resumed or
+    /// re-finished quarter can never pay twice. Failed quarters pay 0.
+    private func awardQuarterReward(quarterIndex: Int) {
+        PlayerWallet.shared.earn(
+            amount: EconomyConfig.standard.quarterSolvedReward,
+            kind: .quarterSolved,
+            transactionID: "quarter-\(matchID.uuidString)-q\(quarterIndex)"
         )
-        rewardBreakdown = breakdown
-        PlayerWallet.shared.claimMatchReward(breakdown)
+    }
+
+    // MARK: Forced-ad gates (Phase 11.7)
+
+    /// True for the user's first regular-season game — no forced ads while
+    /// they learn the game.
+    var isFirstSeasonGame: Bool {
+        seasonNumber == 1 && week == 1 && !isPlayoff
+    }
+
+    /// The forced-ad gate for the transition after the quarter that just
+    /// finished (regulation or into overtime). Pure policy, fed from the
+    /// wallet's per-game forced-ad ledger.
+    func adGateDecision() -> AdGateDecision {
+        let lastOutcome = match.overtimeRecord?.outcome ?? match.quarterRecords.last?.outcome
+        return AdGatePolicy.decision(
+            quarterWon: lastOutcome == .solved,
+            isOvertimeTransition: match.needsOvertime,
+            isAdFree: PurchaseManager.shared.hasAdFree,
+            forcedAdsShown: PlayerWallet.shared.forcedAdCount(for: matchID.uuidString),
+            isTraining: false,
+            isFirstSeasonGame: isFirstSeasonGame
+        )
+    }
+
+    /// Records a forced ad that actually played in this game (against the
+    /// per-game cap).
+    func recordForcedAdShown() {
+        _ = PlayerWallet.shared.recordForcedAd(for: matchID.uuidString)
+    }
+
+    /// Spends the ad-skip cost. Returns false when the balance can't cover
+    /// it — the WATCH AD route is always available instead.
+    @discardableResult
+    func skipAd(cost: Int) -> Bool {
+        PlayerWallet.shared.spend(amount: cost, kind: .adSkip)
+    }
+
+    /// True when the natural-break interstitial after the finished game is
+    /// allowed by the same per-game cap (it counts toward the 2-ad limit).
+    var canShowPostGameInterstitial: Bool {
+        !PurchaseManager.shared.hasAdFree
+            && PlayerWallet.shared.forcedAdCount(for: matchID.uuidString) < EconomyConfig.standard.maxForcedAdsPerGame
     }
 
     /// From the quarter-result screen: either the next quarter intro or the verdict.

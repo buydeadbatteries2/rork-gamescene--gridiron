@@ -27,6 +27,11 @@ struct MatchFlowView: View {
     @State private var matchViewModel: MatchViewModel
     @State private var quarterViewModel: GameViewModel?
     @State private var reportedSeasonResult = false
+    /// Pending forced-ad gate between quarters / into overtime: the skip
+    /// cost while the gate is up, nil otherwise.
+    @State private var adGateSkipCost: Int?
+    @State private var isOvertimeGate = false
+    @State private var isWatchingGateAd = false
 
     init(
         userTeam: GameTeam? = nil,
@@ -90,7 +95,7 @@ struct MatchFlowView: View {
                     QuarterResultView(
                         viewModel: quarterViewModel,
                         matchViewModel: matchViewModel,
-                        onContinue: { matchViewModel.continueFlow() },
+                        onContinue: { continueAfterQuarterResult() },
                         userTeam: userTeam,
                         opponent: opponent
                     )
@@ -108,11 +113,28 @@ struct MatchFlowView: View {
                     onPlayAgain: playAgain,
                     onHome: {
                         dismiss()
-                        // Leaving the finished game is a natural break — the
-                        // frequency gate and rewarded-ad suppression decide
-                        // whether an interstitial actually appears.
-                        AdManager.shared.maybeShowInterstitial()
+                        // Leaving the finished game is a natural break — but
+                        // the same per-game cap applies: once two forced ads
+                        // played, everything is free.
+                        if matchViewModel.canShowPostGameInterstitial {
+                            matchViewModel.recordForcedAdShown()
+                            AdManager.shared.maybeShowInterstitial()
+                        }
                     }
+                )
+                .transition(.opacity)
+            }
+
+            // Forced full-screen gate (Remove Ads owners never see it):
+            // WATCH AD — always free — or SKIP AD for Game Balls.
+            if let skipCost = adGateSkipCost {
+                AdGateOverlay(
+                    skipCost: skipCost,
+                    isOvertime: isOvertimeGate,
+                    isWatching: isWatchingGateAd,
+                    canAffordSkip: PlayerWallet.shared.gameBalls >= skipCost,
+                    onWatch: { watchGateAd() },
+                    onSkip: { skipGateAd(skipCost: skipCost) }
                 )
                 .transition(.opacity)
             }
@@ -136,10 +158,53 @@ struct MatchFlowView: View {
             puzzle: matchViewModel.currentPuzzle,
             difficulty: matchViewModel.activeDifficulty
         )
-        // The Last Chance rewarded life is offered once per quarter, keyed to
-        // this match + quarter and persisted in the wallet.
+        // The rescue ledgers are keyed to this match + quarter and persisted
+        // in the wallet.
         quarterViewModel?.lastChanceKey = matchViewModel.currentLastChanceKey
         matchViewModel.beginQuarter()
+    }
+
+    // MARK: Between-quarter ad gates (Phase 11.7)
+
+    /// Continues from a quarter result through the forced-ad policy: a won
+    /// quarter may gate (WATCH AD or SKIP AD — Game Balls); a lost quarter
+    /// always advances free.
+    private func continueAfterQuarterResult() {
+        switch matchViewModel.adGateDecision() {
+        case .none:
+            matchViewModel.continueFlow()
+        case .forced(let skipCost):
+            Haptics.tick()
+            isOvertimeGate = matchViewModel.match.needsOvertime
+            withAnimation(.easeOut(duration: 0.22)) { adGateSkipCost = skipCost }
+        }
+    }
+
+    /// WATCH AD: the free route. A shown ad is recorded against the per-game
+    /// cap; if no ad is available the player continues free — nothing spent.
+    private func watchGateAd() {
+        guard !isWatchingGateAd else { return }
+        isWatchingGateAd = true
+        Task { @MainActor in
+            let result = await AdManager.shared.showForcedAd()
+            isWatchingGateAd = false
+            guard adGateSkipCost != nil else { return }
+            withAnimation(.easeOut(duration: 0.22)) { adGateSkipCost = nil }
+            if result == .shown {
+                matchViewModel.recordForcedAdShown()
+            }
+            matchViewModel.continueFlow()
+        }
+    }
+
+    /// SKIP AD — Game Balls. Only reachable when the balance covers it; the
+    /// free WATCH AD route is always available instead.
+    private func skipGateAd(skipCost: Int) {
+        guard matchViewModel.skipAd(cost: skipCost) else { return }
+        Haptics.success()
+        AudioManager.shared.play(.buttonPress)
+        withAnimation(.easeOut(duration: 0.22)) { adGateSkipCost = nil }
+        matchViewModel.continueFlow()
     }
 
     // MARK: First-game assist

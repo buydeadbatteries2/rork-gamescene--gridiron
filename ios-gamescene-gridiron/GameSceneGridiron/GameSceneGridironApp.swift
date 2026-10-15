@@ -11,6 +11,13 @@ import SwiftUI
 struct GameSceneGridironApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        // RevenueCat configures exactly once, here — never in views.
+        // DEBUG/development uses the Test Store public key; RELEASE uses the
+        // production iOS public key. The secret key is never a client concern.
+        PurchaseManager.shared.configure()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
