@@ -21,11 +21,20 @@ struct GameSceneGridironApp: App {
         // DEBUG builds run Google's public test ad units; RELEASE uses the
         // build-injected production identifiers (missing → ads disabled).
         AdMobService.shared.configure()
+        // Supabase session restoration starts at launch, before the first
+        // frame — ContentView holds an explicit auth-loading board until the
+        // state resolves, so login/onboarding never flashes mid-restore.
+        Task { await AuthService.shared.restoreSession() }
     }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                // Auth deep links (password-reset return trips) come through
+                // the gamescene:// scheme.
+                .onOpenURL { url in
+                    Task { await AuthService.shared.handleAuthCallback(url: url) }
+                }
         }
         .onChange(of: scenePhase) { _, phase in
             // Lifecycle audio: backgrounding pauses the music bed (the system

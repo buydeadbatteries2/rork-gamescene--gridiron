@@ -288,6 +288,46 @@ final class PurchaseManager {
         }
     }
 
+    // MARK: Identity migration (Supabase Auth UUID)
+
+    /// Migrates RevenueCat identity to the authenticated account after Supabase
+    /// auth succeeds. The Supabase Auth UUID string is the ONLY acceptable App
+    /// User ID — never email, username or real names.
+    ///
+    /// Migration safety: RevenueCat merges the anonymous guest's purchases into
+    /// the identified user server-side. Locally, entitlements re-apply from the
+    /// returned CustomerInfo, and the Starter Pack contents still can only ever
+    /// grant through the wallet's permanent once-flag — ownership can migrate,
+    /// but nothing can duplicate.
+    func loginWithSupabaseIdentity(_ appUserID: String) async {
+        guard isConfigured, Self.isAcceptableAppUserID(appUserID) else { return }
+        do {
+            let (info, _) = try await Purchases.shared.logIn(appUserID)
+            await apply(info)
+        } catch {
+            // A migration hiccup must never block the authenticated session.
+            statusMessage = "Purchases will sync to your account automatically."
+            await applyCurrentCustomerInfo()
+        }
+    }
+
+    /// Signs out back to RevenueCat's anonymous identity. Entitlements stop
+    /// following the account (store-account restore brings them back); local
+    /// wallet contents are device progress and stay untouched — never wiped,
+    /// never fabricated.
+    func logoutToAnonymous() async {
+        guard isConfigured else { return }
+        _ = try? await Purchases.shared.logOut()
+        await applyCurrentCustomerInfo()
+    }
+
+    /// Acceptable RevenueCat App User IDs: UUID strings only (the Supabase
+    /// Auth UUID). Emails/usernames/names are rejected by shape here so no
+    /// caller can accidentally violate the identity contract.
+    nonisolated static func isAcceptableAppUserID(_ id: String) -> Bool {
+        id.split(separator: "-").count == 5 && id.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" }
+    }
+
     // MARK: Entitlement application
 
     private func applyCurrentCustomerInfo() async {

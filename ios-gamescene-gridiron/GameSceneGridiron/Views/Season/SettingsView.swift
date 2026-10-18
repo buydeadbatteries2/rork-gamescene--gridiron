@@ -15,8 +15,10 @@ struct SettingsView: View {
     @State private var audio = AudioManager.shared
     @State private var tutorial = TutorialManager.shared
     @State private var adMob = AdMobService.shared
+    @State private var auth = AuthService.shared
     @State private var hasAppeared: Bool = false
     @State private var isReplayingTutorial: Bool = false
+    @State private var isShowingProfile: Bool = false
 
     /// Phase 11.6: while a season is running the difficulty is pinned to the
     /// level the season was started with. The current difficulty stays fully
@@ -34,6 +36,7 @@ struct SettingsView: View {
                 VStack(spacing: 16) {
                     header
                     gameplayCard
+                    accountCard
                     audioCard
                     accessibilityCard
                     purchasesCard
@@ -51,6 +54,10 @@ struct SettingsView: View {
         }
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.05)) { hasAppeared = true }
+        }
+        .sheet(isPresented: $isShowingProfile) {
+            NavigationStack { ProfileView() }
+                .preferredColorScheme(.dark)
         }
         .fullScreenCover(isPresented: $isReplayingTutorial) {
             // REPLAY TUTORIAL: the guided training case again — team creation,
@@ -213,6 +220,71 @@ struct SettingsView: View {
         .accessibilityLabel("\(level.title) difficulty")
         .accessibilityHint(isDifficultyLocked ? "Locked until the current season ends" : "")
         .accessibilityAddTraits(difficulty.selected == level ? [.isSelected] : [])
+    }
+
+    // MARK: Account
+
+    /// ACCOUNT — signed-in state at a glance, opening the player file. Solo
+    /// play never requires an account; online competition will later be gated
+    /// by `AccountGatePolicy` through this same entry point.
+    private var accountCard: some View {
+        card(rotation: 0.45) {
+            sectionHeader("ACCOUNT", symbol: "person.crop.circle")
+            Button {
+                Haptics.tick()
+                AudioManager.shared.play(.buttonPress)
+                isShowingProfile = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: accountSymbol)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Theme.goldLight)
+                        .frame(width: 36, height: 36)
+                        .background(Color.black.opacity(0.4), in: .circle)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(accountTitle)
+                            .font(.system(size: 15, weight: .black).width(.compressed))
+                            .tracking(1)
+                            .foregroundStyle(Theme.paperInk)
+                        Text(accountDetail)
+                            .font(Theme.typewriter(11, relativeTo: .caption))
+                            .foregroundStyle(Theme.paperInkSoft)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.paperInk.opacity(0.4))
+                }
+                .padding(.vertical, 8)
+                .contentShape(.rect)
+            }
+            .buttonStyle(PressableButtonStyle(scale: 0.99))
+            .accessibilityLabel("Account — \(accountTitle)")
+        }
+    }
+
+    private var accountSymbol: String {
+        if case .authenticated = auth.state { return "person.crop.circle.badge.checkmark" }
+        return "person.crop.circle.badge.questionmark"
+    }
+
+    private var accountTitle: String {
+        if case .authenticated(let profile) = auth.state {
+            return profile.footballDisplayName.isEmpty ? profile.username.uppercased() : profile.footballDisplayName.uppercased()
+        }
+        return "GUEST FILE"
+    }
+
+    private var accountDetail: String {
+        if case .authenticated(let profile) = auth.state {
+            return "Signed in · \(profile.username)"
+        }
+        if case .needsProfileRecovery = auth.state {
+            return "Account found — finish syncing your player file"
+        }
+        return "Playing solo — tap to add an account"
     }
 
     // MARK: Audio

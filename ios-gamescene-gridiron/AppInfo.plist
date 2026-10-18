@@ -59,6 +59,28 @@
 	<string>$(ADMOB_IOS_REWARDED_ID)</string>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>Your data is used to deliver ads that are more relevant to you. The game works fully without tracking.</string>
+	<!-- Supabase project configuration: expanded at build time from the Rork
+	     secret variables. The anon key is the public, RLS-protected key — the
+	     service-role key must NEVER appear anywhere in the client. Empty or
+	     unexpanded values mean "no Supabase": the app runs in guest/local mode. -->
+	<key>SUPABASE_URL</key>
+	<string>$(SUPABASE_URL)</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
+	<!-- Auth callback scheme for password-reset deep links. The redirect URL
+	     (gamescene://auth-callback) must also be allowlisted in the Supabase
+	     dashboard's Auth → URL Configuration — see the phase report. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.gamescene.gridiron.auth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>gamescene</string>
+			</array>
+		</dict>
+	</array>
 	<!-- Google's official current SKAdNetwork identifier list (Google and
 	     participating third-party buyers). Source: Google Mobile Ads SDK iOS
 	     privacy strategies documentation. -->
