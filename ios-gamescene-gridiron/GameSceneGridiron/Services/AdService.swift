@@ -58,13 +58,12 @@ nonisolated enum BannerAdPolicy {
     }
 }
 
-// MARK: - Ad manager
+// MARK: - Ad manager (facade)
 
-/// Owns every ad surface: the gameplay banner, forced interstitials at natural
-/// breaks and the rewarded-video flows. The Google Mobile Ads SDK slots in
-/// behind the marked integration points; until live AdMob configuration
-/// exists, development builds simulate ads here so the entire economy is
-/// exercisable end to end.
+/// The AdService facade every view and view model talks to. Owns the ad
+/// policy surfaces: the gameplay banner, forced interstitials at natural
+/// breaks, the between-quarter gate presentation and the rewarded-video
+/// flows. All Google Mobile Ads SDK work lives behind `AdMobService`.
 @MainActor
 @Observable
 final class AdManager {
@@ -73,18 +72,45 @@ final class AdManager {
     /// Forced interstitial frequency: at most one every N completed games.
     let interstitialEveryNGames: Int
 
+    /// DEBUG-only fallback for builds without a valid AdMob app identifier
+    /// (e.g. sandbox previews): simulates short ads so the whole economy stays
+    /// exercisable. Tests can disable it to prove the honest `.unavailable`
+    /// paths. Release builds never simulate.
+    let simulatesAdsWhenUnavailable: Bool
+
     private(set) var completedGamesSinceInterstitial = 0
     /// Set right after any rewarded ad completes — the immediately following
     /// forced interstitial is suppressed once.
     private(set) var isNextInterstitialSuppressed = false
     private(set) var isRewardedAdShowing = false
+    /// True while ANY full-screen ad (forced interstitial or rewarded) is on
+    /// screen — the Hall of Famer clock and achievement popups key off this.
+    private(set) var isFullScreenAdPresenting = false
     /// True only after a real banner load callback reports success. A release
-    /// build starts (and stays) unloaded until the AdMob integration fires —
-    /// meaning the banner slot stays collapsed, showing no fake strip.
+    /// build starts (and stays) unloaded until the AdMob load fires — meaning
+    /// the banner slot stays collapsed, showing no fake strip.
     private(set) var isBannerAdLoaded = false
 
-    init(interstitialEveryNGames: Int = 2) {
+    init(
+        interstitialEveryNGames: Int = 2,
+        simulatesAdsWhenUnavailable: Bool = AdManager.defaultSimulationSetting
+    ) {
         self.interstitialEveryNGames = max(1, interstitialEveryNGames)
+        self.simulatesAdsWhenUnavailable = simulatesAdsWhenUnavailable
+        AdMobService.shared.onFullScreenAdDismissed = {
+            // A dismissed full-screen ad is the safe moment to surface the
+            // next queued achievement popup.
+            AchievementManager.shared.presentNextPopupIfSafe()
+        }
+    }
+
+    /// Simulation is a DEBUG-only escape hatch, never a release behavior.
+    private nonisolated static var defaultSimulationSetting: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
     }
 
     // MARK: Banner
@@ -95,7 +121,7 @@ final class AdManager {
     var showsBannerAds: Bool { !PurchaseManager.shared.hasAdFree }
 
     /// Whether this compile configuration is a development build.
-    static var isDevelopmentBuild: Bool {
+    nonisolated static var isDevelopmentBuild: Bool {
         #if DEBUG
         true
         #else
@@ -112,25 +138,27 @@ final class AdManager {
         )
     }
 
-    /// Begins loading a banner ad. Never called for Ad-Free owners — they are
-    /// never asked for a banner at all. The real AdMob load request goes at
-    /// the marked integration point; only its success callback may flip
-    /// `isBannerAdLoaded`.
+    /// Arms the banner. The banner view itself performs the AdMob load (only
+    /// when ad requests are consented and the owner hasn't purchased Remove
+    /// Forced Ads); only its load callbacks may flip `isBannerAdLoaded`
+    /// (through `noteBannerLoadResult`).
     func requestBannerAd() {
-        guard showsBannerAds, !isBannerAdLoaded else { return }
-
+        guard showsBannerAds else { return }
         #if DEBUG
-        // Development placeholder: simulates a successful banner load so the
-        // loaded-banner layout state is exercisable. Release builds never run
-        // this — no simulated ad can ever occupy the slot.
-        print("[AdManager] banner ad loaded (development placeholder)")
-        isBannerAdLoaded = true
-        #else
-        // Ad SDK integration point (production): request the AdMob banner
-        // here and set `isBannerAdLoaded = true` ONLY from its success
-        // callback. Until that integration ships, release builds keep the
-        // slot collapsed — no fake banner, no reserved space.
+        // Development fallback: without a valid AdMob app identifier there is
+        // no real ad SDK session, so the labeled layout placeholder stands in.
+        // With real test ads configured, the actual AdMob banner loads instead.
+        if !AdMobService.shared.isAdsSupported {
+            print("[AdManager] banner slot in development-placeholder mode (no AdMob app ID)")
+        }
         #endif
+    }
+
+    /// Called by the banner view from the AdMob load callbacks — success shows
+    /// the banner, failure collapses the slot (with a delayed retry handled by
+    /// the view's next appearance / foreground pass).
+    func noteBannerLoadResult(_ loaded: Bool) {
+        isBannerAdLoaded = loaded
     }
 
     /// Pauses/unloads the banner after the entitlement state changes (an
@@ -170,69 +198,82 @@ final class AdManager {
         }
         guard canShowInterstitial() else { return }
         completedGamesSinceInterstitial = 0
-        presentInterstitial()
-    }
-
-    private func presentInterstitial() {
-        // Ad SDK integration point: present the interstitial here.
-        #if DEBUG
-        print("[AdManager] interstitial presented (development placeholder)")
-        #endif
+        Task { await presentTrackedInterstitial() }
     }
 
     // MARK: Forced full-screen gates (between quarters / overtime)
 
     /// Presents one forced full-screen ad at a between-quarter or overtime
     /// transition. Resolves `.shown` only when an ad actually played — the
-    /// caller then records it against the per-game cap. Release builds
-    /// without the live AdMob integration resolve `.unavailable`: never a
-    /// fake ad, never a fake success, and the player continues for free.
+    /// caller then records it against the per-game cap. Unavailable/failing
+    /// ads resolve `.unavailable`: the player continues for free, nothing is
+    /// charged, nothing counts against the cap.
     func showForcedAd() async -> ForcedAdResult {
         guard showsInterstitialAds else { return .unavailable }
+        guard !isFullScreenAdPresenting else { return .unavailable }
+        guard AdMobService.shared.canServeAds else {
+            #if DEBUG
+            if simulatesAdsWhenUnavailable {
+                isFullScreenAdPresenting = true
+                try? await Task.sleep(for: .seconds(1.2))
+                isFullScreenAdPresenting = false
+                return .shown
+            }
+            #endif
+            return .unavailable
+        }
+        isFullScreenAdPresenting = true
+        let result = await AdMobService.shared.presentInterstitial()
+        isFullScreenAdPresenting = false
+        return result
+    }
 
-        #if DEBUG
-        // Development placeholder: simulates a short forced ad so the gate
-        // flow (watch/skip/cap) is exercisable end to end.
-        try? await Task.sleep(for: .seconds(1.2))
-        print("[AdManager] forced full-screen ad shown (development placeholder)")
-        return .shown
-        #else
-        // Ad SDK integration point (production): present the AdMob full-screen
-        // interstitial here and return `.shown` from its completion callback.
-        // Until that integration ships, release builds never fake an ad.
-        return .unavailable
-        #endif
+    private func presentTrackedInterstitial() {
+        guard showsInterstitialAds, !isFullScreenAdPresenting else { return }
+        Task { @MainActor in
+            guard AdMobService.shared.isAdsSupported else {
+                #if DEBUG
+                if simulatesAdsWhenUnavailable {
+                    isFullScreenAdPresenting = true
+                    try? await Task.sleep(for: .seconds(1.2))
+                    isFullScreenAdPresenting = false
+                    isNextInterstitialSuppressed = true
+                }
+                #endif
+                return
+            }
+            isFullScreenAdPresenting = true
+            let result = await AdMobService.shared.presentInterstitial()
+            isFullScreenAdPresenting = false
+            if result == .shown { isNextInterstitialSuppressed = true }
+        }
     }
 
     // MARK: Rewarded video
 
-    /// Presents a rewarded ad. Resolves `.granted` only through the reward
-    /// callback; an early close resolves `.dismissed` and nothing may be
-    /// granted by the caller.
-    ///
-    /// Production safety: the fake 1.2-second success exists in DEBUG builds
-    /// only. A release build without the live AdMob integration can never
-    /// grant a mock reward — it resolves `.dismissed`, which every call site
-    /// surfaces as "no video is available right now" with nothing spent and
-    /// nothing granted.
+    /// Presents a rewarded ad. Resolves `.granted` only through the Google
+    /// earned-reward callback; an early close resolves `.dismissed` and
+    /// nothing may be granted by the caller. Rewarded videos stay available
+    /// to Remove-Forced-Ads owners — the entitlement never gates this path.
     func showRewarded(_ placement: RewardedAdPlacement) async -> RewardedAdResult {
         guard !isRewardedAdShowing else { return .dismissed }
         isRewardedAdShowing = true
         defer { isRewardedAdShowing = false }
-
-        #if DEBUG
-        // Development placeholder: simulates a short watched ad so the whole
-        // economy (hints, Last Chance, 2× rewards) is exercisable end to end.
-        try? await Task.sleep(for: .seconds(1.2))
-        print("[AdManager] rewarded ad granted (\(placement.rawValue), development placeholder)")
-        isNextInterstitialSuppressed = true
-        return .granted
-        #else
-        // Ad SDK integration point (production): present the AdMob rewarded
-        // video here and map its reward callback to `.granted`, an early
-        // close to `.dismissed`. Until that integration ships, release builds
-        // always report unavailability — never a simulated reward.
-        return .dismissed
-        #endif
+        guard AdMobService.shared.canServeAds else {
+            #if DEBUG
+            if simulatesAdsWhenUnavailable {
+                try? await Task.sleep(for: .seconds(1.2))
+                print("[AdManager] rewarded ad granted (\(placement.rawValue), development simulation)")
+                isNextInterstitialSuppressed = true
+                return .granted
+            }
+            #endif
+            return .dismissed
+        }
+        isFullScreenAdPresenting = true
+        let result = await AdMobService.shared.presentRewarded()
+        isFullScreenAdPresenting = false
+        if result == .granted { isNextInterstitialSuppressed = true }
+        return result
     }
 }

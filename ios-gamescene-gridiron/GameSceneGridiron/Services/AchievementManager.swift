@@ -30,14 +30,21 @@ final class AchievementManager {
 
     private let defaults: UserDefaults
     private var state: PersistedState
+    /// True while a full-screen ad is on screen — popups wait until it's
+    /// dismissed. Injectable so tests can drive the gate directly.
+    private let isPresentationBlocked: @MainActor () -> Bool
 
     /// FIFO queue of unlock popups waiting to be presented.
     private(set) var popupQueue: [AchievementID] = []
     /// The achievement currently on screen, if any.
     private(set) var currentPopupID: AchievementID?
 
-    init(defaults: UserDefaults = .standard) {
+    init(
+        defaults: UserDefaults = .standard,
+        isPresentationBlocked: (@MainActor () -> Bool)? = nil
+    ) {
         self.defaults = defaults
+        self.isPresentationBlocked = isPresentationBlocked ?? { AdManager.shared.isFullScreenAdPresenting }
         state = SaveStore.load(PersistedState.self, key: Self.storageKey, defaults: defaults) ?? PersistedState()
     }
 
@@ -82,6 +89,15 @@ final class AchievementManager {
         guard currentPopupID == nil else { return }
         currentPopupID = popupQueue.first
         if currentPopupID != nil { popupQueue.removeFirst() }
+    }
+
+    /// Presents the next queued unlock only when no full-screen ad is on
+    /// screen — an ACHIEVEMENT UNLOCKED banner never lands on top of a Google
+    /// interstitial or rewarded ad. Called when an unlock arrives and again
+    /// when a full-screen ad is dismissed.
+    func presentNextPopupIfSafe() {
+        guard !isPresentationBlocked() else { return }
+        presentNextPopup()
     }
 
     /// Dismisses the visible popup and lets the next queued one come up.
@@ -260,7 +276,7 @@ final class AchievementManager {
         state.unlocked[id] = .now
         if let holder { state.holderNames[id] = holder }
         popupQueue.append(id)
-        if currentPopupID == nil { presentNextPopup() }
+        if currentPopupID == nil { presentNextPopupIfSafe() }
     }
 
     // MARK: Persistence

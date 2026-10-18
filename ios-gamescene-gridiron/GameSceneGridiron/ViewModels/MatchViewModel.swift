@@ -360,6 +360,30 @@ final class MatchViewModel {
         PlayerWallet.shared.spend(amount: cost, kind: .adSkip)
     }
 
+    /// Opens the forced-gate flow (called once when the gate overlay is
+    /// raised). Exactly one completion is accepted afterward.
+    func beginGateAdFlow() {
+        isGateAdPending = true
+    }
+
+    /// Bookkeeping when a forced-gate ad attempt resolves. Only an ad that
+    /// actually played counts against the per-game cap — an unavailable or
+    /// failed interstitial never charges, never counts, never blocks: the
+    /// player simply continues. A duplicate completion (stray callback,
+    /// foreground replay) is ignored — a quarter can never advance twice.
+    @discardableResult
+    func finishGateAdAttempt(with result: ForcedAdResult) -> Bool {
+        guard isGateAdPending else { return false }
+        isGateAdPending = false
+        if result == .shown {
+            recordForcedAdShown()
+        }
+        continueFlow()
+        return true
+    }
+
+    private var isGateAdPending = false
+
     /// True when the natural-break interstitial after the finished game is
     /// allowed by the same per-game cap (it counts toward the 2-ad limit).
     var canShowPostGameInterstitial: Bool {

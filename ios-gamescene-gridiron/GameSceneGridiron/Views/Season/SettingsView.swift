@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var purchaseManager = PurchaseManager.shared
     @State private var audio = AudioManager.shared
     @State private var tutorial = TutorialManager.shared
+    @State private var adMob = AdMobService.shared
     @State private var hasAppeared: Bool = false
     @State private var isReplayingTutorial: Bool = false
 
@@ -36,6 +37,7 @@ struct SettingsView: View {
                     audioCard
                     accessibilityCard
                     purchasesCard
+                    privacyCard
                     aboutCard
                     effectNote
                 }
@@ -348,6 +350,53 @@ struct SettingsView: View {
             }
             .buttonStyle(PressableButtonStyle(playsPressSound: true))
             .accessibilityHint("Restores the Ad-Free purchase from the App Store")
+        }
+    }
+
+    // MARK: Privacy
+
+    /// PRIVACY — Google's UMP privacy-options entry point, shown ONLY when
+    /// the consent configuration says one is required (no geography is ever
+    /// assumed in code). The existing Privacy Policy / Terms / Support hooks
+    /// stay in ABOUT below.
+    @ViewBuilder
+    private var privacyCard: some View {
+        if adMob.isPrivacyOptionsRequired {
+            card(rotation: 0.35) {
+                sectionHeader("PRIVACY", symbol: "hand.raised")
+                Button {
+                    Haptics.tick()
+                    AudioManager.shared.play(.buttonPress)
+                    Task {
+                        try? await adMob.showPrivacyOptionsForm()
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.shield")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(Theme.goldLight)
+                            .frame(width: 36, height: 36)
+                            .background(Color.black.opacity(0.4), in: .circle)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("PRIVACY OPTIONS")
+                                .font(.system(size: 15, weight: .black).width(.compressed))
+                                .tracking(1)
+                                .foregroundStyle(Theme.paperInk)
+                            Text("Review or change your ad privacy choices")
+                                .font(Theme.typewriter(11, relativeTo: .caption))
+                                .foregroundStyle(Theme.paperInkSoft)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Theme.paperInk.opacity(0.4))
+                    }
+                    .padding(.vertical, 8)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(PressableButtonStyle(scale: 0.99))
+                .accessibilityLabel("Privacy options")
+            }
         }
     }
 

@@ -239,6 +239,16 @@ struct GameplayView: View {
                 viewModel.resumePlayClock(for: .ad)
             }
         }
+        // Any full-screen ad (forced interstitial or rewarded, whichever flow
+        // raised it) freezes the Hall of Famer play clock — ads never consume
+        // solving time.
+        .onChange(of: adManager.isFullScreenAdPresenting) { _, presenting in
+            if presenting {
+                viewModel.suspendPlayClock(for: .ad)
+            } else {
+                viewModel.resumePlayClock(for: .ad)
+            }
+        }
         .onChange(of: viewModel.isHintOfferPresented) { _, presented in
             if presented {
                 viewModel.suspendPlayClock(for: .storeKit)
@@ -288,6 +298,7 @@ struct GameplayView: View {
 
     // MARK: Rewarded offers
 
+    @State private var adManager = AdManager.shared
     @State private var isWatchingAd = false
     /// Shop path from the hint offer when the wallet can't cover the price.
     @State private var isShopPresented = false

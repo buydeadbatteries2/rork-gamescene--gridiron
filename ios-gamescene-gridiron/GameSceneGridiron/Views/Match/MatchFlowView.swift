@@ -175,13 +175,16 @@ struct MatchFlowView: View {
             matchViewModel.continueFlow()
         case .forced(let skipCost):
             Haptics.tick()
+            matchViewModel.beginGateAdFlow()
             isOvertimeGate = matchViewModel.match.needsOvertime
             withAnimation(.easeOut(duration: 0.22)) { adGateSkipCost = skipCost }
         }
     }
 
     /// WATCH AD: the free route. A shown ad is recorded against the per-game
-    /// cap; if no ad is available the player continues free — nothing spent.
+    /// cap; if no ad is available the player continues free — nothing spent,
+    /// nothing counted. The model's gate token makes a duplicate completion
+    /// (stray callback, interruption replay) impossible to double-apply.
     private func watchGateAd() {
         guard !isWatchingGateAd else { return }
         isWatchingGateAd = true
@@ -190,10 +193,7 @@ struct MatchFlowView: View {
             isWatchingGateAd = false
             guard adGateSkipCost != nil else { return }
             withAnimation(.easeOut(duration: 0.22)) { adGateSkipCost = nil }
-            if result == .shown {
-                matchViewModel.recordForcedAdShown()
-            }
-            matchViewModel.continueFlow()
+            matchViewModel.finishGateAdAttempt(with: result)
         }
     }
 

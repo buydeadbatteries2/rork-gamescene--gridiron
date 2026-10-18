@@ -225,23 +225,24 @@ struct BannerAdPolicyTests {
         let adManager = AdManager()
         #expect(!adManager.isBannerAdLoaded)
 
-        #if DEBUG
-        // Development: the simulated load marks the slot as loaded (the real
-        // SDK will own this transition in production).
-        adManager.requestBannerAd()
-        #expect(adManager.isBannerAdLoaded)
-        #expect(adManager.bannerVisibility == .loadedBanner)
-        #else
-        // Release without the live SDK: requesting never loads anything —
-        // the slot stays hidden, no fake banner.
+        // Requesting only arms the slot: a load is real (or simulated by the
+        // banner view's SDK callbacks) — the manager never self-loads.
         adManager.requestBannerAd()
         #expect(!adManager.isBannerAdLoaded)
-        #expect(adManager.bannerVisibility == .hidden)
-        #endif
+        let collapsedVisibility: BannerAdPolicy.BannerVisibility = AdManager.isDevelopmentBuild ? .developmentPlaceholder : .hidden
+        #expect(adManager.bannerVisibility == collapsedVisibility)
+
+        // Only the real AdMob load callback flips the slot to loaded.
+        adManager.noteBannerLoadResult(true)
+        #expect(adManager.bannerVisibility == .loadedBanner)
+        adManager.noteBannerLoadResult(false)
+        #expect(adManager.bannerVisibility == collapsedVisibility)
     }
 
     @Test func bannerSlotKeepsTheDocumentedFixedHeight() {
-        #expect(GameBannerAdView.height == 50)
+        // The slot height follows the adaptive banner dimensions; the DEBUG
+        // placeholder keeps the classic 50pt banner height.
         #expect(AdBannerPlaceholder.height == 50)
+        #expect(AdMobBannerView.adaptiveDimensions(for: 343).height >= 50)
     }
 }

@@ -16,6 +16,11 @@ struct GameSceneGridironApp: App {
         // DEBUG/development uses the Test Store public key; RELEASE uses the
         // production iOS public key. The secret key is never a client concern.
         PurchaseManager.shared.configure()
+        // Google Mobile Ads initializes exactly once, here — the UMP consent
+        // flow runs after start; ads are only requested once consent allows.
+        // DEBUG builds run Google's public test ad units; RELEASE uses the
+        // build-injected production identifiers (missing → ads disabled).
+        AdMobService.shared.configure()
     }
 
     var body: some Scene {
@@ -29,8 +34,10 @@ struct GameSceneGridironApp: App {
             switch phase {
             case .background, .inactive:
                 AudioManager.shared.pauseMusic()
+                AdMobService.shared.handleScenePhase(active: false)
             case .active:
                 AudioManager.shared.resumeMusic()
+                AdMobService.shared.handleScenePhase(active: true)
             @unknown default:
                 break
             }

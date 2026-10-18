@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		XX58A87C46960997EAFEF8XX /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = XX5EB48DBE87E012384FECXX /* GoogleMobileAds */; };
 		XXD63457E41125E77BACFDXX /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = XX8F6E1A701EA04CDCEA3DXX /* RevenueCat */; };
 /* End PBXBuildFile section */
 
@@ -57,6 +58,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				XXD63457E41125E77BACFDXX /* RevenueCat in Frameworks */,
+				XX58A87C46960997EAFEF8XX /* GoogleMobileAds in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -118,6 +120,7 @@
 			name = GameSceneGridiron;
 			packageProductDependencies = (
 				XX8F6E1A701EA04CDCEA3DXX /* RevenueCat */,
+				XX5EB48DBE87E012384FECXX /* GoogleMobileAds */,
 			);
 			productName = GameSceneGridiron;
 			productReference = 105FC57A2E9EAD3100EA8BCF /* GameSceneGridiron.app */;
@@ -212,6 +215,7 @@
 			);
 			packageReferences = (
 				XX56D7F10BAEE1D3529BF9XX /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
+				XX8F321EBFA973C6F11275XX /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
 			);
 		};
 /* End PBXProject section */
@@ -408,7 +412,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AppInfo.plist;
+				ADMOB_APP_ID_VALUE = "ca-app-pub-3940256099942544~3347511713";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -441,7 +447,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AppInfo.plist;
+				ADMOB_APP_ID_VALUE = "$(ADMOB_IOS_APP_ID)";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -599,9 +607,22 @@
 				minimumVersion = 5.0.0;
 			};
 		};
+		XX8F321EBFA973C6F11275XX /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		XX5EB48DBE87E012384FECXX /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = XX8F321EBFA973C6F11275XX /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
+		};
 		XX8F6E1A701EA04CDCEA3DXX /* RevenueCat */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = XX56D7F10BAEE1D3529BF9XX /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;

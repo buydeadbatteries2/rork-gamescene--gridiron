@@ -5,36 +5,34 @@ import SwiftUI
 /// controls.
 ///
 /// Banner visibility contract (release-safe):
-/// - Ad-Free owners: the banner is never requested and never shown; the space
-///   is reclaimed automatically the moment ownership is verified.
-/// - No loaded ad: the slot collapses entirely — a release build never shows
-///   a fake, reserved or "sponsored" strip.
+/// - Remove Forced Ads owners: the banner is never requested and never shown;
+///   the space is reclaimed automatically the moment ownership is verified.
+/// - No loaded ad / no consent / ads unsupported: the slot collapses entirely
+///   — a release build never shows a fake, reserved or "sponsored" strip.
 /// - A real AdMob banner that successfully loads displays here through
-///   `AdManager` (SDK integration point in `AdManager.requestBannerAd`).
+///   `AdMobBannerView` (adaptive width, loaded via `AdManager`).
 /// - Debug builds may show the clearly labeled development placeholder while
-///   no real ad is loaded, for layout testing only.
+///   no real ad is loaded (builds without a valid AdMob app ID), for layout
+///   testing only.
 struct GameBannerAdView: View {
-    static let height: CGFloat = 50
+    @State private var adManager = AdManager.shared
+    @State private var purchases = PurchaseManager.shared
+    @State private var adMob = AdMobService.shared
 
     var body: some View {
         Group {
-            switch AdManager.shared.bannerVisibility {
+            switch adManager.bannerVisibility {
             case .hidden:
                 // Collapses the row — the layout expands into the freed space.
                 EmptyView()
             case .loadedBanner:
-                bannerContent
+                let dimensions = AdMobBannerView.adaptiveDimensions(for: UIScreen.main.bounds.width - 32)
+                AdMobBannerView(availableWidth: UIScreen.main.bounds.width - 32)
+                    .frame(width: dimensions.width, height: dimensions.height)
             case .developmentPlaceholder:
                 AdBannerPlaceholder()
             }
         }
-        .onAppear { AdManager.shared.requestBannerAd() }
-    }
-
-    @ViewBuilder
-    private var bannerContent: some View {
-        // Ad SDK integration point: the live AdMob banner view renders here
-        // in the same fixed 50pt slot once its load callback reports success.
-        AdBannerPlaceholder()
+        .onAppear { adManager.requestBannerAd() }
     }
 }

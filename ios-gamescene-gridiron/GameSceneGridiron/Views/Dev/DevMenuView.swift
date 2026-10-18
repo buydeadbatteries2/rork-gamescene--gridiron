@@ -9,6 +9,8 @@ struct DevMenuView: View {
     @State private var seasonManager = SeasonManager.shared
     @State private var wallet = PlayerWallet.shared
     @State private var telemetry = BalanceTelemetry.shared
+    @State private var adManager = AdManager.shared
+    @State private var adMob = AdMobService.shared
     @State private var message: String?
 
     var body: some View {
@@ -31,6 +33,16 @@ struct DevMenuView: View {
                                 wallet.addHints(5)
                                 done("+5 Hints")
                             }
+                        }
+                        devSection("ADMOB (READ-ONLY INDICATORS)") {
+                            adMobIndicator("AdMob Initialized", value: adMob.isConfigured)
+                            adMobIndicator("Can Request Ads", value: adMob.canRequestAds)
+                            adMobIndicator("Banner Ready", value: adManager.isBannerAdLoaded)
+                            adMobIndicator("Interstitial Ready", value: adMob.isInterstitialReady)
+                            adMobIndicator("Rewarded Ready", value: adMob.isRewardedReady)
+                            adMobIndicator("Remove Ads Active", value: PurchaseManager.shared.hasAdFree)
+                            devButton("PRELOAD TEST INTERSTITIAL") { AdMobService.shared.preloadInterstitial(); done("Interstitial preload requested") }
+                            devButton("PRELOAD TEST REWARDED") { AdMobService.shared.preloadRewarded(); done("Rewarded preload requested") }
                         }
                         devSection("DIFFICULTY") {
                             ForEach(DifficultyLevel.allCases, id: \.self) { level in
@@ -98,6 +110,25 @@ struct DevMenuView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: AdMob indicators
+
+    private func adMobIndicator(_ title: String, value: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: value ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(value ? Theme.gold : Theme.paperInk.opacity(0.35))
+            Text(title)
+                .font(Theme.typewriter(12, relativeTo: .caption))
+                .foregroundStyle(Theme.paperInk)
+            Spacer()
+            Text(value ? "YES" : "NO")
+                .font(.system(size: 10, weight: .heavy).width(.condensed))
+                .tracking(1)
+                .foregroundStyle(Theme.paperInkSoft)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value ? "yes" : "no")")
     }
 
     // MARK: Actions
