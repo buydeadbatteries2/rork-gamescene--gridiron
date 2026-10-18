@@ -97,6 +97,14 @@ struct SchemaHardeningTests {
 
     // MARK: Public profile surface exposes only safe columns
 
+    @Test func publicProfilesViewIsAuthenticatedOnly() throws {
+        let sql = try schemaSQL()
+        #expect(sql.contains("revoke all on public.public_profiles from anon"))
+        #expect(sql.contains("grant select on public.public_profiles to authenticated"))
+        // The combined anon+authenticated grant must never return.
+        #expect(!sql.contains("to anon, authenticated"))
+    }
+
     @Test func publicProfilesViewExcludesPrivateData() throws {
         let sql = try schemaSQL()
         let view = statement(sql, starting: "create or replace view public.public_profiles")

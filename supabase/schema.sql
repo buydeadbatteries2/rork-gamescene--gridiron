@@ -178,7 +178,9 @@ grant update (username, first_name, last_name, selected_franchise_id, current_fa
 --    other users, but it exposes ONLY the columns selected below — never
 --    first_name, last_name, email or any authentication data. Franchise and
 --    faction relationships will later be exposed through their own proper
---    tables, not through this view.
+--    tables, not through this view. All GameScene online features require an
+--    account, so the view is authenticated-only: anon cannot query or scrape
+--    the directory.
 -- ===========================================================================
 create or replace view public.public_profiles with (security_invoker = false) as
 select
@@ -194,7 +196,8 @@ select
     championships
 from public.profiles;
 
-grant select on public.public_profiles to anon, authenticated;
+revoke all on public.public_profiles from anon;
+grant select on public.public_profiles to authenticated;
 
 -- ===========================================================================
 -- Future tables (Phase 13A defines the shape; features come later):
