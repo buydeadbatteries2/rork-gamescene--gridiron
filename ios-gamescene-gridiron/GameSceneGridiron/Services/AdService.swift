@@ -38,6 +38,11 @@ nonisolated enum BannerAdPolicy {
         /// DEBUG only: the clearly labeled development placeholder for
         /// layout testing while no real ad is loaded.
         case developmentPlaceholder
+        /// A real banner request is in flight — the actual `AdMobBannerView`
+        /// is mounted and its load callback will report the outcome. The view
+        /// must stay mounted across this state: recreating it on the
+        /// loading→loaded transition would cancel the in-flight request.
+        case loadingBanner
         /// A real ad banner has loaded and is displayed.
         case loadedBanner
     }
@@ -45,15 +50,22 @@ nonisolated enum BannerAdPolicy {
     /// Release-safety contract:
     /// - Ad-Free always suppresses the banner, loaded or not.
     /// - A release build with no loaded ad shows NOTHING (never a fake or
-    ///   "sponsored" strip).
+    ///   "sponsored" strip) — unless a real request is in flight, in which
+    ///   case the genuine (blank until fill) banner view is mounted so the
+    ///   load callback can actually fire.
     /// - A loaded real ad always gets the banner space.
     static func visibility(
         isAdFree: Bool,
         isBannerLoaded: Bool,
+        canRequestBanner: Bool = false,
         isDevelopmentBuild: Bool
     ) -> BannerVisibility {
         if isAdFree { return .hidden }
         if isBannerLoaded { return .loadedBanner }
+        // The banner view mounts while loading: it is the component that
+        // performs the AdMob request, so waiting for a load to mount it
+        // would deadlock (the callback could never fire).
+        if canRequestBanner { return .loadingBanner }
         return isDevelopmentBuild ? .developmentPlaceholder : .hidden
     }
 }
@@ -90,6 +102,9 @@ final class AdManager {
     /// build starts (and stays) unloaded until the AdMob load fires — meaning
     /// the banner slot stays collapsed, showing no fake strip.
     private(set) var isBannerAdLoaded = false
+    /// True after the most recent real banner load attempt failed — drives
+    /// the DEBUG diagnostic state and the slot's retry cycle.
+    private(set) var didBannerLoadFail = false
 
     init(
         interstitialEveryNGames: Int = 2,
@@ -134,6 +149,7 @@ final class AdManager {
         BannerAdPolicy.visibility(
             isAdFree: PurchaseManager.shared.hasAdFree,
             isBannerLoaded: isBannerAdLoaded,
+            canRequestBanner: AdMobService.shared.canServeAds,
             isDevelopmentBuild: Self.isDevelopmentBuild
         )
     }
@@ -145,20 +161,34 @@ final class AdManager {
     func requestBannerAd() {
         guard showsBannerAds else { return }
         #if DEBUG
-        // Development fallback: without a valid AdMob app identifier there is
-        // no real ad SDK session, so the labeled layout placeholder stands in.
-        // With real test ads configured, the actual AdMob banner loads instead.
-        if !AdMobService.shared.isAdsSupported {
-            print("[AdManager] banner slot in development-placeholder mode (no AdMob app ID)")
+        if !AdMobService.shared.canServeAds {
+            print("[AdManager] banner slot in development-placeholder mode (no AdMob session)")
+        } else {
+            print("[AdManager] banner slot armed — config: \(AdMobConfig.debugUnitLabel(for: AdMobService.shared.bannerUnitID)) banner")
         }
         #endif
     }
 
     /// Called by the banner view from the AdMob load callbacks — success shows
-    /// the banner, failure collapses the slot (with a delayed retry handled by
-    /// the view's next appearance / foreground pass).
+    /// the banner, failure collapses the slot (the view schedules a bounded
+    /// retry cycle).
     func noteBannerLoadResult(_ loaded: Bool) {
         isBannerAdLoaded = loaded
+        didBannerLoadFail = !loaded
+        #if DEBUG
+        if loaded {
+            print("[AdManager] banner loaded ✓")
+        } else {
+            print("[AdManager] banner load failed — slot collapses (retry pending)")
+        }
+        #endif
+    }
+
+    /// Re-arms the slot after a failed load (the view's bounded retry cycle
+    /// remounts the banner view, which issues a fresh request).
+    func retryBannerAfterFailure() {
+        guard didBannerLoadFail else { return }
+        didBannerLoadFail = false
     }
 
     /// Pauses/unloads the banner after the entitlement state changes (an

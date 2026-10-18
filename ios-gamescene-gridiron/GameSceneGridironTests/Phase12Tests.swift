@@ -306,6 +306,25 @@ struct Phase12Tests {
         // A loaded real ad gets its slot.
         #expect(BannerAdPolicy.visibility(isAdFree: false, isBannerLoaded: true, isDevelopmentBuild: false) == .loadedBanner)
     }
+
+    @Test func consentedSessionMountsTheRealBannerBeforeLoad() {
+        // Regression: the banner view is the component that performs the load,
+        // so it must mount while the request is still in flight — waiting for
+        // a load to mount it deadlocks (the callback could never fire) and
+        // pinned DEBUG on the placeholder forever.
+        #expect(BannerAdPolicy.visibility(isAdFree: false, isBannerLoaded: false, canRequestBanner: true, isDevelopmentBuild: false) == .loadingBanner)
+        #expect(BannerAdPolicy.visibility(isAdFree: false, isBannerLoaded: false, canRequestBanner: true, isDevelopmentBuild: true) == .loadingBanner)
+        // Loaded wins over loading; Ad-Free still suppresses everything.
+        #expect(BannerAdPolicy.visibility(isAdFree: false, isBannerLoaded: true, canRequestBanner: true, isDevelopmentBuild: false) == .loadedBanner)
+        #expect(BannerAdPolicy.visibility(isAdFree: true, isBannerLoaded: false, canRequestBanner: true, isDevelopmentBuild: true) == .hidden)
+    }
+
+    @Test func debugBannerUnitIsGooglesTestBanner() {
+        // DEBUG TEST BANNER: Google's official anchored-adaptive test unit —
+        // the production GameScene banner ID never resolves in DEBUG.
+        #expect(AdMobConfig.adUnitID(.banner, isDevelopmentBuild: true, injectedUnitIDs: [.banner: "ca-app-pub-9999999999999999/1234567890"]) == "ca-app-pub-3940256099942544/2435281174")
+        #expect(AdMobConfig.debugUnitLabel(for: AdMobConfig.adUnitID(.banner, isDevelopmentBuild: true, injectedUnitIDs: [:])) == "google-test")
+    }
 }
 
 extension AdGateDecision {

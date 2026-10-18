@@ -82,6 +82,13 @@ nonisolated enum AdMobConfig {
         guard trimmed != googleTestUnitIDs[format] else { return nil }
         return trimmed
     }
+
+    /// DEBUG diagnostics only: classifies a unit ID without ever exposing its
+    /// value — "google-test", "production" or "none".
+    static func debugUnitLabel(for unitID: String?) -> String {
+        guard let unitID, !unitID.isEmpty else { return "none" }
+        return googleTestUnitIDs.values.contains(unitID) ? "google-test" : "production"
+    }
 }
 
 // MARK: - Mobile Ads start gate (pure)
