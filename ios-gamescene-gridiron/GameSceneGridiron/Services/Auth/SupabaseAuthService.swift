@@ -68,8 +68,19 @@ struct SupabaseAuthClientAdapter: AuthClientProtocol {
 // MARK: - Supabase profile repository
 
 /// The real `profiles`-table repository. All writes are keyed by the Supabase
-/// Auth UUID (`id`, primary key) — `ensureProfile` upserts, so a retry after a
-/// partial failure can never create a second profile row for the same account.
+/// Auth UUID (`id`, primary key):
+///
+/// * `fetchProfile` reads the signed-in user's PRIVATE row from
+///   `public.profiles` (RLS: `auth.uid() = id` — other users' rows are
+///   invisible to this query).
+/// * `ensureProfile` is an idempotent two-step write: an insert-only upsert
+///   (creates the row on first signup and on partial-failure retries — a
+///   conflicting id is skipped, never duplicated) followed by an update of
+///   account-owned fields only. Competitive stats are server-authoritative:
+///   clients cannot write them (column privileges + trigger guard), and the
+///   database derives football_display_name + username_normalized itself.
+/// * Future `LeaderboardRepository` / `FactionRepository` conformances read
+///   OTHER users through `public.public_profiles` (safe public columns only).
 struct SupabaseProfileRepository: ProfileRepository {
     let client: SupabaseClient
     private let decoder: JSONDecoder
@@ -95,8 +106,20 @@ struct SupabaseProfileRepository: ProfileRepository {
     }
 
     func ensureProfile(_ profile: UserProfile) async throws {
+        // Step 1 — insert-only upsert: creates the row on first signup and on
+        // partial-failure retries; an existing id is skipped (no duplicate).
+        // Any stats in the payload are coerced to 0 server-side for client
+        // inserts. A taken username still surfaces as a uniqueness error here.
         try await client.from("profiles")
-            .upsert(profile, onConflict: "id")
+            .upsert(profile, onConflict: "id", ignoreDuplicates: true)
+            .execute()
+        // Step 2 — account-owned fields only. Competitive stats are never
+        // client-writable (column privileges + trigger guard server-side);
+        // football_display_name and username_normalized are re-derived by the
+        // database trigger.
+        try await client.from("profiles")
+            .update(ProfileUpdateFields.values(for: profile))
+            .eq("id", value: profile.authUserID.uuidString)
             .execute()
     }
 }

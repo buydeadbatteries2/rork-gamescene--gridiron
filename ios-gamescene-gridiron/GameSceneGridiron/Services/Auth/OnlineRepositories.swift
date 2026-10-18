@@ -11,13 +11,19 @@ import Foundation
 
 /// Creates/reads the GameScene profile record. `ensureProfile` must be
 /// idempotent (keyed by the Supabase Auth UUID) so a failed signup step can be
-/// retried without ever creating a duplicate account or profile.
+/// retried without ever creating a duplicate account or profile. Conformances
+/// read the signed-in user's private row from `public.profiles`; other users'
+/// profiles are only ever read through the `public.public_profiles` view.
 protocol ProfileRepository: Sendable {
     func fetchProfile(userID: UUID) async throws -> UserProfile?
     func ensureProfile(_ profile: UserProfile) async throws
 }
 
 // MARK: Leaderboards (future)
+//
+// Reads other players through `public.public_profiles` — the safe public
+// surface (username, football display name, competitive stats only). Never
+// the private `public.profiles` table.
 
 nonisolated struct LeaderboardEntry: Sendable, Equatable {
     let authUserID: UUID
@@ -42,6 +48,9 @@ protocol CompetitiveSeasonRepository: Sendable {
 }
 
 // MARK: Factions (future)
+//
+// Member lists join `public.public_profiles` for identity display; private
+// profile data (real names) is never read for other users.
 
 protocol FactionRepository: Sendable {
     func factions() async throws -> [Faction]

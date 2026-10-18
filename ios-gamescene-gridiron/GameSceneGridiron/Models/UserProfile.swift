@@ -129,6 +129,46 @@ nonisolated struct UserProfile: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
+// MARK: - Client-editable profile columns
+//
+// The ONLY columns a client may send in a profile update. Competitive stats
+// (global rating, career counters, championships) are server-authoritative:
+// the database blocks them at the privilege layer AND with a trigger guard —
+// SwiftUI validation is never the enforcement point. Future leaderboard and
+// faction repositories read OTHER users through the public_profiles view.
+nonisolated enum ProfileUpdateFields {
+    /// Columns the signed-in client may update on its own profile row.
+    static let editable: [String] = [
+        "username",
+        "first_name",
+        "last_name",
+        "selected_franchise_id",
+        "current_faction_id",
+    ]
+
+    /// Columns reserved to trusted backend logic — never client-writable.
+    static let serverOnly: [String] = [
+        "global_rating",
+        "career_games_played",
+        "career_wins",
+        "career_losses",
+        "career_cases_solved",
+        "championships",
+    ]
+
+    /// The update payload for `ensureProfile`: account-owned fields only.
+    /// Optional values encode as SQL NULL when unset.
+    static func values(for profile: UserProfile) -> [String: String?] {
+        [
+            "username": profile.username,
+            "first_name": profile.firstName,
+            "last_name": profile.lastName,
+            "selected_franchise_id": profile.selectedFranchiseID?.uuidString,
+            "current_faction_id": profile.currentFactionID?.uuidString,
+        ]
+    }
+}
+
 // MARK: - Username rules
 
 /// Username contract: 3–20 characters, ASCII letters / numbers / underscore,
