@@ -5,6 +5,7 @@ import SwiftUI
 struct HomeView: View {
     @State private var teamStore = TeamStore.shared
     @State private var seasonManager = SeasonManager.shared
+    @State private var auth = AuthService.shared
     @State private var isPlaying: Bool = false
     @State private var isEditingTeam: Bool = false
     @State private var isShowingTeamRoster: Bool = false
@@ -12,6 +13,8 @@ struct HomeView: View {
     @State private var isShowingShop: Bool = false
     @State private var isShowingSettings: Bool = false
     @State private var isShowingTrophyRoom: Bool = false
+    @State private var isShowingAccountEntry: Bool = false
+    @State private var isShowingProfile: Bool = false
     @State private var lockedMessage: String?
     @State private var hasAppeared: Bool = false
     @State private var glow: Bool = false
@@ -56,6 +59,10 @@ struct HomeView: View {
                     .accessibilityHint(teamStore.hasTeam ? "Opens your season" : "Opens the investigation")
 
                     walletStrip
+                        .opacity(hasAppeared ? 1 : 0)
+                        .offset(y: hasAppeared ? 0 : 16)
+
+                    accountStrip
                         .opacity(hasAppeared ? 1 : 0)
                         .offset(y: hasAppeared ? 0 : 16)
 
@@ -175,6 +182,16 @@ struct HomeView: View {
         .sheet(isPresented: $isShowingSettings) {
             SettingsView()
         }
+        .sheet(isPresented: $isShowingAccountEntry) {
+            // Guest front door: CREATE ACCOUNT / SIGN IN / CONTINUE AS GUEST.
+            NavigationStack { AccountEntryView() }
+                .preferredColorScheme(.dark)
+        }
+        .sheet(isPresented: $isShowingProfile) {
+            // Signed-in (or recovery) player file: identity, actions, sign out.
+            NavigationStack { ProfileView() }
+                .preferredColorScheme(.dark)
+        }
         .fullScreenCover(isPresented: $isEditingTeam) {
             if let team = teamStore.userTeam {
                 TeamCreationView(existingTeam: team) { _ in
@@ -200,6 +217,59 @@ struct HomeView: View {
             WalletPill(amount: PlayerWallet.shared.gameBalls)
             HintPill(count: PlayerWallet.shared.hints)
         }
+    }
+
+    /// ACCOUNT entry on the desk: GUEST while playing solo (opens the account
+    /// front door), the player's jersey name/username when signed in (opens the
+    /// player file). Recovery pending routes to the same profile screen, which
+    /// carries the FINISH PLAYER FILE card.
+    private var accountStrip: some View {
+        Button {
+            Haptics.tick()
+            AudioManager.shared.play(.buttonPress)
+            if homeAccountState.opensProfile {
+                isShowingProfile = true
+            } else {
+                isShowingAccountEntry = true
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: homeAccountState.symbol)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Theme.goldLight)
+                    .frame(width: 36, height: 36)
+                    .background(Color.black.opacity(0.4), in: .circle)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(homeAccountState.title)
+                        .font(.system(size: 15, weight: .black).width(.compressed))
+                        .tracking(1)
+                        .foregroundStyle(Theme.paperInk)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Text(homeAccountState.detail)
+                        .font(Theme.typewriter(11, relativeTo: .caption))
+                        .foregroundStyle(Theme.paperInkSoft)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Theme.paperInk.opacity(0.4))
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .paperCard(cornerRadius: 6)
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.99))
+        .accessibilityLabel("Account — \(homeAccountState.title)")
+        .accessibilityHint(homeAccountState.opensProfile ? "Opens your player file" : "Opens account options")
+    }
+
+    /// Guest/signed-in/recovery resolution for the home entry — mirrored by
+    /// the Settings ACCOUNT card so both surfaces agree.
+    private var homeAccountState: AccountHomeState {
+        AccountHomeState(auth.state)
     }
 
     /// Pinned season dossier: franchise, record, current week and next case.

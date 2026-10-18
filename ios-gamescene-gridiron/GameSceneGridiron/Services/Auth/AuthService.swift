@@ -26,6 +26,10 @@ final class AuthService {
     private(set) var isWorking = false
     /// Last sanitized, user-facing error message (never raw SDK text).
     private(set) var lastUserMessage: String?
+    /// True when signup succeeded but the project requires email confirmation:
+    /// no session exists yet, so the UI shows CHECK YOUR EMAIL. The player
+    /// signs in after confirming; nothing is authenticated until then.
+    private(set) var didSendConfirmationEmail = false
     /// True when the reset deep link established a confirm-session — the UI
     /// should present the new-password form (dismissable by the form itself).
     var isAwaitingNewPassword = false
@@ -125,6 +129,7 @@ final class AuthService {
     @discardableResult
     func createAccount(_ draft: SignUpDraft) async -> Bool {
         lastUserMessage = nil
+        didSendConfirmationEmail = false
         let errors = AccountValidator.validate(draft)
         guard errors.isEmpty else {
             lastUserMessage = "Check the highlighted fields."
@@ -154,7 +159,16 @@ final class AuthService {
                 state = .needsProfileRecovery(profile)
                 return false
             }
-            await establishAuthenticatedSession(profile, signedUpWithoutSession: !outcome.didCreateSession)
+            guard outcome.didCreateSession else {
+                // Email confirmation required: the project mails a verification
+                // link and no session exists yet. Nothing is authenticated —
+                // the UI shows CHECK YOUR EMAIL and the player signs in after
+                // confirming.
+                didSendConfirmationEmail = true
+                lastUserMessage = "CONFIRM YOUR EMAIL TO ACTIVATE ONLINE FEATURES"
+                return true
+            }
+            await establishAuthenticatedSession(profile)
             return true
         } catch {
             lastUserMessage = AuthErrorMapper.failure(for: error).userMessage
@@ -170,7 +184,7 @@ final class AuthService {
         defer { isWorking = false }
         do {
             try await profiles.ensureProfile(profile)
-            await establishAuthenticatedSession(profile, signedUpWithoutSession: false)
+            await establishAuthenticatedSession(profile)
         } catch {
             lastUserMessage = AuthErrorMapper.failure(for: error).userMessage
         }
@@ -195,7 +209,7 @@ final class AuthService {
             let userID = try await authClient.signIn(email: email, password: password)
             let profile = try await profiles.fetchProfile(userID: userID)
             if let profile {
-                await establishAuthenticatedSession(profile, signedUpWithoutSession: false)
+                await establishAuthenticatedSession(profile)
                 return true
             }
             // Valid account, missing profile row: recover, never dead-end.
@@ -291,13 +305,11 @@ final class AuthService {
 
     // MARK: Helpers
 
-    private func establishAuthenticatedSession(_ profile: UserProfile, signedUpWithoutSession: Bool) async {
+    private func establishAuthenticatedSession(_ profile: UserProfile) async {
         defaults.removeObject(forKey: Self.guestFlagKey)
+        didSendConfirmationEmail = false
         state = .authenticated(profile)
         await onAuthenticated?(profile.authUserID)
-        if signedUpWithoutSession {
-            lastUserMessage = "CONFIRM YOUR EMAIL TO ACTIVATE ONLINE FEATURES"
-        }
     }
 
     /// The initial profile draft for a fresh auth account. The football

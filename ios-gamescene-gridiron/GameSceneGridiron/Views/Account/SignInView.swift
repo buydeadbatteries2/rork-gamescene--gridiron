@@ -20,6 +20,7 @@ struct SignInView: View {
                     formCard
                     forgotPasswordButton
                     submitButton
+                    createAccountSecondary
                     if let message = auth.lastUserMessage {
                         Text(message)
                             .font(Theme.typewriter(11, relativeTo: .caption))
@@ -110,6 +111,23 @@ struct SignInView: View {
         }
         .buttonStyle(PressableButtonStyle())
         .accessibilityLabel("Forgot password")
+    }
+
+    /// Secondary route for players who don't have a file yet.
+    private var createAccountSecondary: some View {
+        NavigationLink {
+            CreateAccountView()
+        } label: {
+            Text("CREATE ACCOUNT")
+                .font(.system(size: 12, weight: .heavy).width(.condensed))
+                .tracking(1.6)
+                .foregroundStyle(Theme.paperInk)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .overlay { Capsule().strokeBorder(Theme.paperInk.opacity(0.4), lineWidth: 1.2) }
+                .contentShape(.capsule)
+        }
+        .buttonStyle(PressableButtonStyle(playsPressSound: true))
+        .accessibilityLabel("Create account")
     }
 
     private var submitButton: some View {

@@ -7,6 +7,7 @@ struct ProfileView: View {
     @State private var auth = AuthService.shared
     @State private var teamStore = TeamStore.shared
     @State private var isShowingSignIn = false
+    @State private var isShowingCreateAccount = false
     @State private var isShowingResetPassword = false
     @State private var didSignOut = false
 
@@ -30,7 +31,10 @@ struct ProfileView: View {
         }
         .preferredColorScheme(.dark)
         .navigationDestination(isPresented: $isShowingSignIn) {
-            AccountEntryView()
+            SignInView()
+        }
+        .navigationDestination(isPresented: $isShowingCreateAccount) {
+            CreateAccountView()
         }
         .sheet(isPresented: $isShowingResetPassword) {
             ResetPasswordView()
@@ -192,7 +196,11 @@ struct ProfileView: View {
                 // faked.
                 actionRow(symbol: "trash", title: "DELETE ACCOUNT", detail: "Coming soon", disabled: true) {}
             } else {
+                // Guest: both doors, straight to the working forms.
                 actionRow(symbol: "person.badge.plus", title: "CREATE ACCOUNT", detail: "Keep progress with an account") {
+                    isShowingCreateAccount = true
+                }
+                actionRow(symbol: "tray.full", title: "SIGN IN", detail: "Resume an existing player file") {
                     isShowingSignIn = true
                 }
             }

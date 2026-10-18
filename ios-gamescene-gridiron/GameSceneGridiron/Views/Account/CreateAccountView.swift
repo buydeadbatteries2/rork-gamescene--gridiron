@@ -25,12 +25,20 @@ struct CreateAccountView: View {
             DeskBackground()
             ScrollView {
                 VStack(spacing: 16) {
-                    header
-                    formCard
-                    previewCard
-                    submitButton
-                    if let message = auth.lastUserMessage {
-                        messageBanner(message)
+                    if auth.didSendConfirmationEmail {
+                        // Email confirmation required: no session yet — show
+                        // CHECK YOUR EMAIL and let the player return to the
+                        // app. They sign in after confirming.
+                        confirmationBoard
+                    } else {
+                        header
+                        formCard
+                        previewCard
+                        submitButton
+                        signInSecondary
+                        if let message = auth.lastUserMessage {
+                            messageBanner(message)
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -44,6 +52,75 @@ struct CreateAccountView: View {
         .onDisappear {
             if didSubmitSuccessfully { dismiss() }
         }
+    }
+
+    /// CHECK YOUR EMAIL — the signup landed but the project requires email
+    /// confirmation before a session exists.
+    private var confirmationBoard: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "envelope.open.fill")
+                .font(.system(size: 26, weight: .bold))
+                .foregroundStyle(Theme.goldGradient)
+                .frame(width: 66, height: 66)
+                .background(Color.black.opacity(0.5), in: .circle)
+                .overlay { Circle().strokeBorder(Theme.gold.opacity(0.45), lineWidth: 1.2) }
+            Text("CHECK YOUR EMAIL")
+                .font(.system(size: 24, weight: .black).width(.compressed))
+                .tracking(1.8)
+                .foregroundStyle(Theme.goldGradient)
+            Text("WE SENT YOU A VERIFICATION LINK. CONFIRM IT, THEN SIGN IN TO OPEN YOUR PLAYER FILE.")
+                .font(Theme.typewriter(11, relativeTo: .caption))
+                .tracking(1)
+                .foregroundStyle(Theme.paperInk)
+                .lineSpacing(3)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 8)
+
+            Button {
+                Haptics.pickUp()
+                AudioManager.shared.play(.buttonPress)
+                didSubmitSuccessfully = true
+                dismiss()
+            } label: {
+                Text("RETURN TO THE GAME")
+                    .font(.system(size: 14, weight: .heavy).width(.condensed))
+                    .tracking(1.8)
+                    .foregroundStyle(Theme.ink)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Theme.goldGradient, in: .capsule)
+                    .contentShape(.capsule)
+            }
+            .buttonStyle(PressableButtonStyle(playsPressSound: false))
+            .accessibilityLabel("Return to the game")
+        }
+        .padding(.vertical, 20)
+        .padding(.horizontal, 16)
+        .background {
+            PaperSurface(cornerRadius: 8, darkness: 0.04)
+                .shadow(color: .black.opacity(0.6), radius: 16, y: 10)
+        }
+        .overlay(alignment: .top) {
+            PushPin(size: 18).offset(y: -8)
+        }
+        .rotationEffect(.degrees(-0.4))
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Secondary route for players who already have a file.
+    private var signInSecondary: some View {
+        NavigationLink {
+            SignInView()
+        } label: {
+            Text("ALREADY HAVE AN ACCOUNT? SIGN IN")
+                .font(.system(size: 12, weight: .heavy).width(.condensed))
+                .tracking(1.6)
+                .foregroundStyle(Theme.goldLight)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .overlay { Capsule().strokeBorder(Theme.paperInk.opacity(0.4), lineWidth: 1.2) }
+                .contentShape(.capsule)
+        }
+        .buttonStyle(PressableButtonStyle(playsPressSound: true))
+        .accessibilityLabel("Already have an account? Sign in")
     }
 
     private var header: some View {
