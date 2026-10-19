@@ -16,13 +16,15 @@ final class MockAuthClient: AuthClientProtocol, @unchecked Sendable {
     var resetPasswordError: Error?
 
     private(set) var signedUpEmails: [String] = []
+    private(set) var signedUpIdentities: [AuthSignUpIdentity] = []
     private(set) var sentResetEmails: [String] = []
     private(set) var handledCallbackURLs: [URL] = []
     private(set) var updatedPasswords: [String] = []
     private(set) var signOutCount = 0
 
-    func signUp(email: String, password: String) async throws -> AuthSignUpOutcome {
+    func signUp(email: String, password: String, identity: AuthSignUpIdentity) async throws -> AuthSignUpOutcome {
         signedUpEmails.append(email)
+        signedUpIdentities.append(identity)
         return try signUpResult.get()
     }
 
@@ -60,7 +62,10 @@ final class MockAuthClient: AuthClientProtocol, @unchecked Sendable {
 final class MockProfileRepository: ProfileRepository, @unchecked Sendable {
     var stored: [UUID: UserProfile] = [:]
     var shouldFailWrites = false
+    var usernameAvailable = true
+    var usernameProbeError: Error?
     private(set) var writeCount = 0
+    private(set) var probedUsernames: [String] = []
 
     func fetchProfile(userID: UUID) async throws -> UserProfile? {
         stored[userID]
@@ -70,6 +75,12 @@ final class MockProfileRepository: ProfileRepository, @unchecked Sendable {
         writeCount += 1
         if shouldFailWrites { throw URLError(.notConnectedToInternet) }
         stored[profile.authUserID] = profile
+    }
+
+    func isUsernameAvailable(_ username: String) async throws -> Bool {
+        probedUsernames.append(username)
+        if let usernameProbeError { throw usernameProbeError }
+        return usernameAvailable
     }
 }
 

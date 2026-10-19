@@ -157,36 +157,70 @@ final class AuthService {
             lastUserMessage = Self.unavailableNotice
             return false
         }
+        // Best-effort pre-flight: a taken username surfaces as a readable
+        // message BEFORE auth is consumed. The auth.users trigger remains the
+        // atomic server-side authority; a probe failure never blocks signup.
+        do {
+            if !(try await profiles.isUsernameAvailable(draft.username)) {
+                lastFailureCategory = "\(AuthFailure.usernameTaken)"
+                lastUserMessage = AuthFailure.usernameTaken.userMessage
+                return false
+            }
+        } catch {
+            #if DEBUG
+            print("[AuthDebug] username probe skipped: \(error)")
+            #endif
+        }
+
         isWorking = true
         defer { isWorking = false }
 
         do {
-            let outcome = try await authClient.signUp(email: draft.email, password: draft.password)
-            let profile = Self.draftProfile(
-                userID: outcome.userID,
-                username: draft.username,
-                firstName: draft.firstName,
-                lastName: draft.lastName
+            let outcome = try await authClient.signUp(
+                email: draft.email,
+                password: draft.password,
+                identity: AuthSignUpIdentity(
+                    username: draft.username,
+                    firstName: draft.firstName,
+                    lastName: draft.lastName
+                )
             )
-            do {
-                try await profiles.ensureProfile(profile)
-            } catch {
-                // Auth succeeded, profile write failed — recoverable, never
-                // retried here automatically and never a duplicate account.
-                lastUserMessage = AuthErrorMapper.failure(for: error).userMessage
-                state = .needsProfileRecovery(profile)
-                return false
-            }
             guard outcome.didCreateSession else {
-                // Email confirmation required: the project mails a verification
-                // link and no session exists yet. Nothing is authenticated —
+                // EMAIL CONFIRMATION REQUIRED = SUCCESS. The project mails a
+                // verification link and no session exists yet — the auth.users
+                // trigger creates the profile server-side from the signup
+                // metadata. NO client-side insert here (RLS requires a session
+                // this user doesn't have), and nothing is authenticated:
                 // the UI shows CHECK YOUR EMAIL and the player signs in after
                 // confirming.
                 didSendConfirmationEmail = true
                 lastUserMessage = "CONFIRM YOUR EMAIL TO ACTIVATE ONLINE FEATURES"
                 return true
             }
-            await establishAuthenticatedSession(profile)
+            // Confirmation disabled → an immediate session exists and the
+            // trigger already created the profile. Fetch it; fall back to the
+            // client-side recovery insert ONLY if the row is unexpectedly
+            // missing (idempotent, own-row RLS still permits it).
+            if let existing = try await profiles.fetchProfile(userID: outcome.userID) {
+                await establishAuthenticatedSession(existing)
+                return true
+            }
+            let profileDraft = Self.draftProfile(
+                userID: outcome.userID,
+                username: draft.username,
+                firstName: draft.firstName,
+                lastName: draft.lastName
+            )
+            do {
+                try await profiles.ensureProfile(profileDraft)
+            } catch {
+                // Auth succeeded, profile write failed — recoverable, never
+                // retried here automatically and never a duplicate account.
+                lastUserMessage = AuthErrorMapper.failure(for: error).userMessage
+                state = .needsProfileRecovery(profileDraft)
+                return false
+            }
+            await establishAuthenticatedSession(profileDraft)
             return true
         } catch {
             let failure = AuthErrorMapper.failure(for: error)

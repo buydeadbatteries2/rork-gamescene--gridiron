@@ -1,4 +1,4 @@
--- GameScene: Gridiron — Supabase schema (Phase 13A: hardened accounts & profile)
+-- GameScene: Gridiron — Supabase schema (Phase 13A: hardened accounts & profile; Phase 13D: signup trigger)
 -- Run in the Supabase SQL editor / migration pipeline. Safe to re-run (idempotent).
 --
 -- Identity contract:
@@ -136,7 +136,86 @@ create trigger profiles_guard_competitive_stats_insert
     for each row execute function public.guard_competitive_stats_insert();
 
 -- ===========================================================================
--- 4. PRIVATE RLS — own row only. No "or true" anywhere; anonymous users get
+-- 4. AUTH-USER PROFILE CREATION (Phase 13D) — the signup trigger.
+--    When the project has "Confirm email" enabled, Supabase signup returns
+--    a user but NO authenticated session, so the CLIENT CANNOT insert its
+--    own profile (RLS requires auth.uid() = id). The initial profile is
+--    therefore created by trusted database logic when the auth user is
+--    created: the client passes username / first_name / last_name as signup
+--    user metadata (never passwords or sensitive data — email/password are
+--    handled by Supabase Auth itself), and this function turns them into a
+--    profile row. The existing derived-fields trigger (section 2) then
+--    derives username_normalized + football_display_name + updated_at.
+--    COMPETITIVE STATS ARE NEVER SET HERE — they keep their zero defaults
+--    and remain server-authoritative (sections 1 + 3).
+--    Idempotent: ON CONFLICT (id) DO NOTHING — repeated trigger execution
+--    can never duplicate a profile for the same Auth UUID.
+-- ===========================================================================
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    requested_username text := coalesce(
+        nullif(btrim(new.raw_user_meta_data->>'username'), ''),
+        'PLAYER' || upper(left(replace(new.id::text, '-', ''), 8))
+    );
+begin
+    -- Server-side username rule: 3–20 characters, letters/numbers/underscore
+    -- only (mirrors the client's AccountValidator).
+    if requested_username !~ '^[A-Za-z0-9_]{3,20}$' then
+        raise exception 'USERNAME_INVALID';
+    end if;
+    begin
+        insert into public.profiles (id, username, first_name, last_name)
+        values (
+            new.id,
+            requested_username,
+            coalesce(new.raw_user_meta_data->>'first_name', ''),
+            coalesce(new.raw_user_meta_data->>'last_name', '')
+        )
+        on conflict (id) do nothing;
+    exception
+        when unique_violation then
+            -- Case-insensitive username collision
+            -- (profiles_username_normalized_key). Supabase Auth wraps trigger
+            -- failures as "Database error saving new user"; the client maps
+            -- that to a readable USERNAME ALREADY TAKEN message.
+            raise exception 'USERNAME_TAKEN';
+    end;
+    return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+    after insert on auth.users
+    for each row execute function public.handle_new_user();
+
+-- Best-effort client pre-flight so a taken username surfaces as a readable
+-- message BEFORE auth is consumed. SECURITY DEFINER (owner: postgres) is
+-- deliberate — the caller may be anon (pre-signup); the function exposes a
+-- single BOOLEAN, never row data. The trigger remains the atomic authority.
+create or replace function public.is_username_available(requested text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+    select not exists (
+        select 1 from public.profiles
+        where lower(username_normalized) = lower(btrim(requested))
+    );
+$$;
+
+revoke all on function public.is_username_available(text) from public;
+grant execute on function public.is_username_available(text) to anon, authenticated;
+
+-- ===========================================================================
+-- 5. PRIVATE RLS — own row only. No "or true" anywhere; anonymous users get
 --    nothing. The legacy Phase 13 "profiles_select_public" policy is dropped.
 -- ===========================================================================
 alter table public.profiles enable row level security;
@@ -172,7 +251,7 @@ grant update (username, first_name, last_name, selected_franchise_id, current_fa
     on public.profiles to authenticated;
 
 -- ===========================================================================
--- 5. PUBLIC: public_profiles — the safe public-facing profile source for
+-- 6. PUBLIC: public_profiles — the safe public-facing profile source for
 --    future leaderboards, versus and factions. The view runs with its owner's
 --    privileges (security_invoker = false) so it can serve public columns to
 --    other users, but it exposes ONLY the columns selected below — never

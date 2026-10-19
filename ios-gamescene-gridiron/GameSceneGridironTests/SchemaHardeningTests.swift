@@ -101,8 +101,14 @@ struct SchemaHardeningTests {
         let sql = try schemaSQL()
         #expect(sql.contains("revoke all on public.public_profiles from anon"))
         #expect(sql.contains("grant select on public.public_profiles to authenticated"))
-        // The combined anon+authenticated grant must never return.
-        #expect(!sql.contains("to anon, authenticated"))
+        // The combined anon+authenticated grant must never return for the
+        // public view — table/view surfaces stay split. (The Phase 13D
+        // is_username_available RPC is a deliberate exception: a single
+        // boolean, explicitly revoked from public first, then granted to
+        // anon + authenticated for the pre-signup probe.)
+        let viewGrant = statement(sql, starting: "grant select on public.public_profiles")
+        #expect(!viewGrant.contains("anon"))
+        #expect(!sql.contains("grant select on public.public_profiles to anon, authenticated"))
     }
 
     @Test func publicProfilesViewExcludesPrivateData() throws {

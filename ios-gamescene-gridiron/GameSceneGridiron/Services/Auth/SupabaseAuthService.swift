@@ -13,8 +13,18 @@ nonisolated struct AuthSignUpOutcome: Equatable, Sendable {
     let didCreateSession: Bool
 }
 
+/// The identity values carried through signup user metadata. The auth.users
+/// trigger (`public.handle_new_user`) turns them into the initial profile
+/// row — with Confirm Email enabled there is NO session to insert with, so
+/// metadata is the only channel. Never passwords or sensitive data.
+nonisolated struct AuthSignUpIdentity: Equatable, Sendable {
+    let username: String
+    let firstName: String
+    let lastName: String
+}
+
 protocol AuthClientProtocol: Sendable {
-    func signUp(email: String, password: String) async throws -> AuthSignUpOutcome
+    func signUp(email: String, password: String, identity: AuthSignUpIdentity) async throws -> AuthSignUpOutcome
     func signIn(email: String, password: String) async throws -> UUID
     func restoreSessionUserID() async throws -> UUID?
     func signOut() async throws
@@ -32,8 +42,16 @@ protocol AuthClientProtocol: Sendable {
 struct SupabaseAuthClientAdapter: AuthClientProtocol {
     let client: SupabaseClient
 
-    func signUp(email: String, password: String) async throws -> AuthSignUpOutcome {
-        let response = try await client.auth.signUp(email: email, password: password)
+    func signUp(email: String, password: String, identity: AuthSignUpIdentity) async throws -> AuthSignUpOutcome {
+        let response = try await client.auth.signUp(
+            email: email,
+            password: password,
+            data: [
+                "username": .string(identity.username),
+                "first_name": .string(identity.firstName),
+                "last_name": .string(identity.lastName),
+            ]
+        )
         return AuthSignUpOutcome(userID: response.user.id, didCreateSession: response.session != nil)
     }
 
@@ -122,6 +140,20 @@ struct SupabaseProfileRepository: ProfileRepository {
             .eq("id", value: profile.authUserID.uuidString)
             .execute()
     }
+
+    func isUsernameAvailable(_ username: String) async throws -> Bool {
+        let response = try await client.rpc(
+            "is_username_available",
+            params: UsernameProbe(requested: username)
+        ).execute()
+        return try JSONDecoder().decode(Bool.self, from: response.data)
+    }
+}
+
+/// Parameter envelope for `public.is_username_available(text)` — the key
+/// matches the SQL parameter name.
+private struct UsernameProbe: Codable, Sendable {
+    let requested: String
 }
 
 // MARK: - Friendly auth errors
@@ -137,18 +169,20 @@ nonisolated enum AuthFailure: Equatable, Sendable {
     case weakPassword
     case networkUnavailable
     case rateLimited
+    case profileCreationFailed
     case unknown
 
     /// The single user-facing message for this failure.
     var userMessage: String {
         switch self {
         case .invalidCredentials: return "Email or password is incorrect."
-        case .emailAlreadyRegistered: return "That email already has an account. Try signing in."
+        case .emailAlreadyRegistered: return "EMAIL ALREADY REGISTERED — an account already exists for this email. Try signing in instead."
         case .emailNotConfirmed: return "Confirm your email first — check your inbox."
-        case .usernameTaken: return "That username is taken. Choose another."
+        case .usernameTaken: return "USERNAME ALREADY TAKEN — choose another."
         case .weakPassword: return "Choose a stronger password (8+ characters, letters and numbers)."
         case .networkUnavailable: return "Can't reach the network. Your season is safe — try again when online."
-        case .rateLimited: return "Too many attempts. Wait a moment and try again."
+        case .rateLimited: return "TOO MANY ATTEMPTS — please wait a few minutes before trying again."
+        case .profileCreationFailed: return "Your account was created, but the player file could not be saved yet. Sign in again to finish setup."
         case .unknown: return "Something went wrong. Try again."
         }
     }
@@ -166,6 +200,9 @@ nonisolated enum AuthErrorMapper {
                 break
             }
         }
+        // Postgres/PostgREST failures come from profile SQL, never auth —
+        // categorize them so the DEBUG banner can tell the two apart.
+        if error is PostgrestError { return .profileCreationFailed }
         let description = error.localizedDescription.lowercased()
         if description.contains("internet") || description.contains("network")
             || description.contains("offline") || description.contains("timed out") {
@@ -174,6 +211,11 @@ nonisolated enum AuthErrorMapper {
         if description.contains("invalid login credentials") { return .invalidCredentials }
         if description.contains("already registered") { return .emailAlreadyRegistered }
         if description.contains("email not confirmed") { return .emailNotConfirmed }
+        // Supabase Auth wraps auth.users trigger failures as "Database error
+        // saving new user". Our trigger's only expected failure is the
+        // case-insensitive username collision (USERNAME_TAKEN), so this maps
+        // to the readable taken-username message.
+        if description.contains("database error saving new user") { return .usernameTaken }
         if description.contains("user already") || description.contains("username") { return .usernameTaken }
         if description.contains("password") && (description.contains("weak") || description.contains("at least")) {
             return .weakPassword

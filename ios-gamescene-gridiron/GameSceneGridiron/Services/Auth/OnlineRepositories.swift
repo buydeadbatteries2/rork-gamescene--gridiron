@@ -17,6 +17,11 @@ import Foundation
 protocol ProfileRepository: Sendable {
     func fetchProfile(userID: UUID) async throws -> UserProfile?
     func ensureProfile(_ profile: UserProfile) async throws
+    /// Best-effort pre-signup probe: is this username claimable? Exposed as
+    /// a boolean-only SECURITY DEFINER RPC (`public.is_username_available`)
+    /// so a taken username surfaces as a readable message before auth is
+    /// consumed. The auth.users trigger stays the atomic authority.
+    func isUsernameAvailable(_ username: String) async throws -> Bool
 }
 
 // MARK: Leaderboards (future)

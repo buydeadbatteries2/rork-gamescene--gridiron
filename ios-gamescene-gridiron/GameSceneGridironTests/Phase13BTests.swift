@@ -58,7 +58,7 @@ struct Phase13BTests {
         // No session exists yet — the player is NOT authenticated, and the
         // guest state is untouched (guest play continues undisturbed).
         #expect(service.state == .guest)
-        #expect(profiles.writeCount == 1) // profile was still created server-side
+        #expect(profiles.writeCount == 0) // NO client-side profile insert without a session — the auth.users trigger owns it
     }
 
     @Test func signupWithoutEmailConfirmationAuthenticatesImmediately() async {
