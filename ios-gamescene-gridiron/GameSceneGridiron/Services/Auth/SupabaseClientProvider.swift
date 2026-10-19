@@ -3,13 +3,17 @@ import Supabase
 
 // MARK: - Supabase client provider
 //
-// The single Supabase entry point. Configuration arrives through the app's
-// Info.plist build-setting expansion from the Rork secret variables:
-//   SUPABASE_URL       — the project URL (https://<ref>.supabase.co)
-//   SUPABASE_ANON_KEY  — the public anon key (RLS-protected; NEVER the
-//                        service-role key, which must never ship in a client)
-// A missing, empty or unexpanded value means Supabase is NOT configured: the
-// app runs in guest/local mode and startup is never blocked on it.
+// The single Supabase entry point. Configuration arrives through the
+// Rork-supported public configuration surface — the generated Config.swift —
+// from the client-safe variables:
+//   EXPO_PUBLIC_SUPABASE_URL       — the project URL (https://<ref>.supabase.co)
+//   EXPO_PUBLIC_SUPABASE_ANON_KEY  — the public anon key (RLS-protected; NEVER
+//                                    the service-role key, which must never
+//                                    ship in a client)
+// The old server-side-only SUPABASE_URL / SUPABASE_ANON_KEY secrets are NOT
+// readable by the native app and are deliberately unused here. A missing,
+// empty or unexpanded value means Supabase is NOT configured: the app runs in
+// guest/local mode and startup is never blocked on it.
 @MainActor
 @Observable
 final class SupabaseClientProvider {
@@ -21,8 +25,8 @@ final class SupabaseClientProvider {
     private let client: SupabaseClient?
 
     init(url: String? = nil, anonKey: String? = nil) {
-        let resolvedURL = url ?? Self.plistValue(forKey: "SUPABASE_URL")
-        let resolvedKey = anonKey ?? Self.plistValue(forKey: "SUPABASE_ANON_KEY")
+        let resolvedURL = url ?? Self.publicConfigURL
+        let resolvedKey = anonKey ?? Self.publicConfigAnonKey
         if let client = Self.makeClient(url: resolvedURL, anonKey: resolvedKey) {
             self.client = client
             isConfigured = true
@@ -36,9 +40,17 @@ final class SupabaseClientProvider {
 
     // MARK: Pure configuration logic (testable)
 
-    /// nil/empty/unexpanded-placeholder values are all "not configured".
-    nonisolated static func plistValue(forKey key: String) -> String? {
-        let raw = Bundle.main.object(forInfoDictionaryKey: key) as? String ?? ""
+    /// The Rork public configuration values (injected into Config.swift at
+    /// build time), or nil when absent/blank/unexpanded.
+    nonisolated static var publicConfigURL: String? {
+        publicConfigValue(Config.EXPO_PUBLIC_SUPABASE_URL)
+    }
+    nonisolated static var publicConfigAnonKey: String? {
+        publicConfigValue(Config.EXPO_PUBLIC_SUPABASE_ANON_KEY)
+    }
+
+    /// nil/blank/unexpanded-placeholder values are all "not configured".
+    nonisolated static func publicConfigValue(_ raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !trimmed.contains("$(") else { return nil }
         return trimmed

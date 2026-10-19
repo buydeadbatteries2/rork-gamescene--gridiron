@@ -46,8 +46,8 @@ struct DevMenuView: View {
                         }
                         devSection("SUPABASE (READ-ONLY INDICATORS)") {
                             // Injection diagnostics only — never the values.
-                            statusIndicator("Supabase URL Injected", value: SupabaseClientProvider.plistValue(forKey: "SUPABASE_URL") != nil)
-                            statusIndicator("Supabase Anon Key Injected", value: SupabaseClientProvider.plistValue(forKey: "SUPABASE_ANON_KEY") != nil)
+                            statusIndicator("Supabase URL Injected", value: SupabaseClientProvider.publicConfigURL != nil)
+                            statusIndicator("Supabase Anon Key Injected", value: SupabaseClientProvider.publicConfigAnonKey != nil)
                             statusIndicator("Supabase Client Ready", value: SupabaseClientProvider.shared.isConfigured)
                         }
                         devSection("DIFFICULTY") {

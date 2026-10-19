@@ -85,9 +85,10 @@ struct Phase13BTests {
         #expect(SupabaseClientProvider.makeClient(url: "ftp://example.com", anonKey: "key") == nil)
         #expect(SupabaseClientProvider.makeClient(url: "https://example.supabase.co", anonKey: "") == nil)
         #expect(SupabaseClientProvider.makeClient(url: "https://example.supabase.co", anonKey: "key") != nil)
-        // Outside a real app bundle there is nothing to read — never configured.
-        #expect(SupabaseClientProvider.plistValue(forKey: "SUPABASE_URL") == nil)
-        #expect(SupabaseClientProvider.plistValue(forKey: "SUPABASE_ANON_KEY") == nil)
+        // Blank public-configuration values (the source-committed Config.swift
+        // literals) are never configured.
+        #expect(SupabaseClientProvider.publicConfigValue("") == nil)
+        #expect(SupabaseClientProvider.publicConfigValue("$(EXPO_PUBLIC_SUPABASE_URL)") == nil)
     }
 
     // MARK: Helpers

@@ -59,19 +59,11 @@
 	<string>$(ADMOB_IOS_REWARDED_ID)</string>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>Your data is used to deliver ads that are more relevant to you. The game works fully without tracking.</string>
-	<!-- Supabase project configuration: expanded at build time from the Rork
-	     secret variables SUPABASE_URL / SUPABASE_ANON_KEY through the
-	     differently-named intermediary build settings SUPABASE_URL_VALUE /
-	     SUPABASE_ANON_KEY_VALUE declared in project.pbxproj — the exact AdMob
-	     pattern (secret → _VALUE build setting → plist expansion); a build
-	     setting may not reference itself. The anon key is the public,
-	     RLS-protected key — the service-role key must NEVER appear anywhere in
-	     the client. Empty or unexpanded values mean "no Supabase": the app runs
-	     in guest/local mode. -->
-	<key>SUPABASE_URL</key>
-	<string>$(SUPABASE_URL_VALUE)</string>
-	<key>SUPABASE_ANON_KEY</key>
-	<string>$(SUPABASE_ANON_KEY_VALUE)</string>
+	<!-- Supabase configuration NO LONGER lives here: the client-safe values
+	     (EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY) arrive
+	     through the generated Config.swift at build time — see
+	     SupabaseClientProvider. RLS remains the security boundary for the anon
+	     key; the service-role key must NEVER appear in any client surface. -->
 	<!-- Auth callback scheme for password-reset deep links. The redirect URL
 	     (gamescene://auth-callback) must also be allowlisted in the Supabase
 	     dashboard's Auth → URL Configuration — see the phase report. -->

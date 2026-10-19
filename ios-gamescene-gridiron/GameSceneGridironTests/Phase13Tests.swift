@@ -460,7 +460,7 @@ struct Phase13Tests {
         #expect(SupabaseClientProvider.makeClient(url: "$(SUPABASE_URL)", anonKey: "key") == nil)
         #expect(SupabaseClientProvider.makeClient(url: "notaurl", anonKey: "key") == nil)
         #expect(SupabaseClientProvider.makeClient(url: "https://example.supabase.co", anonKey: "anon") != nil)
-        #expect(SupabaseClientProvider.plistValue(forKey: "__no_such_key__") == nil)
+        #expect(SupabaseClientProvider.publicConfigValue("   ") == nil)
         #expect(SupabaseClientProvider.isAuthCallbackURL(URL(string: "gamescene://auth-callback?refresh_token=x")!))
         #expect(!SupabaseClientProvider.isAuthCallbackURL(URL(string: "https://example.com")!))
     }

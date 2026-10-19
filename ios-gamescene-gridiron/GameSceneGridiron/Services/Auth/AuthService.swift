@@ -30,6 +30,9 @@ final class AuthService {
     /// no session exists yet, so the UI shows CHECK YOUR EMAIL. The player
     /// signs in after confirming; nothing is authenticated until then.
     private(set) var didSendConfirmationEmail = false
+    /// DEBUG diagnostic: the sanitized failure category of the last auth
+    /// error (shown in the DEBUG message banner, never in RELEASE copy).
+    private(set) var lastFailureCategory: String?
     /// The guarded-out-of-build notices (no Supabase secrets in this build).
     /// One source of truth — the UI renders these as the legible
     /// ONLINE ACCOUNT UNAVAILABLE status card instead of a plain banner.
@@ -186,7 +189,14 @@ final class AuthService {
             await establishAuthenticatedSession(profile)
             return true
         } catch {
-            lastUserMessage = AuthErrorMapper.failure(for: error).userMessage
+            let failure = AuthErrorMapper.failure(for: error)
+            // DEBUG-only diagnostics for live smoke tests — the sanitized
+            // category only; no payloads, emails, or SDK internals.
+            #if DEBUG
+            print("[AuthDebug] createAccount failure category: \(failure)")
+            #endif
+            lastFailureCategory = "\(failure)"
+            lastUserMessage = failure.userMessage
             return false
         }
     }

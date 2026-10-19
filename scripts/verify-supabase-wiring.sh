@@ -1,42 +1,43 @@
 #!/bin/bash
-# Phase 13C.1 — verifies the Supabase secret-injection wiring in the REAL
-# project files follows the proven AdMob pattern exactly:
-#   Rork secret (SUPABASE_URL / SUPABASE_ANON_KEY)
-#     → differently-named build setting (SUPABASE_URL_VALUE / SUPABASE_ANON_KEY_VALUE)
-#       → AppInfo.plist expansion ($(SUPABASE_URL_VALUE) / $(SUPABASE_ANON_KEY_VALUE))
+# Phase 13C.2 — verifies the Supabase configuration reaches the native app
+# through the Rork-supported PUBLIC surface (generated Config.swift), and that
+# the old server-side-secret pbxproj/plist workaround is fully removed:
+#   Rork public variable (EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY)
+#     → generated Config.swift
+#       → SupabaseClientProvider (Config.EXPO_PUBLIC_* reads)
 # Run from the project root: scripts/verify-supabase-wiring.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 PBX="ios-gamescene-gridiron/GameSceneGridiron.xcodeproj/project.pbxproj"
 PLIST="ios-gamescene-gridiron/AppInfo.plist"
+CONFIG="ios-gamescene-gridiron/GameSceneGridiron/Config.swift"
+PROVIDER="ios-gamescene-gridiron/GameSceneGridiron/Services/Auth/SupabaseClientProvider.swift"
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
-# AdMob reference pattern (proven working in the live pipeline)
+# Generated Config.swift exposes the public Supabase variables
+grep -q 'EXPO_PUBLIC_SUPABASE_URL' "$CONFIG" \
+  || fail "Config.swift does not expose EXPO_PUBLIC_SUPABASE_URL"
+grep -q 'EXPO_PUBLIC_SUPABASE_ANON_KEY' "$CONFIG" \
+  || fail "Config.swift does not expose EXPO_PUBLIC_SUPABASE_ANON_KEY"
+
+# The provider reads ONLY the public Config surface
+grep -q 'Config.EXPO_PUBLIC_SUPABASE_URL' "$PROVIDER" \
+  || fail "SupabaseClientProvider does not read EXPO_PUBLIC_SUPABASE_URL from Config"
+grep -q 'Config.EXPO_PUBLIC_SUPABASE_ANON_KEY' "$PROVIDER" \
+  || fail "SupabaseClientProvider does not read EXPO_PUBLIC_SUPABASE_ANON_KEY from Config"
+grep -q 'plistValue(forKey: "SUPABASE' "$PROVIDER" \
+  && fail "SupabaseClientProvider still reads server-side secrets from Info.plist"
+
+# The broken pbxproj/plist workaround is fully removed
+grep -q 'SUPABASE' "$PBX" \
+  && fail "project.pbxproj still contains Supabase build settings"
+grep -q '<key>SUPABASE_\|>$(SUPABASE_' "$PLIST" \
+  && fail "AppInfo.plist still contains Supabase keys or expansions"
+
+# The working AdMob configuration is untouched
 grep -q 'ADMOB_APP_ID_VALUE = "$(ADMOB_IOS_APP_ID)"' "$PBX" \
   || fail "AdMob reference pattern missing from pbxproj"
 
-# Supabase intermediary build settings — both app-target configs (Debug + Release)
-[ "$(grep -c 'SUPABASE_URL_VALUE = "$(SUPABASE_URL)"' "$PBX")" -eq 2 ] \
-  || fail "SUPABASE_URL_VALUE intermediary not declared in both app-target configs"
-[ "$(grep -c 'SUPABASE_ANON_KEY_VALUE = "$(SUPABASE_ANON_KEY)"' "$PBX")" -eq 2 ] \
-  || fail "SUPABASE_ANON_KEY_VALUE intermediary not declared in both app-target configs"
-
-# No self-referencing settings left over from the previous attempt
-grep -q 'SUPABASE_URL = "$(SUPABASE_URL)"' "$PBX" \
-  && fail "self-referencing SUPABASE_URL build setting still present"
-grep -q 'SUPABASE_ANON_KEY = "$(SUPABASE_ANON_KEY)"' "$PBX" \
-  && fail "self-referencing SUPABASE_ANON_KEY build setting still present"
-
-# Plist expands the intermediary build settings only — never the raw secrets
-grep -q '<string>$(SUPABASE_URL_VALUE)</string>' "$PLIST" \
-  || fail "AppInfo.plist does not expand SUPABASE_URL_VALUE"
-grep -q '<string>$(SUPABASE_ANON_KEY_VALUE)</string>' "$PLIST" \
-  || fail "AppInfo.plist does not expand SUPABASE_ANON_KEY_VALUE"
-grep -q '<string>$(SUPABASE_URL)</string>' "$PLIST" \
-  && fail "AppInfo.plist still references the raw SUPABASE_URL secret"
-grep -q '<string>$(SUPABASE_ANON_KEY)</string>' "$PLIST" \
-  && fail "AppInfo.plist still references the raw SUPABASE_ANON_KEY secret"
-
-echo "OK — Supabase wiring matches the AdMob pattern"
+echo "OK — Supabase uses the Rork public Config.swift path; AdMob untouched"

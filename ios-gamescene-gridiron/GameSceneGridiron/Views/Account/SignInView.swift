@@ -28,12 +28,12 @@ struct SignInView: View {
                     } else if let message = auth.lastUserMessage {
                         Text(message)
                             .font(Theme.typewriter(11, relativeTo: .caption))
-                            .foregroundStyle(Theme.paperInk)
+                            .foregroundStyle(Theme.paper)
                             .multilineTextAlignment(.center)
                             .padding(.vertical, 10)
                             .padding(.horizontal, 14)
                             .frame(maxWidth: .infinity)
-                            .background(Color.black.opacity(0.55), in: .rect(cornerRadius: 6))
+                            .background(Color.black.opacity(0.6), in: .rect(cornerRadius: 6))
                             .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.gold.opacity(0.3), lineWidth: 1) }
                     }
                 }

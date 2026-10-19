@@ -419,8 +419,6 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AppInfo.plist;
 				ADMOB_APP_ID_VALUE = "ca-app-pub-3940256099942544~3347511713";
-				SUPABASE_URL_VALUE = "$(SUPABASE_URL)";
-				SUPABASE_ANON_KEY_VALUE = "$(SUPABASE_ANON_KEY)";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -456,8 +454,6 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AppInfo.plist;
 				ADMOB_APP_ID_VALUE = "$(ADMOB_IOS_APP_ID)";
-				SUPABASE_URL_VALUE = "$(SUPABASE_URL)";
-				SUPABASE_ANON_KEY_VALUE = "$(SUPABASE_ANON_KEY)";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
