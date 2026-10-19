@@ -35,14 +35,20 @@ struct DevMenuView: View {
                             }
                         }
                         devSection("ADMOB (READ-ONLY INDICATORS)") {
-                            adMobIndicator("AdMob Initialized", value: adMob.isConfigured)
-                            adMobIndicator("Can Request Ads", value: adMob.canRequestAds)
-                            adMobIndicator("Banner Ready", value: adManager.isBannerAdLoaded)
-                            adMobIndicator("Interstitial Ready", value: adMob.isInterstitialReady)
-                            adMobIndicator("Rewarded Ready", value: adMob.isRewardedReady)
-                            adMobIndicator("Remove Ads Active", value: PurchaseManager.shared.hasAdFree)
+                            statusIndicator("AdMob Initialized", value: adMob.isConfigured)
+                            statusIndicator("Can Request Ads", value: adMob.canRequestAds)
+                            statusIndicator("Banner Ready", value: adManager.isBannerAdLoaded)
+                            statusIndicator("Interstitial Ready", value: adMob.isInterstitialReady)
+                            statusIndicator("Rewarded Ready", value: adMob.isRewardedReady)
+                            statusIndicator("Remove Ads Active", value: PurchaseManager.shared.hasAdFree)
                             devButton("PRELOAD TEST INTERSTITIAL") { AdMobService.shared.preloadInterstitial(); done("Interstitial preload requested") }
                             devButton("PRELOAD TEST REWARDED") { AdMobService.shared.preloadRewarded(); done("Rewarded preload requested") }
+                        }
+                        devSection("SUPABASE (READ-ONLY INDICATORS)") {
+                            // Injection diagnostics only — never the values.
+                            statusIndicator("Supabase URL Injected", value: SupabaseClientProvider.plistValue(forKey: "SUPABASE_URL") != nil)
+                            statusIndicator("Supabase Anon Key Injected", value: SupabaseClientProvider.plistValue(forKey: "SUPABASE_ANON_KEY") != nil)
+                            statusIndicator("Supabase Client Ready", value: SupabaseClientProvider.shared.isConfigured)
                         }
                         devSection("DIFFICULTY") {
                             ForEach(DifficultyLevel.allCases, id: \.self) { level in
@@ -112,9 +118,9 @@ struct DevMenuView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: AdMob indicators
+    // MARK: Status indicators
 
-    private func adMobIndicator(_ title: String, value: Bool) -> some View {
+    private func statusIndicator(_ title: String, value: Bool) -> some View {
         HStack(spacing: 10) {
             Image(systemName: value ? "checkmark.circle.fill" : "circle")
                 .foregroundStyle(value ? Theme.gold : Theme.paperInk.opacity(0.35))

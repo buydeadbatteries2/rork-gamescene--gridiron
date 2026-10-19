@@ -77,6 +77,19 @@ struct Phase13BTests {
         }
     }
 
+    // MARK: Configuration guard
+
+    @Test func configurationGuardRejectsBlankAndPlaceholderValues() {
+        #expect(SupabaseClientProvider.makeClient(url: "", anonKey: "key") == nil)
+        #expect(SupabaseClientProvider.makeClient(url: "   ", anonKey: "key") == nil)
+        #expect(SupabaseClientProvider.makeClient(url: "ftp://example.com", anonKey: "key") == nil)
+        #expect(SupabaseClientProvider.makeClient(url: "https://example.supabase.co", anonKey: "") == nil)
+        #expect(SupabaseClientProvider.makeClient(url: "https://example.supabase.co", anonKey: "key") != nil)
+        // Outside a real app bundle there is nothing to read — never configured.
+        #expect(SupabaseClientProvider.plistValue(forKey: "SUPABASE_URL") == nil)
+        #expect(SupabaseClientProvider.plistValue(forKey: "SUPABASE_ANON_KEY") == nil)
+    }
+
     // MARK: Helpers
 
     private static func makeService(

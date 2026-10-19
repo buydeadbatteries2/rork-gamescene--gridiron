@@ -60,9 +60,11 @@
 	<key>NSUserTrackingUsageDescription</key>
 	<string>Your data is used to deliver ads that are more relevant to you. The game works fully without tracking.</string>
 	<!-- Supabase project configuration: expanded at build time from the Rork
-	     secret variables. The anon key is the public, RLS-protected key — the
-	     service-role key must NEVER appear anywhere in the client. Empty or
-	     unexpanded values mean "no Supabase": the app runs in guest/local mode. -->
+	     secret variables SUPABASE_URL / SUPABASE_ANON_KEY via the same-named
+	     build settings declared in project.pbxproj (the proven AdMob injection
+	     path). The anon key is the public, RLS-protected key — the service-role
+	     key must NEVER appear anywhere in the client. Empty or unexpanded values
+	     mean "no Supabase": the app runs in guest/local mode. -->
 	<key>SUPABASE_URL</key>
 	<string>$(SUPABASE_URL)</string>
 	<key>SUPABASE_ANON_KEY</key>

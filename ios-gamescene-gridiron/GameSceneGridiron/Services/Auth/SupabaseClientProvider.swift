@@ -45,11 +45,13 @@ final class SupabaseClientProvider {
     }
 
     nonisolated static func makeClient(url: String?, anonKey: String?) -> SupabaseClient? {
-        guard let url, let anonKey,
-              let validURL = URL(string: url),
+        let cleanURL = url?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let cleanKey = anonKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !cleanURL.isEmpty, !cleanKey.isEmpty,
+              let validURL = URL(string: cleanURL),
               validURL.scheme == "https" || validURL.scheme == "http",
               validURL.host != nil else { return nil }
-        return SupabaseClient(supabaseURL: validURL, supabaseKey: anonKey)
+        return SupabaseClient(supabaseURL: validURL, supabaseKey: cleanKey)
     }
 
     // MARK: Password-reset deep link
