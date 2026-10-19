@@ -47,9 +47,12 @@ final class SupabaseClientProvider {
     nonisolated static func makeClient(url: String?, anonKey: String?) -> SupabaseClient? {
         let cleanURL = url?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let cleanKey = anonKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // Unresolved build-setting placeholders can only reach here if the
+        // injection failed — treat them exactly like absent configuration.
         guard !cleanURL.isEmpty, !cleanKey.isEmpty,
+              !cleanURL.contains("$("), !cleanKey.contains("$("),
               let validURL = URL(string: cleanURL),
-              validURL.scheme == "https" || validURL.scheme == "http",
+              validURL.scheme == "https",
               validURL.host != nil else { return nil }
         return SupabaseClient(supabaseURL: validURL, supabaseKey: cleanKey)
     }

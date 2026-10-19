@@ -36,7 +36,11 @@ struct CreateAccountView: View {
                         previewCard
                         submitButton
                         signInSecondary
-                        if let message = auth.lastUserMessage {
+                        if !auth.isSupabaseConfigured {
+                            // No secrets in this build — legible status card,
+                            // shown up front. Vanishes entirely when configured.
+                            AccountUnavailableCard(message: AuthService.unavailableNotice)
+                        } else if let message = auth.lastUserMessage {
                             messageBanner(message)
                         }
                     }
@@ -297,18 +301,19 @@ struct CreateAccountView: View {
 // MARK: - Shared auth field styling
 
 extension View {
-    /// A typewriter-styled input slot — a typed line on the desk paper.
+    /// A typewriter-styled input slot — a darkened slot on the desk paper so
+    /// typed text and placeholders stay high-contrast (parchment on ink).
     func authFieldStyle(error: String?) -> some View {
         self
             .font(Theme.typewriter(14, relativeTo: .body))
-            .foregroundStyle(Theme.paperInk)
+            .foregroundStyle(Theme.paper)
             .textInputAutocapitalization(.never)
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, minHeight: 44)
-            .background(Color.black.opacity(0.28), in: .rect(cornerRadius: 6))
+            .background(Color.black.opacity(0.52), in: .rect(cornerRadius: 6))
             .overlay {
                 RoundedRectangle(cornerRadius: 6).strokeBorder(
-                    error != nil ? Theme.paperInk.opacity(0.6) : Theme.paperInk.opacity(0.28),
+                    error != nil ? Theme.gold.opacity(0.75) : Theme.paper.opacity(0.38),
                     lineWidth: 1.2
                 )
             }

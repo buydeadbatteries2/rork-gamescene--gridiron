@@ -21,7 +21,11 @@ struct SignInView: View {
                     forgotPasswordButton
                     submitButton
                     createAccountSecondary
-                    if let message = auth.lastUserMessage {
+                    if !auth.isSupabaseConfigured {
+                        // No secrets in this build — legible status card,
+                        // shown up front. Vanishes entirely when configured.
+                        AccountUnavailableCard(message: AuthService.unavailableNotice)
+                    } else if let message = auth.lastUserMessage {
                         Text(message)
                             .font(Theme.typewriter(11, relativeTo: .caption))
                             .foregroundStyle(Theme.paperInk)
@@ -29,7 +33,7 @@ struct SignInView: View {
                             .padding(.vertical, 10)
                             .padding(.horizontal, 14)
                             .frame(maxWidth: .infinity)
-                            .background(Color.black.opacity(0.35), in: .rect(cornerRadius: 6))
+                            .background(Color.black.opacity(0.55), in: .rect(cornerRadius: 6))
                             .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.gold.opacity(0.3), lineWidth: 1) }
                     }
                 }
@@ -121,9 +125,9 @@ struct SignInView: View {
             Text("CREATE ACCOUNT")
                 .font(.system(size: 12, weight: .heavy).width(.condensed))
                 .tracking(1.6)
-                .foregroundStyle(Theme.paperInk)
+                .foregroundStyle(Theme.goldLight)
                 .frame(maxWidth: .infinity, minHeight: 44)
-                .overlay { Capsule().strokeBorder(Theme.paperInk.opacity(0.4), lineWidth: 1.2) }
+                .overlay { Capsule().strokeBorder(Theme.gold.opacity(0.4), lineWidth: 1.2) }
                 .contentShape(.capsule)
         }
         .buttonStyle(PressableButtonStyle(playsPressSound: true))

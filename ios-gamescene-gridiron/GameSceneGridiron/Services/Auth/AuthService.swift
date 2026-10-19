@@ -30,6 +30,21 @@ final class AuthService {
     /// no session exists yet, so the UI shows CHECK YOUR EMAIL. The player
     /// signs in after confirming; nothing is authenticated until then.
     private(set) var didSendConfirmationEmail = false
+    /// The guarded-out-of-build notices (no Supabase secrets in this build).
+    /// One source of truth — the UI renders these as the legible
+    /// ONLINE ACCOUNT UNAVAILABLE status card instead of a plain banner.
+    nonisolated static let unavailableNotice = "Accounts aren't available in this build — you can keep playing solo."
+    nonisolated static let unavailableShortNotice = "Accounts aren't available in this build."
+    /// True while the current message is the unavailable notice.
+    var isShowingUnavailableNotice: Bool {
+        lastUserMessage == Self.unavailableNotice || lastUserMessage == Self.unavailableShortNotice
+    }
+
+    /// Pure message classifier — lets views and tests distinguish the
+    /// configuration guard from ordinary sanitized status/error copy.
+    nonisolated static func isUnavailableNoticeMessage(_ message: String?) -> Bool {
+        message == unavailableNotice || message == unavailableShortNotice
+    }
     /// True when the reset deep link established a confirm-session — the UI
     /// should present the new-password form (dismissable by the form itself).
     var isAwaitingNewPassword = false
@@ -136,7 +151,7 @@ final class AuthService {
             return false
         }
         guard let authClient, let profiles else {
-            lastUserMessage = "Accounts aren't available in this build — you can keep playing solo."
+            lastUserMessage = Self.unavailableNotice
             return false
         }
         isWorking = true
@@ -196,7 +211,7 @@ final class AuthService {
     func signIn(email: String, password: String) async -> Bool {
         lastUserMessage = nil
         guard let authClient, let profiles else {
-            lastUserMessage = "Accounts aren't available in this build — you can keep playing solo."
+            lastUserMessage = Self.unavailableNotice
             return false
         }
         guard AccountValidator.isValidEmail(email), !password.isEmpty else {
@@ -228,7 +243,7 @@ final class AuthService {
     func sendPasswordReset(email: String) async -> Bool {
         lastUserMessage = nil
         guard let authClient else {
-            lastUserMessage = "Accounts aren't available in this build."
+            lastUserMessage = Self.unavailableShortNotice
             return false
         }
         guard AccountValidator.isValidEmail(email) else {
@@ -264,7 +279,7 @@ final class AuthService {
     func updatePassword(_ newPassword: String, confirm: String) async -> Bool {
         lastUserMessage = nil
         guard let authClient else {
-            lastUserMessage = "Accounts aren't available in this build."
+            lastUserMessage = Self.unavailableShortNotice
             return false
         }
         guard newPassword.count >= 8, newPassword == confirm else {
