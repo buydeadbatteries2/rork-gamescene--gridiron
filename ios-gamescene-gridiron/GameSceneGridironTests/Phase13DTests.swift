@@ -2,12 +2,15 @@ import Foundation
 import Testing
 @testable import GameSceneGridiron
 
-// MARK: - Phase 13D tests — trigger-driven profile creation flow
+// MARK: - Phase 13D/13E tests — trigger-driven profile creation flow
 //
-// With Confirm Email enabled, Supabase signup returns a user but NO session —
-// the client cannot insert its own profile (RLS requires auth.uid() = id).
-// The auth.users trigger `public.handle_new_user` creates the profile from
-// signup user metadata instead. These tests pin the new architecture.
+// The auth.users trigger `public.handle_new_user` remains the authoritative
+// initial profile creator (Phase 13D). With Confirm Email DISABLED (Phase
+// 13E), a successful signup carries an active session: the profile is fetched
+// by the authenticated UUID (bounded backoff for a short trigger delay), the
+// player is signed in immediately, and RevenueCat identifies with the Supabase
+// UUID. A nil-session signup is handled defensively as a generic recoverable
+// error — there is no CHECK YOUR EMAIL flow anymore.
 
 // Schema trigger-section assertions run against SchemaFixture.sql (the
 // byte-identical snapshot of supabase/schema.sql — regenerated via
@@ -110,9 +113,9 @@ struct Phase13DSchemaTests {
     }
 }
 
-// Swift-side flow tests for the new signup architecture.
+// Swift-side flow tests for the immediate-session signup architecture.
 @MainActor
-@Suite("Phase 13D — signup metadata & client-side flow")
+@Suite("Phase 13E — immediate-session signup & client-side flow")
 struct Phase13DFlowTests {
 
     private func makeService(
@@ -153,8 +156,10 @@ struct Phase13DFlowTests {
         #expect(identity.lastName == "Hudson")
     }
 
-    // 1 + 2 — confirmation-pending signup is SUCCESS with zero client writes.
-    @Test func nilSessionSignupIsSuccessWithoutClientProfileInsert() async {
+    // Defensive: a nil-session signup (should never happen with Confirm Email
+    // OFF) is a generic recoverable failure — never CHECK YOUR EMAIL, zero
+    // client writes, no RevenueCat migration, never half-authenticated.
+    @Test func nilSessionSignupIsADefensiveRecoverableFailure() async {
         var revenueCatCalls: [UUID] = []
         let (service, authClient, profiles) = makeService(onAuthenticated: { uuid in
             revenueCatCalls.append(uuid)
@@ -165,10 +170,9 @@ struct Phase13DFlowTests {
 
         let submitted = await service.createAccount(makeDraft())
 
-        // SUCCESS — never converted into a generic failure.
-        #expect(submitted)
-        #expect(service.didSendConfirmationEmail)
-        #expect(service.lastUserMessage?.contains("CONFIRM") == true)
+        #expect(!submitted)
+        #expect(service.lastUserMessage?.uppercased().contains("CONFIRM") != true)
+        #expect(service.lastUserMessage?.uppercased().contains("CHECK YOUR EMAIL") != true)
         // The client must NOT attempt the initial profile insert (no session).
         #expect(profiles.writeCount == 0)
         #expect(profiles.probedUsernames == ["GridironKing"])
@@ -177,8 +181,35 @@ struct Phase13DFlowTests {
         #expect(service.state == .guest)
     }
 
-    // With a session (confirmation disabled): trigger-created profile is
-    // fetched — no duplicate insert on top of the trigger's work.
+    // 5 — a short trigger-timing delay is absorbed by the bounded backoff:
+    // the first fetch misses, a retry finds the trigger-created row.
+    @Test func shortProfileDelayIsAbsorbedByBoundedRetry() async {
+        var revenueCatCalls: [UUID] = []
+        let (service, authClient, profiles) = makeService(onAuthenticated: { uuid in
+            revenueCatCalls.append(uuid)
+        })
+        service.configureProfileFetchRetry(count: 3, delayMs: 1)
+        await service.restoreSession()
+        let userID = UUID()
+        let triggerCreated = UserProfile(
+            authUserID: userID, username: "GridironKing", firstName: "Julius", lastName: "Hudson"
+        )
+        profiles.stored[userID] = triggerCreated
+        profiles.nilFetchesRemaining = 2 // first fetch misses, attempt 3 finds it
+        authClient.signUpResult = .success(AuthSignUpOutcome(userID: userID, didCreateSession: true))
+
+        let submitted = await service.createAccount(makeDraft())
+
+        // Immediate success — the delay never reached the player.
+        #expect(submitted)
+        #expect(profiles.writeCount == 0) // trigger owns creation — no client insert
+        #expect(service.state == .authenticated(triggerCreated))
+        // RevenueCat identifies exactly once, with the stable Supabase UUID.
+        #expect(revenueCatCalls == [userID])
+    }
+
+    // 1 + 4 + 6 — normal path: the session is active, the trigger-created
+    // profile is fetched by the authenticated UUID, no duplicate insert.
     @Test func immediateSessionSignupFetchesTriggerProfileWithoutDuplicateWrite() async {
         var revenueCatCalls: [UUID] = []
         let (service, authClient, profiles) = makeService(onAuthenticated: { uuid in
@@ -197,13 +228,18 @@ struct Phase13DFlowTests {
         #expect(submitted)
         #expect(profiles.writeCount == 0) // trigger owns creation — no client insert
         #expect(service.state == .authenticated(triggerCreated))
+        // No confirmation email copy anywhere in the success flow.
+        #expect(service.lastUserMessage?.uppercased().contains("CHECK YOUR EMAIL") != true)
+        #expect(service.lastUserMessage?.uppercased().contains("VERIFICATION") != true)
         // RevenueCat identifies exactly once, with the stable Supabase UUID.
         #expect(revenueCatCalls == [userID])
     }
 
-    // 10 — fallback: trigger row unexpectedly missing → recovery, not a crash.
+    // 10 — fallback: trigger row unexpectedly missing after the bounded
+    // retries → single idempotent recovery insert, not a crash.
     @Test func missingTriggerRowFallsBackToRecoveryInsert() async {
         let (service, authClient, profiles) = makeService()
+        service.configureProfileFetchRetry(count: 0, delayMs: 1) // keep the test instant
         await service.restoreSession()
         let userID = UUID()
         authClient.signUpResult = .success(AuthSignUpOutcome(userID: userID, didCreateSession: true))
@@ -234,7 +270,22 @@ struct Phase13DFlowTests {
         #expect(AuthErrorMapper.failure(for: marker) == .usernameTaken)
     }
 
-    // 8 — 429 reads as a wait message, screen never permanently locked.
+    // 8 — an already-registered email maps to readable sign-in guidance
+    // (with Confirm Email OFF, Supabase returns "User already registered").
+    @Test func existingEmailMapsToReadableSignInGuidance() {
+        let alreadyRegistered = NSError(
+            domain: "GoTrue", code: 422,
+            userInfo: [NSLocalizedDescriptionKey: "User already registered"]
+        )
+        let failure = AuthErrorMapper.failure(for: alreadyRegistered)
+        #expect(failure == .emailAlreadyRegistered)
+        #expect(failure.userMessage.contains("Try signing in instead"))
+        #expect(failure.userMessage.contains("ALREADY"))
+        // The old wording ("user already …" → usernameTaken) must never win.
+        #expect(failure != .usernameTaken)
+    }
+
+    // 9 — 429 reads as a wait message, screen never permanently locked.
     @Test func rateLimitProducesReadableWaitMessage() {
         let limited = NSError(
             domain: "GoTrue", code: 429,
@@ -247,17 +298,24 @@ struct Phase13DFlowTests {
         #expect(AuthFailure.profileCreationFailed.userMessage.contains("player file"))
     }
 
-    // Pre-flight probe failure never blocks signup.
+    // Pre-flight probe failure never blocks signup (the trigger stays the
+    // authority; auth is still attempted).
     @Test func usernameProbeFailureDoesNotBlockSignup() async {
         let (service, authClient, profiles) = makeService()
+        service.configureProfileFetchRetry(count: 0, delayMs: 1)
         await service.restoreSession()
         profiles.usernameProbeError = URLError(.notConnectedToInternet)
-        authClient.signUpResult = .success(AuthSignUpOutcome(userID: UUID(), didCreateSession: false))
+        let userID = UUID()
+        profiles.stored[userID] = UserProfile(
+            authUserID: userID, username: "GridironKing", firstName: "Julius", lastName: "Hudson"
+        )
+        authClient.signUpResult = .success(AuthSignUpOutcome(userID: userID, didCreateSession: true))
 
         let submitted = await service.createAccount(makeDraft())
 
-        #expect(submitted) // signup still went through
-        #expect(profiles.writeCount == 0)
+        #expect(submitted) // signup still went through to auth
+        #expect(authClient.signedUpEmails.count == 1)
+        #expect(profiles.writeCount == 0) // trigger-created row was fetched
     }
 
     // Taken-username pre-flight surfaces the readable message before auth.

@@ -13,6 +13,9 @@ import Observation
 // - Signup is stepwise-safe: if Auth succeeds but profile creation fails, the
 //   state becomes `.needsProfileRecovery` and the profile creation can be
 //   retried (idempotent upsert — no duplicate accounts/profiles).
+// - Confirm Email is DISABLED: a successful signup carries an active session,
+//   and the player is signed in immediately. A nil-session signup is handled
+//   defensively as a generic recoverable error — no confirmation-email flow.
 // - Passwords exist only inside the request payload. They are never stored,
 //   logged, or encoded into profiles.
 // - After authentication, RevenueCat migrates to the Supabase Auth UUID as
@@ -26,10 +29,6 @@ final class AuthService {
     private(set) var isWorking = false
     /// Last sanitized, user-facing error message (never raw SDK text).
     private(set) var lastUserMessage: String?
-    /// True when signup succeeded but the project requires email confirmation:
-    /// no session exists yet, so the UI shows CHECK YOUR EMAIL. The player
-    /// signs in after confirming; nothing is authenticated until then.
-    private(set) var didSendConfirmationEmail = false
     /// DEBUG diagnostic: the sanitized failure category of the last auth
     /// error (shown in the DEBUG message banner, never in RELEASE copy).
     private(set) var lastFailureCategory: String?
@@ -62,6 +61,21 @@ final class AuthService {
     var onSignedOut: (() async -> Void)?
 
     private var defaults: UserDefaults
+
+    /// Bounded backoff for the post-signup profile fetch: the trigger creates
+    /// the row in the same transaction as the auth user, so it is normally
+    /// visible immediately — the retries only absorb a short timing delay.
+    /// Injectable so tests stay instant.
+    nonisolated static let defaultProfileFetchRetryCount = 2
+    nonisolated static let defaultProfileFetchRetryDelayMs = 400
+    private(set) var profileFetchRetryCount = AuthService.defaultProfileFetchRetryCount
+    private(set) var profileFetchRetryDelayMs = AuthService.defaultProfileFetchRetryDelayMs
+
+    /// Test seam: shrink/flatten the bounded profile-fetch backoff.
+    func configureProfileFetchRetry(count: Int, delayMs: Int) {
+        profileFetchRetryCount = count
+        profileFetchRetryDelayMs = delayMs
+    }
 
     static let guestFlagKey = "gamescene.gridiron.isGuest"
 
@@ -147,7 +161,6 @@ final class AuthService {
     @discardableResult
     func createAccount(_ draft: SignUpDraft) async -> Bool {
         lastUserMessage = nil
-        didSendConfirmationEmail = false
         let errors = AccountValidator.validate(draft)
         guard errors.isEmpty else {
             lastUserMessage = "Check the highlighted fields."
@@ -186,25 +199,35 @@ final class AuthService {
                 )
             )
             guard outcome.didCreateSession else {
-                // EMAIL CONFIRMATION REQUIRED = SUCCESS. The project mails a
-                // verification link and no session exists yet — the auth.users
-                // trigger creates the profile server-side from the signup
-                // metadata. NO client-side insert here (RLS requires a session
-                // this user doesn't have), and nothing is authenticated:
-                // the UI shows CHECK YOUR EMAIL and the player signs in after
-                // confirming.
-                didSendConfirmationEmail = true
-                lastUserMessage = "CONFIRM YOUR EMAIL TO ACTIVATE ONLINE FEATURES"
+                // DEFENSIVE ONLY: Confirm Email is disabled, so a successful
+                // signup always carries an active session. If one is ever
+                // missing (project misconfiguration, server anomaly), show a
+                // generic recoverable error — NEVER the retired
+                // CHECK YOUR EMAIL flow, and never a half-authenticated state.
+                lastUserMessage = "YOUR ACCOUNT COULDN'T BE OPENED JUST NOW — TRY AGAIN IN A MOMENT."
+                return false
+            }
+            // Immediate-session signup: the auth.users trigger already created
+            // the profile. Fetch it by the session's UUID, tolerating a short
+            // database timing delay with a small bounded backoff — never an
+            // unbounded spin.
+            var profile = try await profiles.fetchProfile(userID: outcome.userID)
+            if profile == nil {
+                for _ in 0..<profileFetchRetryCount {
+                    try await Task.sleep(for: .milliseconds(profileFetchRetryDelayMs))
+                    if let fetched = try await profiles.fetchProfile(userID: outcome.userID) {
+                        profile = fetched
+                        break
+                    }
+                }
+            }
+            if let profile {
+                await establishAuthenticatedSession(profile)
                 return true
             }
-            // Confirmation disabled → an immediate session exists and the
-            // trigger already created the profile. Fetch it; fall back to the
-            // client-side recovery insert ONLY if the row is unexpectedly
-            // missing (idempotent, own-row RLS still permits it).
-            if let existing = try await profiles.fetchProfile(userID: outcome.userID) {
-                await establishAuthenticatedSession(existing)
-                return true
-            }
+            // Still missing after the bounded retries (e.g. the trigger was
+            // not yet applied): ONE idempotent recovery insert, then the
+            // existing recovery path if that also fails. Never a duplicate.
             let profileDraft = Self.draftProfile(
                 userID: outcome.userID,
                 username: draft.username,
@@ -366,7 +389,6 @@ final class AuthService {
 
     private func establishAuthenticatedSession(_ profile: UserProfile) async {
         defaults.removeObject(forKey: Self.guestFlagKey)
-        didSendConfirmationEmail = false
         state = .authenticated(profile)
         await onAuthenticated?(profile.authUserID)
     }

@@ -146,15 +146,18 @@ create trigger profiles_guard_competitive_stats_insert
     for each row execute function public.guard_competitive_stats_insert();
 
 -- ===========================================================================
--- 4. AUTH-USER PROFILE CREATION (Phase 13D) — the signup trigger.
---    When the project has "Confirm email" enabled, Supabase signup returns
---    a user but NO authenticated session, so the CLIENT CANNOT insert its
---    own profile (RLS requires auth.uid() = id). The initial profile is
---    therefore created by trusted database logic when the auth user is
---    created: the client passes username / first_name / last_name as signup
---    user metadata (never passwords or sensitive data — email/password are
---    handled by Supabase Auth itself), and this function turns them into a
---    profile row. The existing derived-fields trigger (section 2) then
+-- 4. AUTH-USER PROFILE CREATION (Phase 13D, flow updated Phase 13E) — the
+--    signup trigger. THE AUTHORITATIVE INITIAL PROFILE CREATION PATH: the
+--    client never inserts the initial profile. The client passes username /
+--    first_name / last_name as signup user metadata (never passwords or
+--    sensitive data — email/password are handled by Supabase Auth itself),
+--    and this function turns them into a profile row when the auth user is
+--    created. With "Confirm email" DISABLED (Phase 13E) the signup returns
+--    an active session and the app signs the player in immediately, reading
+--    the trigger-created row by the authenticated UUID; if email
+--    confirmation were ever re-enabled there would be NO session at signup
+--    and the client could not insert its own profile anyway (RLS requires
+--    auth.uid() = id) — which is exactly why the trigger owns creation. The existing derived-fields trigger (section 2) then
 --    derives username_normalized + football_display_name + updated_at.
 --    COMPETITIVE STATS ARE NEVER SET HERE — they keep their zero defaults
 --    and remain server-authoritative (sections 1 + 3).

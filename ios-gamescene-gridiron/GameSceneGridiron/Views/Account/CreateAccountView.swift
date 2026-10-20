@@ -13,7 +13,9 @@ struct CreateAccountView: View {
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var fieldErrors = SignUpFieldErrors()
-    @State private var didSubmitSuccessfully = false
+    /// Immediate signup success — the player file is open and the player is
+    /// signed in (Confirm Email is disabled; no verification email exists).
+    @State private var didCreatePlayerFile = false
 
     /// The derived "J. Hudson" preview — never typed by the user.
     private var footballDisplayNamePreview: String {
@@ -25,11 +27,10 @@ struct CreateAccountView: View {
             DeskBackground()
             ScrollView {
                 VStack(spacing: 16) {
-                    if auth.didSendConfirmationEmail {
-                        // Email confirmation required: no session yet — show
-                        // CHECK YOUR EMAIL and let the player return to the
-                        // app. They sign in after confirming.
-                        confirmationBoard
+                    if didCreatePlayerFile {
+                        // Success is immediate: the session is active and the
+                        // player file is open — no email step in between.
+                        successBoard
                     } else {
                         header
                         formCard
@@ -53,29 +54,28 @@ struct CreateAccountView: View {
         }
         .preferredColorScheme(.dark)
         .navigationBarTitleDisplayMode(.inline)
-        .onDisappear {
-            if didSubmitSuccessfully { dismiss() }
-        }
     }
 
-    /// CHECK YOUR EMAIL — the signup landed but the project requires email
-    /// confirmation before a session exists.
-    private var confirmationBoard: some View {
+    /// PLAYER FILE CREATED — the post-signup success stamp. The player is
+    /// already signed in; ENTER THE GAME closes the sheet into the
+    /// authenticated home state (RevenueCat identification already happened
+    /// inside AuthService).
+    private var successBoard: some View {
         VStack(spacing: 14) {
-            Image(systemName: "envelope.open.fill")
+            Image(systemName: "folder.badge.person.crop")
                 .font(.system(size: 26, weight: .bold))
                 .foregroundStyle(Theme.goldGradient)
                 .frame(width: 66, height: 66)
                 .background(Color.black.opacity(0.5), in: .circle)
                 .overlay { Circle().strokeBorder(Theme.gold.opacity(0.45), lineWidth: 1.2) }
-            Text("CHECK YOUR EMAIL")
+            Text("PLAYER FILE CREATED")
                 .font(.system(size: 24, weight: .black).width(.compressed))
                 .tracking(1.8)
                 .foregroundStyle(Theme.goldGradient)
-            Text("WE SENT YOU A VERIFICATION LINK. CONFIRM IT, THEN SIGN IN TO OPEN YOUR PLAYER FILE.")
+            Text("YOU ARE SIGNED IN — YOUR PLAYER FILE IS OPEN AND READY FOR THE GRIDIRON.")
                 .font(Theme.typewriter(11, relativeTo: .caption))
                 .tracking(1)
-                .foregroundStyle(Theme.paperInk)
+                .foregroundStyle(Theme.paper)
                 .lineSpacing(3)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 8)
@@ -83,10 +83,9 @@ struct CreateAccountView: View {
             Button {
                 Haptics.pickUp()
                 AudioManager.shared.play(.buttonPress)
-                didSubmitSuccessfully = true
                 dismiss()
             } label: {
-                Text("RETURN TO THE GAME")
+                Text("ENTER THE GAME")
                     .font(.system(size: 14, weight: .heavy).width(.condensed))
                     .tracking(1.8)
                     .foregroundStyle(Theme.ink)
@@ -95,7 +94,7 @@ struct CreateAccountView: View {
                     .contentShape(.capsule)
             }
             .buttonStyle(PressableButtonStyle(playsPressSound: false))
-            .accessibilityLabel("Return to the game")
+            .accessibilityLabel("Enter the game")
         }
         .padding(.vertical, 20)
         .padding(.horizontal, 16)
@@ -235,10 +234,14 @@ struct CreateAccountView: View {
                 email: email, password: password, confirmPassword: confirmPassword
             ))
             guard fieldErrors.isEmpty else { return }
-            Task { didSubmitSuccessfully = await auth.createAccount(SignUpDraft(
-                firstName: firstName, lastName: lastName, username: username,
-                email: email, password: password, confirmPassword: confirmPassword
-            )) }
+            Task {
+                if await auth.createAccount(SignUpDraft(
+                    firstName: firstName, lastName: lastName, username: username,
+                    email: email, password: password, confirmPassword: confirmPassword
+                )) {
+                    didCreatePlayerFile = true
+                }
+            }
         } label: {
             Text(auth.isWorking ? "FILING…" : "CREATE ACCOUNT")
                 .font(.system(size: 14, weight: .heavy).width(.condensed))

@@ -6,8 +6,8 @@ import Testing
 //
 // The Home ACCOUNT entry, the Settings ACCOUNT card and the auth screens all
 // resolve through the same pieces: `AccountHomeState` (what Home shows and
-// where a tap lands) and the AuthService email-confirmation behavior
-// (CHECK YOUR EMAIL vs. immediate authentication).
+// where a tap lands) and the AuthService immediate-session signup behavior
+// (Confirm Email is disabled — signup signs the player in right away).
 @MainActor
 struct Phase13BTests {
 
@@ -43,38 +43,43 @@ struct Phase13BTests {
         #expect(home.title.contains("FINISH"))
     }
 
-    // MARK: Signup → CHECK YOUR EMAIL vs. immediate authentication
+    // MARK: Signup → immediate authentication
 
-    @Test func signupWithEmailConfirmationShowsCheckEmailWithoutAuthenticating() async {
+    @Test func signupWithImmediateSessionAuthenticatesWithoutConfirmationCopy() async {
         let (service, authClient, profiles, _) = Self.makeService()
-        await service.restoreSession()
-        authClient.signUpResult = .success(AuthSignUpOutcome(userID: UUID(), didCreateSession: false))
-
-        let submitted = await service.createAccount(Self.makeDraft())
-
-        #expect(submitted)
-        #expect(service.didSendConfirmationEmail)
-        #expect(service.lastUserMessage?.contains("CONFIRM") == true)
-        // No session exists yet — the player is NOT authenticated, and the
-        // guest state is untouched (guest play continues undisturbed).
-        #expect(service.state == .guest)
-        #expect(profiles.writeCount == 0) // NO client-side profile insert without a session — the auth.users trigger owns it
-    }
-
-    @Test func signupWithoutEmailConfirmationAuthenticatesImmediately() async {
-        let (service, authClient, _, _) = Self.makeService()
         await service.restoreSession()
         authClient.signUpResult = .success(AuthSignUpOutcome(userID: UUID(), didCreateSession: true))
 
         let submitted = await service.createAccount(Self.makeDraft())
 
         #expect(submitted)
-        #expect(!service.didSendConfirmationEmail)
+        // NO confirmation-email step: the player is signed in immediately.
+        #expect(service.lastUserMessage?.uppercased().contains("CONFIRM") != true)
+        #expect(service.lastUserMessage?.uppercased().contains("CHECK YOUR EMAIL") != true)
+        #expect(service.lastUserMessage?.uppercased().contains("VERIFICATION") != true)
         if case .authenticated(let profile) = service.state {
             #expect(profile.username == "GridironKing")
         } else {
-            Issue.record("Expected an authenticated session after signup with session")
+            Issue.record("Expected an authenticated session after immediate signup")
         }
+        _ = profiles
+    }
+
+    @Test func signupWithoutSessionIsADefensiveRecoverableFailure() async {
+        let (service, authClient, profiles, _) = Self.makeService()
+        await service.restoreSession()
+        authClient.signUpResult = .success(AuthSignUpOutcome(userID: UUID(), didCreateSession: false))
+
+        let submitted = await service.createAccount(Self.makeDraft())
+
+        // Defensive path: a nil-session signup is a generic recoverable
+        // failure — NEVER the retired CHECK YOUR EMAIL flow, never a
+        // half-authenticated state, and no client-side profile insert.
+        #expect(!submitted)
+        #expect(service.lastUserMessage?.uppercased().contains("CONFIRM") != true)
+        #expect(service.lastUserMessage?.uppercased().contains("CHECK YOUR EMAIL") != true)
+        #expect(service.state == .guest)
+        #expect(profiles.writeCount == 0)
     }
 
     // MARK: Configuration guard

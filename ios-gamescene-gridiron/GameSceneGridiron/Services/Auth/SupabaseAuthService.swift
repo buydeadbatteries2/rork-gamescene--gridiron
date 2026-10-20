@@ -6,8 +6,10 @@ import Supabase
 // The AuthService depends on this protocol, never on the Supabase SDK
 // directly — tests inject mocks, and the SDK stays swappable.
 
-/// Outcome of a signup. `didCreateSession` is false when the project requires
-/// email confirmation (the account exists but the user must confirm first).
+/// Outcome of a signup. `didCreateSession` is false only in a defensive
+/// fallback path (Confirm Email is disabled, so successful signups always
+/// carry an active session — a missing one surfaces as a generic recoverable
+/// error, never a confirmation flow).
 nonisolated struct AuthSignUpOutcome: Equatable, Sendable {
     let userID: UUID
     let didCreateSession: Bool
@@ -15,8 +17,8 @@ nonisolated struct AuthSignUpOutcome: Equatable, Sendable {
 
 /// The identity values carried through signup user metadata. The auth.users
 /// trigger (`public.handle_new_user`) turns them into the initial profile
-/// row — with Confirm Email enabled there is NO session to insert with, so
-/// metadata is the only channel. Never passwords or sensitive data.
+/// row — the authoritative creation path (no client-side initial insert).
+/// Never passwords or sensitive data.
 nonisolated struct AuthSignUpIdentity: Equatable, Sendable {
     let username: String
     let firstName: String

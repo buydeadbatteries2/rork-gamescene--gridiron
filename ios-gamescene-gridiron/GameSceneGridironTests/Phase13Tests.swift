@@ -64,11 +64,18 @@ final class MockProfileRepository: ProfileRepository, @unchecked Sendable {
     var shouldFailWrites = false
     var usernameAvailable = true
     var usernameProbeError: Error?
+    /// Simulates a short trigger-timing delay: the next N fetches return nil
+    /// (even if the row is stored), then normal lookups resume.
+    var nilFetchesRemaining = 0
     private(set) var writeCount = 0
     private(set) var probedUsernames: [String] = []
 
     func fetchProfile(userID: UUID) async throws -> UserProfile? {
-        stored[userID]
+        if nilFetchesRemaining > 0 {
+            nilFetchesRemaining -= 1
+            return nil
+        }
+        return stored[userID]
     }
 
     func ensureProfile(_ profile: UserProfile) async throws {
@@ -504,14 +511,21 @@ struct Phase13Tests {
         #expect(profiles.stored[fixedUUID] != nil)
     }
 
-    // Email-confirmation flow (spec §10/§11/§13).
-
-    @Test func signUpWithoutSessionFlagsEmailConfirmation() async {
-        let (service, authClient, _, _) = makeService()
+    // Nil-session defensive handling + friendly sign-in errors (Phase 13E):
+    // a nil-session signup is a generic recoverable failure — never the
+    // retired CHECK YOUR EMAIL flow.
+    @Test func signupWithoutSessionIsADefensiveRecoverableFailure() async {
+        let (service, authClient, profiles, _) = makeService()
         await service.restoreSession()
         authClient.signUpResult = .success(AuthSignUpOutcome(userID: UUID(), didCreateSession: false))
-        _ = await service.createAccount(makeDraft())
-        #expect(service.lastUserMessage?.contains("CONFIRM") == true)
+
+        let submitted = await service.createAccount(makeDraft())
+
+        #expect(!submitted)
+        #expect(service.lastUserMessage?.uppercased().contains("CONFIRM") != true)
+        #expect(service.lastUserMessage?.uppercased().contains("CHECK YOUR EMAIL") != true)
+        #expect(service.state == .guest)
+        #expect(profiles.writeCount == 0)
 
         // Sign-in errors map to friendly copy — never raw SDK text.
         authClient.signInResult = .failure(URLError(.cannotFindHost))

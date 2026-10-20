@@ -51,7 +51,19 @@ final class AudioManager {
 
     private let defaults: UserDefaults
     private var musicPlayer: AVAudioPlayer?
-    private var activeEffectPlayers: [AVAudioPlayer] = []
+    /// One playing one-shot effect. Reaping is TIME-based (startedAt vs the
+    /// duration read at enqueue) rather than polling `isPlaying`: on the
+    /// cloud simulator a recycled AVAudioPlayer's underlying storage can be
+    /// swapped out, making a late `isPlaying` poll raise an uncatchable
+    /// NSInvalidArgumentException. Reading `duration` right after creation
+    /// (on a healthy object) avoids that entirely.
+    private struct ActiveEffect {
+        let player: AVAudioPlayer
+        let duration: TimeInterval
+        let startedAt = Date()
+    }
+
+    private var activeEffectPlayers: [ActiveEffect] = []
     private var effectData: [SoundEffect: Data] = [:]
     private var currentTrack: MusicTrack?
     /// True while a screen wants the music bed (even if music is currently muted),
@@ -148,11 +160,12 @@ final class AudioManager {
         player.play()
         // Reap finished players, then cap the pool: rapid taps (or a burst of
         // overlapping stings) can never spawn runaway audio instances.
-        activeEffectPlayers.removeAll { !$0.isPlaying }
+        let now = Date()
+        activeEffectPlayers.removeAll { now.timeIntervalSince($0.startedAt) >= $0.duration }
         if activeEffectPlayers.count >= Self.maxSimultaneousEffects {
             activeEffectPlayers.removeFirst(activeEffectPlayers.count - Self.maxSimultaneousEffects + 1)
         }
-        activeEffectPlayers.append(player)
+        activeEffectPlayers.append(ActiveEffect(player: player, duration: player.duration))
     }
 
     // MARK: Settings
