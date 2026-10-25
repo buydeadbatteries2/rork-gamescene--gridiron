@@ -24,22 +24,23 @@ protocol ProfileRepository: Sendable {
     func isUsernameAvailable(_ username: String) async throws -> Bool
 }
 
-// MARK: Leaderboards (future)
+// MARK: Leaderboards (Phase 14)
 //
-// Reads other players through `public.public_profiles` — the safe public
-// surface (username, football display name, competitive stats only). Never
-// the private `public.profiles` table.
-
-nonisolated struct LeaderboardEntry: Sendable, Equatable {
-    let authUserID: UUID
-    let username: String
-    let footballDisplayName: String
-    let rating: Int
-}
+// Reads other players only through server functions that join
+// `public.public_profiles` — the safe public surface (username, football
+// display name, competitive stats). Never the private `public.profiles`
+// table, never real names or email. Scores are always server-computed.
+// Views never call this directly — `LeaderboardViewModel` does.
 
 protocol LeaderboardRepository: Sendable {
-    func topPlayers(limit: Int) async throws -> [LeaderboardEntry]
-    func rating(for userID: UUID) async throws -> Int?
+    /// One page of the board (server caps the page size).
+    func page(board: LeaderboardBoard, difficulty: LeaderboardDifficultyFilter, limit: Int, offset: Int) async throws -> [LeaderboardEntry]
+    /// The signed-in player's own row on the board (nil = no verified games).
+    func myStanding(board: LeaderboardBoard, difficulty: LeaderboardDifficultyFilter) async throws -> LeaderboardEntry?
+    /// Username search over public profiles (authenticated only).
+    func searchPlayers(query: String, limit: Int) async throws -> [PublicPlayerFile]
+    /// A public player file by account id.
+    func playerFile(userID: UUID) async throws -> PublicPlayerFile?
 }
 
 // MARK: Competitive seasons (future)

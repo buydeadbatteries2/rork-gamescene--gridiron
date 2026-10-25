@@ -12,6 +12,8 @@ struct DevMenuView: View {
     @State private var adManager = AdManager.shared
     @State private var adMob = AdMobService.shared
     @State private var message: String?
+    @State private var competitive = CompetitiveSubmissionService.shared
+    @State private var auth = AuthService.shared
 
     var body: some View {
         NavigationStack {
@@ -49,6 +51,18 @@ struct DevMenuView: View {
                             statusIndicator("Supabase URL Injected", value: SupabaseClientProvider.publicConfigURL != nil)
                             statusIndicator("Supabase Anon Key Injected", value: SupabaseClientProvider.publicConfigAnonKey != nil)
                             statusIndicator("Supabase Client Ready", value: SupabaseClientProvider.shared.isConfigured)
+                        }
+                        devSection("COMPETITIVE (READ-ONLY INDICATORS)") {
+                            // Diagnostics only — never JWTs, keys or case solutions.
+                            statusIndicator("Authenticated User ID Present", value: AccountGatePolicy.canAccessOnlineFeatures(auth.state))
+                            statusIndicator("Ranked Repository Connected", value: competitive.isRepositoryConnected)
+                            valueRow("Pending Submissions", "\(competitive.queue.pendingCount)")
+                            valueRow("Last Submission State", lastSubmissionSummary)
+                            valueRow("Last Ineligible Reason", competitive.lastIneligibleReason?.rawValue ?? "—")
+                            devButton("FLUSH QUEUE NOW") {
+                                Task { await competitive.flush() }
+                                done("Flush requested")
+                            }
                         }
                         devSection("DIFFICULTY") {
                             ForEach(DifficultyLevel.allCases, id: \.self) { level in
@@ -119,6 +133,29 @@ struct DevMenuView: View {
     }
 
     // MARK: Status indicators
+
+    private var lastSubmissionSummary: String {
+        guard let latest = competitive.queue.latest else { return "—" }
+        var text = latest.state.rawValue.uppercased()
+        if let score = latest.finalScore { text += " · \(score)" }
+        if let category = latest.lastErrorCategory { text += " · \(category)" }
+        return text
+    }
+
+    private func valueRow(_ title: String, _ value: String) -> some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(Theme.typewriter(12, relativeTo: .caption))
+                .foregroundStyle(Theme.paperInk)
+            Spacer()
+            Text(value)
+                .font(.system(size: 10, weight: .heavy).width(.condensed))
+                .tracking(1)
+                .foregroundStyle(Theme.paperInkSoft)
+                .lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
 
     private func statusIndicator(_ title: String, value: Bool) -> some View {
         HStack(spacing: 10) {

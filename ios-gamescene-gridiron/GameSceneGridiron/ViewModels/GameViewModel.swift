@@ -525,7 +525,8 @@ final class GameViewModel {
             timeoutsRemaining: timeoutsRemaining,
             lives: lives,
             placedPlayerIDs: placements.map(\.player.id),
-            usedHintIDs: Array(usedHintIDs)
+            usedHintIDs: Array(usedHintIDs),
+            rejectionCount: rejectionCount
         )
         SaveStore.save(snapshot, key: Self.clockSnapshotKey, defaults: defaults)
     }
@@ -554,9 +555,23 @@ final class GameViewModel {
             return PlacedPlayer(player: player, profile: solution.profile, slot: slot)
         }
         usedHintIDs.formUnion(snapshot.usedHintIDs)
+        rejectionCount = max(rejectionCount, snapshot.rejectionCount ?? 0)
         if snapshot.isTimed {
             playClock?.restore(remaining: snapshot.remaining)
         }
+    }
+
+    // MARK: Competitive facts (Phase 14)
+
+    /// Hint leads consumed this quarter, including any restored from a
+    /// snapshot after a relaunch (never resets).
+    var consumedHintCount: Int { max(usedHints.count, usedHintIDs.count) }
+
+    /// Correct placements as case-file keys, sorted for a deterministic payload.
+    var competitivePlacements: [CompetitivePlacement] {
+        placements
+            .map { CompetitivePlacement.from($0, caseID: puzzle.id) }
+            .sorted { $0.playerKey < $1.playerKey }
     }
 
     // MARK: Hints (persistent economy)

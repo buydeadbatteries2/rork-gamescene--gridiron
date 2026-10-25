@@ -146,6 +146,10 @@ final class SeasonManager {
                 scheduled.difficulty = DifficultyManager.shared.selected
                 persist()
             }
+            // Phase 14: stamp older saves with a ranked season identity.
+            if scheduled.competitiveSeasonID == nil {
+                scheduled.competitiveSeasonID = UUID()
+            }
             season = scheduled
             if scheduled != loaded {
                 // Persist the repair/schedule immediately so it survives restarts.
@@ -210,6 +214,9 @@ final class SeasonManager {
     /// The difficulty the active (or most recent) season was started with.
     var activeSeasonDifficulty: DifficultyLevel? { season?.difficulty }
 
+    /// Phase 14: the running season's ranked identity (payload season_id).
+    var competitiveSeasonID: UUID? { season?.competitiveSeasonID }
+
     /// Starts a new season (or advances to the next one) at `difficulty` —
     /// the choice made on the SELECT DIFFICULTY screen. The choice is stored
     /// on the season (locking it until the season completes) and persisted as
@@ -224,6 +231,7 @@ final class SeasonManager {
         let nextNumber = (season?.seasonNumber ?? 0) + 1
         var next = Self.generateSeason(userTeamID: userTeam.id, seasonNumber: nextNumber)
         next.difficulty = resolved
+        next.competitiveSeasonID = UUID()
         season = next
         DifficultyManager.shared.selectUnlocked(resolved)
         persist()

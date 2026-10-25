@@ -23,6 +23,11 @@ nonisolated struct ActiveMatchRecord: Codable, Hashable, Sendable {
     var matchID: UUID
     /// The match state as of the last completed quarter (or a fresh game).
     var match: GameMatch
+    /// Phase 14: the game's competitive identity (unique match ID, start
+    /// time, per-case results so far). nil on records saved before ranked
+    /// play existed — such a resumed game is played normally but is never
+    /// ranked. Optional so older saves keep decoding.
+    var competitive: CompetitiveMatchState? = nil
 }
 
 nonisolated enum ActiveInvestigationStore {

@@ -292,12 +292,541 @@ revoke all on public.public_profiles from anon;
 grant select on public.public_profiles to authenticated;
 
 -- ===========================================================================
+-- 7. PHASE 14 — GLOBAL LEADERBOARDS (server-verified ranked results)
+--
+--    Trust model: the client NEVER submits a score. A finished season game
+--    is sent as raw facts to the `submit-ranked-result` Edge Function, which
+--    derives the user from the JWT, validates every case id / version /
+--    placement against the PRIVATE solutions below, and calls
+--    record_verified_ranked_result (service_role only). That function is the
+--    ONLY writer of ranked results and of career stats — it computes the
+--    score from the single ranked_scoring_config row. Clients can read only
+--    their own result rows plus leaderboard-safe aggregates through the
+--    SECURITY DEFINER read functions at the end of this section, which join
+--    public.public_profiles (never real names or email).
+-- ===========================================================================
+
+-- 7a. PRIVATE competitive case catalog. Populated by the GENERATED file
+--     supabase/competitive_catalog.sql (paste after this schema). Solutions
+--     are never readable by anon/authenticated: RLS on, no policies, and no
+--     privileges. Only the service role (Edge Function) reads them.
+create table if not exists public.competitive_cases (
+    case_id               text        primary key,
+    case_version          int         not null check (case_version >= 1),
+    difficulty            text        not null check (difficulty in ('rookie', 'pro', 'all_pro', 'hall_of_famer')),
+    difficulty_score      int         not null default 0,
+    band                  int         not null default 0,
+    missing_count         int         not null check (missing_count between 1 and 8),
+    active                boolean     not null default true,
+    competitive_eligible  boolean     not null default true,
+    fingerprint           text        not null,
+    -- {"rookie": [{player_key, slot_key, profile}…], "pro": […], "all_pro": […], "hall_of_famer": […]}
+    solutions             jsonb       not null,
+    updated_at            timestamptz not null default now()
+);
+
+alter table public.competitive_cases enable row level security;
+revoke all on public.competitive_cases from anon, authenticated;
+
+-- 7b. The ONE scoring configuration. Edit the row (never code) to rebalance;
+--     the score function reads it on every verified result.
+create table if not exists public.ranked_scoring_config (
+    id                          int          primary key default 1 check (id = 1),
+    quarter_solved_points       int          not null,
+    game_win_points             int          not null,
+    overtime_win_points         int          not null,
+    perfect_regulation_points   int          not null,
+    no_hints_points             int          not null,
+    no_wrong_placements_points  int          not null,
+    rookie_multiplier           numeric(4,2) not null,
+    pro_multiplier              numeric(4,2) not null,
+    all_pro_multiplier          numeric(4,2) not null,
+    hall_of_famer_multiplier    numeric(4,2) not null,
+    weekly_best_games           int          not null,
+    alltime_best_games          int          not null,
+    provisional_min_games       int          not null,
+    submissions_per_hour        int          not null,
+    updated_at                  timestamptz  not null default now()
+);
+
+insert into public.ranked_scoring_config (
+    id, quarter_solved_points, game_win_points, overtime_win_points,
+    perfect_regulation_points, no_hints_points, no_wrong_placements_points,
+    rookie_multiplier, pro_multiplier, all_pro_multiplier, hall_of_famer_multiplier,
+    weekly_best_games, alltime_best_games, provisional_min_games, submissions_per_hour
+) values (1, 10, 10, 5, 5, 3, 3, 1.00, 1.25, 1.50, 2.00, 10, 25, 5, 30)
+on conflict (id) do update set
+    quarter_solved_points      = excluded.quarter_solved_points,
+    game_win_points            = excluded.game_win_points,
+    overtime_win_points        = excluded.overtime_win_points,
+    perfect_regulation_points  = excluded.perfect_regulation_points,
+    no_hints_points            = excluded.no_hints_points,
+    no_wrong_placements_points = excluded.no_wrong_placements_points,
+    rookie_multiplier          = excluded.rookie_multiplier,
+    pro_multiplier             = excluded.pro_multiplier,
+    all_pro_multiplier         = excluded.all_pro_multiplier,
+    hall_of_famer_multiplier   = excluded.hall_of_famer_multiplier,
+    weekly_best_games          = excluded.weekly_best_games,
+    alltime_best_games         = excluded.alltime_best_games,
+    provisional_min_games      = excluded.provisional_min_games,
+    submissions_per_hour       = excluded.submissions_per_hour,
+    updated_at                 = now();
+
+alter table public.ranked_scoring_config enable row level security;
+revoke all on public.ranked_scoring_config from anon, authenticated;
+
+-- 7c. Verified ranked results. One row per competitive match id (unique),
+--     one per (user, season, game number). Written ONLY by
+--     record_verified_ranked_result — clients have no INSERT/UPDATE/DELETE.
+create table if not exists public.ranked_game_results (
+    id                          uuid         primary key default gen_random_uuid(),
+    match_id                    uuid         not null,
+    user_id                     uuid         not null references public.profiles (id) on delete cascade,
+    season_id                   uuid,
+    game_number                 int          not null check (game_number between 1 and 12),
+    difficulty                  text         not null check (difficulty in ('rookie', 'pro', 'all_pro', 'hall_of_famer')),
+    regulation_quarters_solved  int          not null check (regulation_quarters_solved between 0 and 4),
+    regulation_quarters_lost    int          not null check (regulation_quarters_lost between 0 and 4),
+    game_won                    boolean      not null,
+    overtime_played             boolean      not null,
+    overtime_won                boolean      not null,
+    wrong_placements            int          not null check (wrong_placements >= 0),
+    hints_used                  int          not null check (hints_used >= 0),
+    base_score                  int          not null check (base_score >= 0),
+    difficulty_multiplier       numeric(4,2) not null check (difficulty_multiplier > 0),
+    final_score                 int          not null check (final_score >= 0),
+    verified                    boolean      not null default true,
+    case_results                jsonb        not null default '[]'::jsonb,
+    started_at                  timestamptz,
+    completed_at                timestamptz,
+    game_version                text,
+    created_at                  timestamptz  not null default now(),
+    constraint ranked_game_results_match_id_key unique (match_id),
+    constraint ranked_game_results_quarters_check
+        check (regulation_quarters_solved + regulation_quarters_lost = 4),
+    constraint ranked_game_results_overtime_check
+        check (overtime_played or not overtime_won)
+);
+
+create unique index if not exists ranked_game_results_season_game_key
+    on public.ranked_game_results (user_id, season_id, game_number)
+    where season_id is not null;
+create index if not exists ranked_game_results_created_at_idx
+    on public.ranked_game_results (created_at);
+create index if not exists ranked_game_results_user_idx
+    on public.ranked_game_results (user_id, final_score desc);
+
+alter table public.ranked_game_results enable row level security;
+
+drop policy if exists "ranked_results_select_own" on public.ranked_game_results;
+create policy "ranked_results_select_own" on public.ranked_game_results
+    for select to authenticated
+    using (auth.uid() = user_id);
+
+revoke all on public.ranked_game_results from anon;
+revoke insert, update, delete on public.ranked_game_results from authenticated;
+grant select on public.ranked_game_results to authenticated;
+
+-- 7d. Submission audit + rate limiting (service role only).
+create table if not exists public.ranked_submission_attempts (
+    id          bigserial   primary key,
+    user_id     uuid        not null,
+    match_id    uuid,
+    outcome     text        not null check (outcome in ('verified', 'duplicate', 'rejected', 'error')),
+    reason      text,
+    created_at  timestamptz not null default now()
+);
+create index if not exists ranked_submission_attempts_user_idx
+    on public.ranked_submission_attempts (user_id, created_at);
+
+alter table public.ranked_submission_attempts enable row level security;
+revoke all on public.ranked_submission_attempts from anon, authenticated;
+
+-- 7e. THE ONLY WRITER of ranked results and career stats. Called by the Edge
+--     Function (service_role) AFTER it validated every case against the
+--     private catalog. Idempotent by match id: a repeated submission returns
+--     the stored result with duplicate = true and changes nothing.
+--     Championships are NOT incremented here (future verified path only).
+create or replace function public.record_verified_ranked_result(
+    p_user_id                    uuid,
+    p_match_id                   uuid,
+    p_season_id                  uuid,
+    p_game_number                int,
+    p_difficulty                 text,
+    p_regulation_quarters_solved int,
+    p_game_won                   boolean,
+    p_overtime_played            boolean,
+    p_overtime_won               boolean,
+    p_wrong_placements           int,
+    p_hints_used                 int,
+    p_case_results               jsonb,
+    p_started_at                 timestamptz,
+    p_completed_at               timestamptz,
+    p_game_version               text
+)
+returns table (result_id uuid, final_score int, duplicate boolean)
+language plpgsql
+security definer
+set search_path = public
+as $$
+#variable_conflict use_column
+declare
+    cfg       public.ranked_scoring_config%rowtype;
+    existing  public.ranked_game_results%rowtype;
+    v_base    int;
+    v_mult    numeric(4,2);
+    v_final   int;
+    v_id      uuid;
+begin
+    select * into existing from public.ranked_game_results r where r.match_id = p_match_id;
+    if found then
+        if existing.user_id <> p_user_id then
+            raise exception 'MATCH_ID_CONFLICT';
+        end if;
+        return query select existing.id, existing.final_score, true;
+        return;
+    end if;
+
+    if p_season_id is not null and exists (
+        select 1 from public.ranked_game_results r
+        where r.user_id = p_user_id and r.season_id = p_season_id and r.difficulty <> p_difficulty
+    ) then
+        raise exception 'SEASON_DIFFICULTY_MISMATCH';
+    end if;
+
+    if p_season_id is not null and exists (
+        select 1 from public.ranked_game_results r
+        where r.user_id = p_user_id and r.season_id = p_season_id and r.game_number = p_game_number
+    ) then
+        raise exception 'DUPLICATE_SEASON_GAME';
+    end if;
+
+    select * into cfg from public.ranked_scoring_config c where c.id = 1;
+    if not found then
+        raise exception 'SCORING_CONFIG_MISSING';
+    end if;
+
+    v_base := p_regulation_quarters_solved * cfg.quarter_solved_points
+        + (case when p_game_won then cfg.game_win_points else 0 end)
+        + (case when p_overtime_won then cfg.overtime_win_points else 0 end)
+        + (case when p_regulation_quarters_solved = 4 then cfg.perfect_regulation_points else 0 end)
+        + (case when p_hints_used = 0 then cfg.no_hints_points else 0 end)
+        + (case when p_wrong_placements = 0 then cfg.no_wrong_placements_points else 0 end);
+
+    v_mult := case p_difficulty
+        when 'rookie' then cfg.rookie_multiplier
+        when 'pro' then cfg.pro_multiplier
+        when 'all_pro' then cfg.all_pro_multiplier
+        when 'hall_of_famer' then cfg.hall_of_famer_multiplier
+    end;
+    if v_mult is null then
+        raise exception 'INVALID_DIFFICULTY';
+    end if;
+
+    -- Consistent rounding: numeric round() is half away from zero.
+    v_final := round(v_base::numeric * v_mult)::int;
+
+    begin
+        insert into public.ranked_game_results (
+            match_id, user_id, season_id, game_number, difficulty,
+            regulation_quarters_solved, regulation_quarters_lost, game_won,
+            overtime_played, overtime_won, wrong_placements, hints_used,
+            base_score, difficulty_multiplier, final_score, verified,
+            case_results, started_at, completed_at, game_version
+        ) values (
+            p_match_id, p_user_id, p_season_id, p_game_number, p_difficulty,
+            p_regulation_quarters_solved, 4 - p_regulation_quarters_solved, p_game_won,
+            p_overtime_played, p_overtime_won, p_wrong_placements, p_hints_used,
+            v_base, v_mult, v_final, true,
+            coalesce(p_case_results, '[]'::jsonb), p_started_at, p_completed_at, p_game_version
+        )
+        returning id into v_id;
+    exception
+        when unique_violation then
+            -- A concurrent retry of the same match won the race: idempotent.
+            select * into existing from public.ranked_game_results r where r.match_id = p_match_id;
+            if found and existing.user_id = p_user_id then
+                return query select existing.id, existing.final_score, true;
+                return;
+            end if;
+            raise exception 'DUPLICATE_SEASON_GAME';
+    end;
+
+    -- Career stats move ONLY here, after verification. global_rating is the
+    -- rounded average of the player's best all-time verified results.
+    update public.profiles p set
+        career_games_played = p.career_games_played + 1,
+        career_wins         = p.career_wins + (case when p_game_won then 1 else 0 end),
+        career_losses       = p.career_losses + (case when p_game_won then 0 else 1 end),
+        career_cases_solved = p.career_cases_solved + p_regulation_quarters_solved
+                              + (case when p_overtime_won then 1 else 0 end),
+        global_rating       = (
+            select coalesce(round(avg(best.final_score)), 0)::int
+            from (
+                select r.final_score from public.ranked_game_results r
+                where r.user_id = p_user_id and r.verified
+                order by r.final_score desc, r.created_at asc
+                limit cfg.alltime_best_games
+            ) best
+        )
+    where p.id = p_user_id;
+
+    return query select v_id, v_final, false;
+end;
+$$;
+
+revoke all on function public.record_verified_ranked_result(uuid, uuid, uuid, int, text, int, boolean, boolean, boolean, int, int, jsonb, timestamptz, timestamptz, text) from public, anon, authenticated;
+grant execute on function public.record_verified_ranked_result(uuid, uuid, uuid, int, text, int, boolean, boolean, boolean, int, int, jsonb, timestamptz, timestamptz, text) to service_role;
+
+-- 7f. INTERNAL leaderboard aggregation (not callable by clients).
+--     WEEKLY: Monday 00:00 UTC → Sunday 23:59:59 UTC, bucketed by the
+--     server's received time; score = SUM of the best N verified games.
+--     ALL-TIME: score = AVERAGE of the best N verified games (1 decimal);
+--     fewer than provisional_min_games verified games = PROVISIONAL (listed
+--     after established players). Difficulty filter uses each game's
+--     recorded difficulty. Tiebreakers: higher average, more wins, more
+--     quarters, fewer hints, fewer wrong placements; full ties share the
+--     rank and list by who reached the score first.
+create or replace function public.ranked_leaderboard_rows(p_board text, p_difficulty text)
+returns table (
+    rank                   bigint,
+    user_id                uuid,
+    username               text,
+    football_display_name  text,
+    score                  numeric,
+    games_counted          int,
+    total_games            int,
+    average_score          numeric,
+    wins                   int,
+    quarters_solved        int,
+    hints_used             int,
+    wrong_placements       int,
+    top_difficulty         text,
+    is_provisional         boolean,
+    first_reached_at       timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+    with cfg as (
+        select c.* from public.ranked_scoring_config c where c.id = 1
+    ),
+    week_start as (
+        select (date_trunc('week', now() at time zone 'utc') at time zone 'utc') as ts
+    ),
+    eligible as (
+        select r.*
+        from public.ranked_game_results r
+        where r.verified
+          and (p_difficulty = 'all' or r.difficulty = p_difficulty)
+          and (p_board = 'alltime' or r.created_at >= (select w.ts from week_start w))
+    ),
+    ordered as (
+        select e.*,
+               row_number() over (partition by e.user_id order by e.final_score desc, e.created_at asc, e.id asc) as game_rank,
+               count(*) over (partition by e.user_id) as user_total
+        from eligible e
+    ),
+    counted as (
+        select o.*
+        from ordered o cross join cfg
+        where o.game_rank <= (case when p_board = 'weekly' then cfg.weekly_best_games else cfg.alltime_best_games end)
+    ),
+    agg as (
+        select
+            c.user_id,
+            count(*)::int                                                         as games_counted,
+            max(c.user_total)::int                                                as total_games,
+            sum(c.final_score)::numeric                                           as total_score,
+            round(avg(c.final_score)::numeric, 1)                                 as average_score,
+            (count(*) filter (where c.game_won))::int                             as wins,
+            sum(c.regulation_quarters_solved + (case when c.overtime_won then 1 else 0 end))::int as quarters_solved,
+            sum(c.hints_used)::int                                                as hints_used,
+            sum(c.wrong_placements)::int                                          as wrong_placements,
+            max(case c.difficulty when 'rookie' then 1 when 'pro' then 2 when 'all_pro' then 3 else 4 end) as top_level,
+            max(c.created_at)                                                     as first_reached_at
+        from counted c
+        group by c.user_id
+    ),
+    scored as (
+        select
+            a.*,
+            (case when p_board = 'weekly' then a.total_score else a.average_score end) as score,
+            (p_board = 'alltime' and a.total_games < cfg.provisional_min_games)      as is_provisional
+        from agg a cross join cfg
+    )
+    select
+        rank() over (
+            order by s.is_provisional asc, s.score desc, s.average_score desc, s.wins desc,
+                     s.quarters_solved desc, s.hints_used asc, s.wrong_placements asc
+        )                                   as rank,
+        s.user_id,
+        pp.username,
+        pp.football_display_name,
+        s.score,
+        s.games_counted,
+        s.total_games,
+        s.average_score,
+        s.wins,
+        s.quarters_solved,
+        s.hints_used,
+        s.wrong_placements,
+        (case s.top_level when 1 then 'rookie' when 2 then 'pro' when 3 then 'all_pro' else 'hall_of_famer' end) as top_difficulty,
+        s.is_provisional,
+        s.first_reached_at
+    from scored s
+    join public.public_profiles pp on pp.id = s.user_id;
+$$;
+
+revoke all on function public.ranked_leaderboard_rows(text, text) from public, anon, authenticated;
+
+-- 7g. CLIENT READS (authenticated only). Page size is capped at 50.
+create or replace function public.ranked_leaderboard(
+    p_board text,
+    p_difficulty text default 'all',
+    p_limit int default 50,
+    p_offset int default 0
+)
+returns table (
+    rank                   bigint,
+    user_id                uuid,
+    username               text,
+    football_display_name  text,
+    score                  numeric,
+    games_counted          int,
+    total_games            int,
+    average_score          numeric,
+    wins                   int,
+    quarters_solved        int,
+    hints_used             int,
+    wrong_placements       int,
+    top_difficulty         text,
+    is_provisional         boolean,
+    first_reached_at       timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+#variable_conflict use_column
+begin
+    if auth.uid() is null then
+        raise exception 'AUTH_REQUIRED';
+    end if;
+    if p_board not in ('weekly', 'alltime') then
+        raise exception 'INVALID_BOARD';
+    end if;
+    if p_difficulty not in ('all', 'rookie', 'pro', 'all_pro', 'hall_of_famer') then
+        raise exception 'INVALID_DIFFICULTY';
+    end if;
+    return query
+        select lr.*
+        from public.ranked_leaderboard_rows(p_board, p_difficulty) lr
+        order by lr.rank asc, lr.first_reached_at asc, lr.username asc
+        limit least(greatest(coalesce(p_limit, 50), 1), 50)
+        offset greatest(coalesce(p_offset, 0), 0);
+end;
+$$;
+
+revoke all on function public.ranked_leaderboard(text, text, int, int) from public, anon;
+grant execute on function public.ranked_leaderboard(text, text, int, int) to authenticated;
+
+-- The caller's own row (pinned YOUR RANK). Empty = no verified games yet.
+create or replace function public.my_ranked_standing(p_board text, p_difficulty text default 'all')
+returns table (
+    rank                   bigint,
+    user_id                uuid,
+    username               text,
+    football_display_name  text,
+    score                  numeric,
+    games_counted          int,
+    total_games            int,
+    average_score          numeric,
+    wins                   int,
+    quarters_solved        int,
+    hints_used             int,
+    wrong_placements       int,
+    top_difficulty         text,
+    is_provisional         boolean,
+    first_reached_at       timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+#variable_conflict use_column
+begin
+    if auth.uid() is null then
+        raise exception 'AUTH_REQUIRED';
+    end if;
+    if p_board not in ('weekly', 'alltime') then
+        raise exception 'INVALID_BOARD';
+    end if;
+    if p_difficulty not in ('all', 'rookie', 'pro', 'all_pro', 'hall_of_famer') then
+        raise exception 'INVALID_DIFFICULTY';
+    end if;
+    return query
+        select lr.*
+        from public.ranked_leaderboard_rows(p_board, p_difficulty) lr
+        where lr.user_id = auth.uid();
+end;
+$$;
+
+revoke all on function public.my_ranked_standing(text, text) from public, anon;
+grant execute on function public.my_ranked_standing(text, text) to authenticated;
+
+-- Username search over PUBLIC profile columns only (prefix match, 2–20
+-- characters, at most 20 rows). Never real names or email.
+create or replace function public.search_public_profiles(p_query text, p_limit int default 20)
+returns table (
+    id                     uuid,
+    username               text,
+    football_display_name  text,
+    global_rating          int,
+    career_games_played    int,
+    career_wins            int,
+    championships          int
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+#variable_conflict use_column
+declare
+    q text := lower(btrim(coalesce(p_query, '')));
+begin
+    if auth.uid() is null then
+        raise exception 'AUTH_REQUIRED';
+    end if;
+    if q !~ '^[a-z0-9_]{2,20}$' then
+        return;
+    end if;
+    return query
+        select pp.id, pp.username, pp.football_display_name, pp.global_rating,
+               pp.career_games_played, pp.career_wins, pp.championships
+        from public.public_profiles pp
+        where lower(pp.username) like replace(q, '_', '\_') || '%'
+        order by lower(pp.username) asc
+        limit least(greatest(coalesce(p_limit, 20), 1), 20);
+end;
+$$;
+
+revoke all on function public.search_public_profiles(text, int) from public, anon;
+grant execute on function public.search_public_profiles(text, int) to authenticated;
+
+-- ===========================================================================
 -- Future tables (Phase 13A defines the shape; features come later):
 --   factions, faction_members (max 11 per faction-season = starting lineup),
 --   faction_season_roster_slots (position per slot, footballDisplayName
 --   snapshot), competitive_seasons, competitive_season_members,
 --   competitive_game_assignments (server-authoritative caseID + difficulty),
---   competitive_game_results, faction_battles, faction_battle_rosters,
+--   competitive_game_results (Phase 14 ships ranked_game_results above for
+--   solo-season leaderboards), faction_battles, faction_battle_rosters,
 --   faction_daily_progress.
 -- Server-side rules to enforce when they land:
 --   * assignments and results are written ONLY by the server (service role),

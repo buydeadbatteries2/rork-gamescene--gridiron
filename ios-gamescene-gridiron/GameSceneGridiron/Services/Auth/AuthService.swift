@@ -92,6 +92,8 @@ final class AuthService {
         }
         onAuthenticated = { uuid in
             await PurchaseManager.shared.loginWithSupabaseIdentity(uuid.uuidString)
+            // Phase 14: games queued while offline/signed-out submit now.
+            await CompetitiveSubmissionService.shared.flush()
         }
         onSignedOut = {
             await PurchaseManager.shared.logoutToAnonymous()

@@ -1,0 +1,602 @@
+{
+  "case_allPro_110": {
+    "fingerprint": "c0239c76fe968409",
+    "version": 1
+  },
+  "case_allPro_111": {
+    "fingerprint": "5b78d717fe98401f",
+    "version": 1
+  },
+  "case_allPro_112": {
+    "fingerprint": "4cd36f56e9c670e5",
+    "version": 1
+  },
+  "case_allPro_113": {
+    "fingerprint": "d70f8e34b096600e",
+    "version": 1
+  },
+  "case_allPro_114": {
+    "fingerprint": "ac843c6ad7f36fb7",
+    "version": 1
+  },
+  "case_allPro_115": {
+    "fingerprint": "df91f0954775089a",
+    "version": 1
+  },
+  "case_allPro_116": {
+    "fingerprint": "dc659af4d85ca6b0",
+    "version": 1
+  },
+  "case_allPro_117": {
+    "fingerprint": "81edc61b5a31f33e",
+    "version": 1
+  },
+  "case_allPro_118": {
+    "fingerprint": "8fac3a3caa7a5828",
+    "version": 1
+  },
+  "case_allPro_119": {
+    "fingerprint": "b35bd69d21547d64",
+    "version": 1
+  },
+  "case_allPro_120": {
+    "fingerprint": "5523cf95efbc3352",
+    "version": 1
+  },
+  "case_allPro_121": {
+    "fingerprint": "51cca55ac3d1836e",
+    "version": 1
+  },
+  "case_allPro_122": {
+    "fingerprint": "b8b04a25d97c8cbc",
+    "version": 1
+  },
+  "case_allPro_123": {
+    "fingerprint": "b2073dcd0fc386e9",
+    "version": 1
+  },
+  "case_allPro_124": {
+    "fingerprint": "58b769d9eb2c833e",
+    "version": 1
+  },
+  "case_allPro_125": {
+    "fingerprint": "459ea662d6ad639e",
+    "version": 1
+  },
+  "case_allPro_126": {
+    "fingerprint": "131c931a899535d8",
+    "version": 1
+  },
+  "case_allPro_127": {
+    "fingerprint": "516a3b95c86c072b",
+    "version": 1
+  },
+  "case_allPro_128": {
+    "fingerprint": "613e41c3cd9ded06",
+    "version": 1
+  },
+  "case_allPro_129": {
+    "fingerprint": "c27946b1aa69c675",
+    "version": 1
+  },
+  "case_allPro_130": {
+    "fingerprint": "22aebed9530eb380",
+    "version": 1
+  },
+  "case_allPro_131": {
+    "fingerprint": "a3bd7b827eed9ba5",
+    "version": 1
+  },
+  "case_allPro_132": {
+    "fingerprint": "3272ffe5c2cd6acb",
+    "version": 1
+  },
+  "case_allPro_133": {
+    "fingerprint": "4d3d11d1b37c9619",
+    "version": 1
+  },
+  "case_allPro_134": {
+    "fingerprint": "1a9dac1e5a0a86d3",
+    "version": 1
+  },
+  "case_allPro_135": {
+    "fingerprint": "844a40fc9adf6998",
+    "version": 1
+  },
+  "case_allPro_136": {
+    "fingerprint": "07a23c88cf51f9e1",
+    "version": 1
+  },
+  "case_allPro_137": {
+    "fingerprint": "1aa970b26f3156c4",
+    "version": 1
+  },
+  "case_allPro_138": {
+    "fingerprint": "504081f2459c9727",
+    "version": 1
+  },
+  "case_all_out_pressure_05": {
+    "fingerprint": "515ae005440d246a",
+    "version": 1
+  },
+  "case_blitz_a_gap_10": {
+    "fingerprint": "723bcff8ca3bca7f",
+    "version": 1
+  },
+  "case_bootleg_right_09": {
+    "fingerprint": "f3127f0460d76ddb",
+    "version": 1
+  },
+  "case_bunch_right_08": {
+    "fingerprint": "c0eb0fafff3f9862",
+    "version": 1
+  },
+  "case_cover_two_shell_10": {
+    "fingerprint": "2c382b688a4ece0e",
+    "version": 1
+  },
+  "case_cover_zero_rush_06": {
+    "fingerprint": "2b5d9d3121f2a45c",
+    "version": 1
+  },
+  "case_crossing_routes_02": {
+    "fingerprint": "d4d990b635347fc8",
+    "version": 1
+  },
+  "case_dbl_move_sideline_08": {
+    "fingerprint": "7f56c56befcd9feb",
+    "version": 1
+  },
+  "case_deep_crosser_07": {
+    "fingerprint": "fc1bbf8dc4e4fe9f",
+    "version": 1
+  },
+  "case_deep_safety_read_04": {
+    "fingerprint": "84634eb614e02a39",
+    "version": 1
+  },
+  "case_doubling_star_07": {
+    "fingerprint": "968ab42fc4c90f0e",
+    "version": 1
+  },
+  "case_edge_concern_05": {
+    "fingerprint": "4f4ae183ca23773e",
+    "version": 1
+  },
+  "case_edge_or_die_08": {
+    "fingerprint": "ec70081630723c15",
+    "version": 1
+  },
+  "case_empty_backfield_01": {
+    "fingerprint": "4b8b42ead6959b77",
+    "version": 1
+  },
+  "case_final_drive_empty_01": {
+    "fingerprint": "225e168cd5b8ca0c",
+    "version": 1
+  },
+  "case_four_wide_flood_05": {
+    "fingerprint": "46c95e2dcf8c69c0",
+    "version": 1
+  },
+  "case_gap_integrity_07": {
+    "fingerprint": "cc1e2c8e8f74e791",
+    "version": 1
+  },
+  "case_goal_line_power_02": {
+    "fingerprint": "f76e8681badb2963",
+    "version": 1
+  },
+  "case_goal_line_stand_03": {
+    "fingerprint": "51067da04f88aa47",
+    "version": 1
+  },
+  "case_gun_protection_02": {
+    "fingerprint": "e9effb9ecc0e2141",
+    "version": 1
+  },
+  "case_hail_mary_04": {
+    "fingerprint": "3d85179cbe1d3ecd",
+    "version": 1
+  },
+  "case_hallOfFamer_139": {
+    "fingerprint": "f46d382afb34df6f",
+    "version": 1
+  },
+  "case_hallOfFamer_140": {
+    "fingerprint": "2ad328598a170182",
+    "version": 1
+  },
+  "case_hallOfFamer_141": {
+    "fingerprint": "fb66a1a1e267b6be",
+    "version": 1
+  },
+  "case_hallOfFamer_142": {
+    "fingerprint": "b155594ea55199b9",
+    "version": 1
+  },
+  "case_hallOfFamer_143": {
+    "fingerprint": "500fe5fa6fce77d5",
+    "version": 1
+  },
+  "case_hallOfFamer_144": {
+    "fingerprint": "1ef58e2137975448",
+    "version": 1
+  },
+  "case_hallOfFamer_145": {
+    "fingerprint": "8e1737a11dfdcf67",
+    "version": 1
+  },
+  "case_hallOfFamer_146": {
+    "fingerprint": "6a8ac54c9cc0b365",
+    "version": 1
+  },
+  "case_hallOfFamer_147": {
+    "fingerprint": "00ada55cbf8fdb2c",
+    "version": 1
+  },
+  "case_hallOfFamer_148": {
+    "fingerprint": "b579d0de1dbd88d2",
+    "version": 1
+  },
+  "case_hallOfFamer_149": {
+    "fingerprint": "77b7e7b4568c7099",
+    "version": 1
+  },
+  "case_hallOfFamer_150": {
+    "fingerprint": "14c93fc5b3029d1f",
+    "version": 1
+  },
+  "case_hallOfFamer_151": {
+    "fingerprint": "69c0806d26b2b780",
+    "version": 1
+  },
+  "case_hallOfFamer_152": {
+    "fingerprint": "81a5f028e98e49c5",
+    "version": 1
+  },
+  "case_hallOfFamer_153": {
+    "fingerprint": "7385b54812d7ff9e",
+    "version": 1
+  },
+  "case_hallOfFamer_154": {
+    "fingerprint": "b9f1d0d7e9c11ba2",
+    "version": 1
+  },
+  "case_hallOfFamer_155": {
+    "fingerprint": "6b8d7f970e530867",
+    "version": 1
+  },
+  "case_hallOfFamer_156": {
+    "fingerprint": "f0354ad5a06a6d24",
+    "version": 1
+  },
+  "case_highlight_trap_41": {
+    "fingerprint": "e858d3c5cfebb2f8",
+    "version": 1
+  },
+  "case_hype_island_31": {
+    "fingerprint": "e86da840ae3f0cb0",
+    "version": 1
+  },
+  "case_interior_stunt_08": {
+    "fingerprint": "92f81f19db59f577",
+    "version": 1
+  },
+  "case_kneel_down_war_06": {
+    "fingerprint": "f3f1dc17eb4f3b88",
+    "version": 1
+  },
+  "case_motion_left_09": {
+    "fingerprint": "2e3c33d9922c172d",
+    "version": 1
+  },
+  "case_nickel_slot_02": {
+    "fingerprint": "8680876a97d98fc4",
+    "version": 1
+  },
+  "case_option_pitch_06": {
+    "fingerprint": "28ce2a11461f1c4c",
+    "version": 1
+  },
+  "case_overs_front_01": {
+    "fingerprint": "0bb9a15eb5d7f7c5",
+    "version": 1
+  },
+  "case_pistol_push_04": {
+    "fingerprint": "6de2595e628f2ddd",
+    "version": 1
+  },
+  "case_post_safe_08": {
+    "fingerprint": "a13e94e6eb6eeb39",
+    "version": 1
+  },
+  "case_power_interior_07": {
+    "fingerprint": "1139abdb6867142d",
+    "version": 1
+  },
+  "case_pro_090": {
+    "fingerprint": "0a1969c456414eee",
+    "version": 1
+  },
+  "case_pro_091": {
+    "fingerprint": "cf5b9089f392e582",
+    "version": 1
+  },
+  "case_pro_092": {
+    "fingerprint": "41d77da22d328114",
+    "version": 1
+  },
+  "case_pro_093": {
+    "fingerprint": "75026c667a770c7b",
+    "version": 1
+  },
+  "case_pro_094": {
+    "fingerprint": "8551f8a27ccc8e45",
+    "version": 1
+  },
+  "case_pro_095": {
+    "fingerprint": "78ae502338322f1a",
+    "version": 1
+  },
+  "case_pro_096": {
+    "fingerprint": "ab192e92fe745121",
+    "version": 1
+  },
+  "case_pro_097": {
+    "fingerprint": "2d4e4c8aae0dd19e",
+    "version": 1
+  },
+  "case_pro_098": {
+    "fingerprint": "5e39d7dfa409880b",
+    "version": 1
+  },
+  "case_pro_099": {
+    "fingerprint": "58dc9c632ffb8bb4",
+    "version": 1
+  },
+  "case_pro_100": {
+    "fingerprint": "a7d459d274e63298",
+    "version": 1
+  },
+  "case_pro_101": {
+    "fingerprint": "69b4a4d94784ea46",
+    "version": 1
+  },
+  "case_pro_102": {
+    "fingerprint": "b6aa00aefbf54f69",
+    "version": 1
+  },
+  "case_pro_103": {
+    "fingerprint": "c5fe4b59426277a7",
+    "version": 1
+  },
+  "case_pro_104": {
+    "fingerprint": "5ca25b1a2870064a",
+    "version": 1
+  },
+  "case_pro_105": {
+    "fingerprint": "18ba46961af9e6b9",
+    "version": 1
+  },
+  "case_pro_106": {
+    "fingerprint": "27c4f104c8ddd538",
+    "version": 1
+  },
+  "case_pro_107": {
+    "fingerprint": "5c804befc72ffad4",
+    "version": 1
+  },
+  "case_pro_108": {
+    "fingerprint": "a707dc81e822c199",
+    "version": 1
+  },
+  "case_pro_109": {
+    "fingerprint": "5a216876d2fccf6a",
+    "version": 1
+  },
+  "case_red_zone_look_10": {
+    "fingerprint": "ee8cbc91e88a4338",
+    "version": 1
+  },
+  "case_red_zone_stamp_10": {
+    "fingerprint": "8ce9d6b32050999f",
+    "version": 1
+  },
+  "case_reputation_blindside_51": {
+    "fingerprint": "d72c293e4b91a6fb",
+    "version": 1
+  },
+  "case_rookie_060": {
+    "fingerprint": "8bf960f79f25e8a7",
+    "version": 1
+  },
+  "case_rookie_061": {
+    "fingerprint": "3b96cbbfdfacda80",
+    "version": 1
+  },
+  "case_rookie_062": {
+    "fingerprint": "9e42756c402426c8",
+    "version": 1
+  },
+  "case_rookie_063": {
+    "fingerprint": "15aa8044b30c8eca",
+    "version": 1
+  },
+  "case_rookie_064": {
+    "fingerprint": "b1e661e92ef4ff13",
+    "version": 1
+  },
+  "case_rookie_065": {
+    "fingerprint": "1bc13c6312e231d6",
+    "version": 1
+  },
+  "case_rookie_066": {
+    "fingerprint": "14b680f2b9921451",
+    "version": 1
+  },
+  "case_rookie_067": {
+    "fingerprint": "b10f90f10cdc7b9c",
+    "version": 1
+  },
+  "case_rookie_068": {
+    "fingerprint": "a8d144bd05362e38",
+    "version": 1
+  },
+  "case_rookie_069": {
+    "fingerprint": "6c673a0b7cd44313",
+    "version": 1
+  },
+  "case_rookie_070": {
+    "fingerprint": "530742e014c54dbe",
+    "version": 1
+  },
+  "case_rookie_071": {
+    "fingerprint": "8c34a76af99eeca0",
+    "version": 1
+  },
+  "case_rookie_072": {
+    "fingerprint": "16888f1029423668",
+    "version": 1
+  },
+  "case_rookie_073": {
+    "fingerprint": "7ed50d2d5de2e9a6",
+    "version": 1
+  },
+  "case_rookie_074": {
+    "fingerprint": "eb5aaead4396a2e1",
+    "version": 1
+  },
+  "case_rookie_075": {
+    "fingerprint": "c3d11164775fe067",
+    "version": 1
+  },
+  "case_rookie_076": {
+    "fingerprint": "efeee4359810fd0b",
+    "version": 1
+  },
+  "case_rookie_077": {
+    "fingerprint": "a930360afe239a00",
+    "version": 1
+  },
+  "case_rookie_078": {
+    "fingerprint": "ecd183e89acdd2cb",
+    "version": 1
+  },
+  "case_rookie_079": {
+    "fingerprint": "22371e5d096a2c79",
+    "version": 1
+  },
+  "case_rookie_080": {
+    "fingerprint": "2c3bfe96718ad94d",
+    "version": 1
+  },
+  "case_rookie_081": {
+    "fingerprint": "a7bb62a7acae3172",
+    "version": 1
+  },
+  "case_rookie_082": {
+    "fingerprint": "58628589943040b5",
+    "version": 1
+  },
+  "case_rookie_083": {
+    "fingerprint": "d75bfa6125a5bd59",
+    "version": 1
+  },
+  "case_rookie_084": {
+    "fingerprint": "a188c745d18eaa29",
+    "version": 1
+  },
+  "case_rookie_085": {
+    "fingerprint": "95ad8af6ecc6354a",
+    "version": 1
+  },
+  "case_rookie_086": {
+    "fingerprint": "ea3635b6d04dae1b",
+    "version": 1
+  },
+  "case_rookie_087": {
+    "fingerprint": "b51352fcf666a72f",
+    "version": 1
+  },
+  "case_rookie_088": {
+    "fingerprint": "a37438cade14fa8c",
+    "version": 1
+  },
+  "case_rookie_089": {
+    "fingerprint": "a7c465441da0965b",
+    "version": 1
+  },
+  "case_scramble_drill_04": {
+    "fingerprint": "2fff33acbe7b64e8",
+    "version": 1
+  },
+  "case_screen_left_07": {
+    "fingerprint": "dd980cb37ee9b133",
+    "version": 1
+  },
+  "case_screen_right_bias_05": {
+    "fingerprint": "28b01bcf36368785",
+    "version": 1
+  },
+  "case_short_yardage_wedge_03": {
+    "fingerprint": "357b560da5d9da6d",
+    "version": 1
+  },
+  "case_singleback_gap_03": {
+    "fingerprint": "57dab001a45afb44",
+    "version": 1
+  },
+  "case_spread_sideline_01": {
+    "fingerprint": "951730b915736471",
+    "version": 1
+  },
+  "case_strong_side_leak_06": {
+    "fingerprint": "d6114895138d882e",
+    "version": 1
+  },
+  "case_three_level_flood_02": {
+    "fingerprint": "e1e5b624b592efcd",
+    "version": 1
+  },
+  "case_tight_edge_04": {
+    "fingerprint": "3e78b6f29c261acd",
+    "version": 1
+  },
+  "case_trips_assignment_06": {
+    "fingerprint": "04dfa6626f49a59b",
+    "version": 1
+  },
+  "case_trips_coverage_03": {
+    "fingerprint": "56fb5b6b58b66877",
+    "version": 1
+  },
+  "case_two_back_blitz_05": {
+    "fingerprint": "47e5a8b9063d9cf3",
+    "version": 1
+  },
+  "case_two_minute_spread_09": {
+    "fingerprint": "f8e32022f92f1edd",
+    "version": 1
+  },
+  "case_two_point_call_09": {
+    "fingerprint": "59ca7c9f7d2e8dfc",
+    "version": 1
+  },
+  "case_two_tight_power_09": {
+    "fingerprint": "769384af9bb6caa6",
+    "version": 1
+  },
+  "case_under_center_03": {
+    "fingerprint": "8064677b9c72eef1",
+    "version": 1
+  },
+  "case_unders_safety_01": {
+    "fingerprint": "64201c8ae68a23c5",
+    "version": 1
+  },
+  "case_victory_formation_10": {
+    "fingerprint": "1dc3f68999003038",
+    "version": 1
+  }
+}

@@ -176,4 +176,8 @@ nonisolated struct InvestigationSnapshot: Codable, Sendable, Hashable {
     let lives: Int
     let placedPlayerIDs: [String]
     let usedHintIDs: [String]
+    /// Phase 14: wrong placements so far this quarter — survives a kill so a
+    /// relaunch can never reset the ranked wrong-placement count. Optional
+    /// so older snapshots keep decoding.
+    var rejectionCount: Int? = nil
 }

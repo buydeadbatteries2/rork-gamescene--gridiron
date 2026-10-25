@@ -15,6 +15,8 @@ struct HomeView: View {
     @State private var isShowingTrophyRoom: Bool = false
     @State private var isShowingAccountEntry: Bool = false
     @State private var isShowingProfile: Bool = false
+    @State private var isShowingLeaderboard: Bool = false
+    @State private var isShowingLeaderboardGate: Bool = false
     @State private var lockedMessage: String?
     @State private var hasAppeared: Bool = false
     @State private var glow: Bool = false
@@ -124,6 +126,20 @@ struct HomeView: View {
                             UnlockedFolderTile(title: "TROPHY ROOM", symbol: "trophy.fill")
                         }
                         .buttonStyle(PressableButtonStyle(scale: 0.97))
+
+                        Button {
+                            Haptics.tick()
+                            // Online competition needs an account; guests see ACCOUNT REQUIRED.
+                            if AccountGatePolicy.requiresAccount(auth.state) {
+                                isShowingLeaderboardGate = true
+                            } else {
+                                isShowingLeaderboard = true
+                            }
+                        } label: {
+                            UnlockedFolderTile(title: "LEADERBOARD", symbol: "list.number")
+                        }
+                        .buttonStyle(PressableButtonStyle(scale: 0.97))
+                        .accessibilityIdentifier("home.leaderboard")
                     }
                     .opacity(hasAppeared ? 1 : 0)
                     .offset(y: hasAppeared ? 0 : 20)
@@ -178,6 +194,13 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $isShowingTrophyRoom) {
             TrophyRoomView()
+        }
+        .fullScreenCover(isPresented: $isShowingLeaderboard) {
+            LeaderboardView()
+        }
+        .sheet(isPresented: $isShowingLeaderboardGate) {
+            NavigationStack { AccountGateView(featureName: "Leaderboards") }
+                .preferredColorScheme(.dark)
         }
         .sheet(isPresented: $isShowingSettings) {
             SettingsView()

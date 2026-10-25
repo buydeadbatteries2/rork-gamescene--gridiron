@@ -47,6 +47,8 @@ struct GameSceneGridironApp: App {
             case .active:
                 AudioManager.shared.resumeMusic()
                 AdMobService.shared.handleScenePhase(active: true)
+                // Phase 14: retry any queued ranked results on return.
+                Task { await CompetitiveSubmissionService.shared.flush() }
             @unknown default:
                 break
             }

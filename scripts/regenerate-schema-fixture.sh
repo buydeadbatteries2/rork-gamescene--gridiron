@@ -27,3 +27,22 @@ HEAD
 } > "$FIXTURE"
 
 echo "Regenerated $FIXTURE from $SCHEMA"
+
+# Phase 14: the ranked-result Edge Function is pinned the same way so the
+# security tests can assert its JWT / idempotency / no-score rules.
+EDGE="supabase/functions/submit-ranked-result/index.ts"
+EDGE_FIXTURE="ios-gamescene-gridiron/GameSceneGridironTests/EdgeFunctionFixture.swift"
+{
+  cat <<'HEAD'
+import Foundation
+
+/// Byte-identical snapshot of `supabase/functions/submit-ranked-result/index.ts`.
+/// Regenerate with scripts/regenerate-schema-fixture.sh after editing it.
+enum EdgeFunctionFixture {
+    static let submitRankedResult = #"""
+HEAD
+  cat "$EDGE"
+  printf '"""#\n}\n'
+} > "$EDGE_FIXTURE"
+
+echo "Regenerated $EDGE_FIXTURE from $EDGE"

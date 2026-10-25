@@ -49,6 +49,14 @@ final class MatchViewModel {
     var matchWeek: Int?
     private let seasonNumber: Int
     private let week: Int
+    /// Phase 14: competitive identity + per-case facts for ranked
+    /// submission. Created once when a real season game starts (its match ID
+    /// is persisted with the active-match record and never regenerated);
+    /// nil for standalone games, which are never ranked.
+    private(set) var competitive: CompetitiveMatchState?
+    /// The ranked outcome built when the game completed (eligible payload or
+    /// the reason it can't count). Local results never depend on it.
+    private(set) var competitiveOutcome: CompetitivePayloadBuilder.Outcome?
 
     /// Draws the game's case files from the local puzzle library via the
     /// deterministic scheduler: no case repeats within a game, and across a
@@ -74,6 +82,7 @@ final class MatchViewModel {
         // Phase 11.6: season games are identity-stable — leaving and
         // reopening resumes the same investigation, quarter for quarter.
         if seasonNumber > 0 {
+            competitive = .fresh()
             matchID = Self.stableMatchID(
                 seasonNumber: seasonNumber, week: week,
                 isPlayoff: isPlayoff, isChampionship: isChampionship
@@ -115,6 +124,11 @@ final class MatchViewModel {
         if let resume, Self.matchesContext(resume, seasonNumber: seasonNumber, week: week, isPlayoff: isPlayoff, isChampionship: isChampionship) {
             match = resume.match
             matchID = resume.matchID
+            // Same competitive identity as before the exit; a record saved
+            // before ranked play existed can never be ranked.
+            if seasonNumber > 0 {
+                competitive = resume.competitive ?? .legacyResume()
+            }
         }
     }
 
@@ -220,6 +234,9 @@ final class MatchViewModel {
         match = .fresh()
         matchID = UUID()
         rewardBreakdown = nil
+        // A standalone replay is never ranked.
+        competitive = nil
+        competitiveOutcome = nil
         phase = .quarterIntro
         // A fresh standalone game supersedes any stale saved investigation.
         ActiveInvestigationStore.clear()
@@ -242,7 +259,8 @@ final class MatchViewModel {
             isPlayoff: isPlayoff,
             isChampionship: isChampionship,
             matchID: matchID,
-            match: match
+            match: match,
+            competitive: competitive
         ))
     }
 
@@ -285,6 +303,7 @@ final class MatchViewModel {
         if outcome == .solved {
             awardQuarterReward(quarterIndex: viewModel.puzzleIndex)
         }
+        recordCompetitiveCase(viewModel, outcome: outcome)
         if match.isComplete {
             rewardBreakdown = MatchRewardBreakdown.forMatch(
                 match,
@@ -306,9 +325,75 @@ final class MatchViewModel {
         withAnimation(.easeInOut(duration: 0.3)) {
             phase = match.isComplete ? .gameResult : .quarterResult
         }
+        // Ranked submission is queued durably BEFORE the active record is
+        // cleared, so a kill right after the verdict can't lose it.
+        if match.isComplete {
+            submitCompetitiveResultIfEligible()
+        }
         // The quarter snapshot is cleared by the finished GameViewModel; the
         // match record advances (or clears on completion) for a clean resume.
         persistActiveInvestigation(afterAdvance: true)
+    }
+
+    // MARK: Competitive facts (Phase 14)
+
+    /// Appends the finished case's facts (replacing any earlier entry for the
+    /// same quarter so a re-finished quarter never double-counts).
+    private func recordCompetitiveCase(_ viewModel: GameViewModel, outcome: QuarterOutcome) {
+        guard var state = competitive else { return }
+        let caseID = viewModel.puzzle.id
+        let version = CompetitiveCaseCatalog.competitiveVersion(forCaseID: caseID)
+        state.caseResults.removeAll { $0.quarterIndex == viewModel.puzzleIndex }
+        state.caseResults.append(CompetitiveCaseResult(
+            caseID: caseID,
+            caseVersion: version,
+            quarterIndex: viewModel.puzzleIndex,
+            outcome: outcome,
+            hintsUsed: viewModel.consumedHintCount,
+            wrongPlacements: viewModel.rejectionCount,
+            placements: viewModel.competitivePlacements
+        ))
+        if version == nil, state.ineligibleReason == nil {
+            state.ineligibleReason = .unknownCaseVersion
+        }
+        competitive = state
+    }
+
+    /// QA/debug paths that fabricate a result call this first — such a game
+    /// can never be ranked.
+    func markCompetitiveIneligible(_ reason: CompetitiveIneligibility) {
+        guard var state = competitive else { return }
+        state.ineligibleReason = state.ineligibleReason ?? reason
+        competitive = state
+    }
+
+    /// Pure payload build for this finished game (tests call it directly).
+    func competitivePayload(userID: UUID?, seasonID: UUID?, seasonDifficulty: DifficultyLevel?, completedAt: Date = Date()) -> CompetitivePayloadBuilder.Outcome {
+        CompetitivePayloadBuilder.build(
+            state: competitive,
+            match: match,
+            seasonNumber: seasonNumber,
+            gameNumber: week,
+            activeDifficulty: activeDifficulty,
+            seasonDifficulty: seasonDifficulty,
+            seasonID: seasonID,
+            userID: userID,
+            completedAt: completedAt
+        )
+    }
+
+    private func submitCompetitiveResultIfEligible() {
+        guard competitive != nil, competitiveOutcome == nil else { return }
+        var userID: UUID?
+        if case .authenticated(let profile) = AuthService.shared.state { userID = profile.authUserID }
+        let seasons = SeasonManager.shared
+        let outcome = competitivePayload(
+            userID: userID,
+            seasonID: seasons.competitiveSeasonID,
+            seasonDifficulty: seasons.activeSeasonDifficulty
+        )
+        competitiveOutcome = outcome
+        CompetitiveSubmissionService.shared.handle(outcome)
     }
 
     // MARK: Game Ball economy (Phase 11.7)
