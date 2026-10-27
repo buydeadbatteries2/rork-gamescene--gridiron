@@ -13,6 +13,10 @@ written. Outputs:
   GameSceneGridiron/Data/CaseStatEventsGenerated.swift  stat events for the new cases
 
 Re-runnable: deterministic (fixed RNG seed), skips nothing, rewrites outputs.
+
+Phase 14A: after re-running, ALWAYS run scripts/calibrate_case_difficulty.py
+(writes the calibrated difficultyScore into every pack) and then
+scripts/export_competitive_catalog.py — tests fail on any uncalibrated score.
 """
 
 import os, re, sys, random, itertools, math

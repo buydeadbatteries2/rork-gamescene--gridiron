@@ -92,7 +92,8 @@ nonisolated enum CasePack3 {
                 (player: "dl", slot: "dl-edge", profile: .fast),
                 (player: "lb", slot: "lb-right", profile: .veteran),
                 (player: "ss", slot: "ss-box-left", profile: .powerful)
-            ]
+            ],
+            tier: .allPro, difficultyScore: 62, isCompetitiveEligible: true
         ),
 
         // 22 — Crossers Everywhere (seed 21)
@@ -180,7 +181,8 @@ nonisolated enum CasePack3 {
                 (player: "rb", slot: "rb-right", profile: .veteran),
                 (player: "cb", slot: "cb-right", profile: .fast),
                 (player: "fs", slot: "fs-center", profile: .veteran)
-            ]
+            ],
+            tier: .allPro, difficultyScore: 62, isCompetitiveEligible: true
         ),
 
         // 23 — Under Center, Overloaded (seed 22)
@@ -271,7 +273,8 @@ nonisolated enum CasePack3 {
                 (player: "dl", slot: "de-right", profile: .powerful),
                 (player: "lb", slot: "lb-right", profile: .fast),
                 (player: "cb", slot: "cb-left", profile: .fast)
-            ]
+            ],
+            tier: .allPro, difficultyScore: 63, isCompetitiveEligible: true
         ),
 
         // 24 — The Disappearing Deep Man (seed 23)
@@ -351,7 +354,8 @@ nonisolated enum CasePack3 {
                 (player: "cb", slot: "cb-left", profile: .fast),
                 (player: "fs", slot: "fs-center", profile: .veteran),
                 (player: "lb", slot: "lb-right", profile: .veteran)
-            ]
+            ],
+            tier: .allPro, difficultyScore: 58, isCompetitiveEligible: true
         ),
 
         // 25 — The Unblocked Edge (seed 24)
@@ -434,7 +438,8 @@ nonisolated enum CasePack3 {
                 (player: "de", slot: "de-edge", profile: .fast),
                 (player: "cb", slot: "cb-right", profile: .fast),
                 (player: "ss", slot: "ss-box", profile: .powerful)
-            ]
+            ],
+            tier: .allPro, difficultyScore: 62, isCompetitiveEligible: true
         ),
 
         // 26 — The Option Pitch (seed 25)
@@ -516,7 +521,8 @@ nonisolated enum CasePack3 {
                 (player: "wr", slot: "wr-right", profile: .veteran),
                 (player: "dl", slot: "de-right", profile: .powerful),
                 (player: "fs", slot: "fs-center", profile: .veteran)
-            ]
+            ],
+            tier: .allPro, difficultyScore: 59, isCompetitiveEligible: true
         ),
 
         // 27 — Doubling the Star (seed 26)
@@ -605,7 +611,8 @@ nonisolated enum CasePack3 {
                 (player: "cb1", slot: "cb1-right", profile: .powerful),
                 (player: "cb2", slot: "cb2-left", profile: .fast),
                 (player: "ss", slot: "ss-box", profile: .veteran)
-            ]
+            ],
+            tier: .allPro, difficultyScore: 64, isCompetitiveEligible: true
         ),
 
         // 28 — The Interior Stunt (seed 27)
@@ -688,7 +695,8 @@ nonisolated enum CasePack3 {
                 (player: "dt2", slot: "dt-3tech", profile: .fast),
                 (player: "lb", slot: "lb-right", profile: .veteran),
                 (player: "fs", slot: "fs-center", profile: .veteran)
-            ]
+            ],
+            tier: .allPro, difficultyScore: 59, isCompetitiveEligible: true
         ),
 
         // 29 — The Bootleg Rollout (seed 28)
@@ -771,7 +779,8 @@ nonisolated enum CasePack3 {
                 (player: "wr", slot: "wr-right", profile: .veteran),
                 (player: "dl", slot: "de-right", profile: .powerful),
                 (player: "lb", slot: "lb-right", profile: .fast)
-            ]
+            ],
+            tier: .allPro, difficultyScore: 58, isCompetitiveEligible: true
         ),
 
         // 30 — The Shell That Leaked (seed 29)
@@ -854,7 +863,8 @@ nonisolated enum CasePack3 {
                 (player: "te", slot: "te-right", profile: .powerful),
                 (player: "dl", slot: "dt-nose", profile: .powerful),
                 (player: "fs", slot: "fs-center", profile: .fast)
-            ]
+            ],
+            tier: .allPro, difficultyScore: 59, isCompetitiveEligible: true
         )
     ]
 }

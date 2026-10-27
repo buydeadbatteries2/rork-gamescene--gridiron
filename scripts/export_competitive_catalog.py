@@ -28,7 +28,10 @@ Deterministic: no randomness, stable ordering. Re-run after any case edit:
   python3 scripts/export_competitive_catalog.py
 """
 
-import json, os, re, sys
+import hashlib, json, os, re, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import case_difficulty_features as cdf  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = os.path.join(ROOT, "ios-gamescene-gridiron")
@@ -36,13 +39,6 @@ DATA = os.path.join(APP, "GameSceneGridiron", "Data")
 TESTS = os.path.join(APP, "GameSceneGridironTests")
 SUPABASE = os.path.join(ROOT, "supabase")
 VERSIONS_PATH = os.path.join(SUPABASE, "competitive_case_versions.json")
-
-# Derived difficulty scores for packs 1–6 (cases authored before explicit
-# scores existed). CaseLibrary.makeCase derives them from
-# CaseDifficultyProfile(rating * 100); captured once from the Swift runtime
-# and pinned by Phase14CatalogTests (any drift fails the test).
-DERIVED_SCORES = {
-}
 
 SERVER_DIFFICULTY = {"rookie": "rookie", "pro": "pro", "allPro": "all_pro", "hallOfFamer": "hall_of_famer"}
 POOLS = {
@@ -52,6 +48,47 @@ POOLS = {
     "hallOfFamer": ["rookie", "veteran", "fast", "powerful", "overrated"],
 }
 DIFFICULTY_ORDER = ["rookie", "pro", "allPro", "hallOfFamer"]
+SANITY_BANDS = {"rookie": (10, 35), "pro": (30, 55), "allPro": (50, 75), "hallOfFamer": (70, 100)}
+# Solo leaderboard cases ship inside the app binary. Future Versus/Faction
+# cases will be 'server_assigned' (content never bundled) and are refused by
+# the solo submission path.
+DISTRIBUTION = "client_bundled"
+
+
+def jsonb_text(value):
+    """Postgres jsonb::text rendering: object keys ordered by (length, bytes),
+    ', ' and ': ' separators. Lets the server recompute the catalog checksum
+    from the stored jsonb (competitive_catalog_checksum())."""
+    if isinstance(value, dict):
+        keys = sorted(value.keys(), key=lambda k: (len(k.encode("utf-8")), k.encode("utf-8")))
+        return "{" + ", ".join(json.dumps(k) + ": " + jsonb_text(value[k]) for k in keys) + "}"
+    if isinstance(value, list):
+        return "[" + ", ".join(jsonb_text(v) for v in value) + "]"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        assert all(32 <= ord(ch) < 127 and ch not in '"\\' for ch in value), value
+        return json.dumps(value)
+    return str(value)
+
+
+def md5(text):
+    return hashlib.md5(text.encode("utf-8")).hexdigest()
+
+
+def canonical_line(c):
+    """One active catalog row — byte-identical to the line built by
+    public.competitive_catalog_checksum() and by Phase14ACatalogTests."""
+    return "|".join([
+        c["id"], str(c["version"]), SERVER_DIFFICULTY[c["tier"]], str(c["score"]),
+        str(c["band"]), str(len(c["solution"])), "true", "true" if c["eligible"] else "false",
+        DISTRIBUTION, c["fingerprint"], md5(jsonb_text(solutions_for(c))),
+    ])
+
+
+def catalog_checksum(cases):
+    lines = sorted((canonical_line(c) for c in cases), key=lambda l: l.encode("utf-8"))
+    return md5("\n".join(lines))
 
 
 def fnv1a(values):
@@ -77,48 +114,23 @@ def remap(profile, pool):
     return "veteran" if "veteran" in pool else (pool[0] if pool else "rookie")
 
 
-def band_tier(band):
-    return "pro" if band in (1, 2) else ("allPro" if band == 3 else "hallOfFamer")
-
-
-def block_between(text, start, end):
-    i = text.index(start) + len(start)
-    j = text.index(end, i)
-    return text[i:j]
-
-
 def parse_cases():
-    cases = []
-    for n in range(1, 13):
-        text = open(os.path.join(DATA, f"CasePack{n}.swift")).read()
-        for block in text.split("CaseLibrary.makeCase(")[1:]:
-            cid = re.search(r'id: "([^"]+)"', block).group(1)
-            seed = int(re.search(r'seed: (\d+)', block).group(1))
-            band = int(re.search(r'band: (\d+)', block).group(1))
-            missing = re.findall(r'\(key: "([^"]+)", position: \.(\w+)\)', block_between(block, "missing: [", "evidence: ["))
-            slots = re.findall(r'\(key: "([^"]+)", x:', block_between(block, "slots: [", "clues: ["))
-            clues = re.findall(r'\(player: "[^"]+", family:', block)
-            hints = re.findall(r'\(player: "[^"]+", text:', block)
-            solution = re.findall(r'\(player: "([^"]+)", slot: "([^"]+)", profile: \.(\w+)\)', block)
-            tail = block[block.index("solution: ["):]
-            tier_m = re.search(r'tier: \.(\w+)', tail)
-            score_m = re.search(r'difficultyScore: (\d+)', tail)
-            elig_m = re.search(r'isCompetitiveEligible: (true|false)', tail)
-            tier = tier_m.group(1) if tier_m else band_tier(band)
-            if score_m:
-                score = int(score_m.group(1))
-                score_source = "authored"
-            else:
-                score = DERIVED_SCORES.get(cid, 0)
-                score_source = "derived"
-            eligible = (elig_m.group(1) == "true") if elig_m else True
-            assert missing and slots and solution, cid
-            cases.append(dict(
-                id=cid, seed=seed, band=band, missing=missing, slots=slots,
-                clue_count=len(clues), hint_count=len(hints), solution=solution,
-                tier=tier, score=min(100, max(1, score)) if score else 0,
-                score_source=score_source, eligible=eligible,
-            ))
+    """Shared parser (scripts/case_difficulty_features.py). Phase 14A: every
+    case must carry an EXPLICIT authored score equal to the calibration
+    model — no derived, default or placeholder score can reach the server."""
+    cases = cdf.parse_library()
+    problems = []
+    for c in cases:
+        expected = cdf.calibrated_score(c)
+        if c["score"] == 0:
+            problems.append(f"{c['id']}: no authored difficultyScore")
+        elif c["score"] != expected:
+            problems.append(f"{c['id']}: difficultyScore {c['score']} != calibrated {expected}")
+        lo, hi = SANITY_BANDS[c["tier"]]
+        if not lo <= c["score"] <= hi:
+            problems.append(f"{c['id']}: {c['tier']} score {c['score']} outside {lo}-{hi}")
+    if problems:
+        sys.exit("run scripts/calibrate_case_difficulty.py first:\n  " + "\n  ".join(problems[:20]))
     return cases
 
 
@@ -156,7 +168,6 @@ def main():
     ids = [c["id"] for c in cases]
     if len(set(ids)) != len(ids):
         sys.exit("duplicate case ids")
-    missing_scores = [c["id"] for c in cases if c["score"] == 0]
 
     state = {}
     if os.path.exists(VERSIONS_PATH):
@@ -175,6 +186,7 @@ def main():
         c["version"] = version
         new_state[c["id"]] = {"version": version, "fingerprint": fp}
     catalog_fp = "%016x" % fnv1a([f"{c['id']}@{c['version']}:{c['fingerprint']}" for c in cases])
+    checksum = catalog_checksum(cases)
 
     os.makedirs(SUPABASE, exist_ok=True)
     with open(VERSIONS_PATH, "w") as f:
@@ -188,18 +200,24 @@ def main():
         rows.append(
             f"    ({sql_str(c['id'])}, {c['version']}, {sql_str(SERVER_DIFFICULTY[c['tier']])}, {c['score']}, "
             f"{c['band']}, {len(c['solution'])}, true, {'true' if c['eligible'] else 'false'}, "
-            f"{sql_str(c['fingerprint'])}, {sql_str(sol)}::jsonb)"
+            f"{sql_str(DISTRIBUTION)}, {sql_str(c['fingerprint'])}, {sql_str(sol)}::jsonb)"
         )
     sql = [
         "-- GENERATED by scripts/export_competitive_catalog.py — DO NOT EDIT BY HAND.",
         "-- GameScene: Gridiron — Phase 14 competitive case catalog (PRIVATE).",
-        f"-- {len(cases)} cases · catalog fingerprint {catalog_fp}",
+        f"-- {len(cases)} cases · catalog fingerprint {catalog_fp} · checksum (md5) {checksum}",
+        f"-- difficulty_score: calibrated (CaseDifficultyCalibration) — "
+        + ", ".join(f"{SERVER_DIFFICULTY[t]} {min(x['score'] for x in cases if x['tier'] == t)}-{max(x['score'] for x in cases if x['tier'] == t)}" for t in DIFFICULTY_ORDER),
         "-- Paste into the Supabase SQL editor AFTER supabase/schema.sql. Idempotent:",
         "-- re-running upserts every case; edited cases arrive with a bumped",
         "-- case_version. Solutions are readable ONLY by the service role (the",
         "-- submit-ranked-result Edge Function) — anon/authenticated have no access.",
+        "-- The whole file runs as ONE transaction: the final checksum check rolls",
+        "-- everything back if the stored catalog differs from this export.",
+        "begin;",
+        "",
         "insert into public.competitive_cases",
-        "    (case_id, case_version, difficulty, difficulty_score, band, missing_count, active, competitive_eligible, fingerprint, solutions)",
+        "    (case_id, case_version, difficulty, difficulty_score, band, missing_count, active, competitive_eligible, distribution, fingerprint, solutions)",
         "values",
         ",\n".join(rows),
         "on conflict (case_id) do update set",
@@ -210,6 +228,7 @@ def main():
         "    missing_count        = excluded.missing_count,",
         "    active               = excluded.active,",
         "    competitive_eligible = excluded.competitive_eligible,",
+        "    distribution         = excluded.distribution,",
         "    fingerprint          = excluded.fingerprint,",
         "    solutions            = excluded.solutions,",
         "    updated_at           = now();",
@@ -218,6 +237,28 @@ def main():
         "-- its references).",
         "update public.competitive_cases set active = false, updated_at = now()",
         "where case_id not in (" + ", ".join(sql_str(i) for i in ids) + ");",
+        "",
+        "-- Drift detection: the expected checksum is recorded, then recomputed",
+        "-- from the stored rows. Any mismatch aborts (and rolls back) the paste.",
+        "insert into public.competitive_catalog_meta (id, case_count, catalog_fingerprint, expected_checksum)",
+        f"values (1, {len(cases)}, {sql_str(catalog_fp)}, {sql_str(checksum)})",
+        "on conflict (id) do update set",
+        "    case_count          = excluded.case_count,",
+        "    catalog_fingerprint = excluded.catalog_fingerprint,",
+        "    expected_checksum   = excluded.expected_checksum,",
+        "    updated_at          = now();",
+        "",
+        "do $$",
+        "declare",
+        "    v_actual text := public.competitive_catalog_checksum();",
+        "begin",
+        f"    if v_actual is distinct from {sql_str(checksum)} then",
+        f"        raise exception 'COMPETITIVE_CATALOG_DRIFT: expected {checksum}, stored %', v_actual;",
+        "    end if;",
+        "end;",
+        "$$;",
+        "",
+        "commit;",
         "",
     ]
     open(os.path.join(SUPABASE, "competitive_catalog.sql"), "w").write("\n".join(sql))
@@ -235,6 +276,9 @@ def main():
         "// CaseLibrary, so any case edit without a re-export fails the tests.",
         "nonisolated enum CompetitiveCaseCatalog {",
         f"    static let catalogFingerprint = \"{catalog_fp}\"",
+        "    /// md5 over the canonical active-row lines — equals",
+        "    /// public.competitive_catalog_checksum() on a correctly pasted server.",
+        f"    static let catalogChecksum = \"{checksum}\"",
         f"    static let caseCount = {len(cases)}",
         "",
         "    static let entries: [String: CompetitiveCatalogEntry] = [",
@@ -263,6 +307,11 @@ def main():
         "//   case_id|difficulty|player:slot:profile,player:slot:profile,...",
         "enum CompetitiveCatalogFixture {",
         f"    static let catalogFingerprint = \"{catalog_fp}\"",
+        "    /// Canonical active-row lines hashed by public.competitive_catalog_checksum():",
+        "    /// id|version|difficulty|score|band|missing|active|eligible|distribution|fingerprint|md5(solutions jsonb)",
+        "    static let canonicalLines = #\"\"\"",
+        *sorted((canonical_line(c) for c in cases), key=lambda l: l.encode("utf-8")),
+        "\"\"\"#",
         "    static let solutions = #\"\"\"",
         *sol_lines,
         "\"\"\"#",
@@ -271,9 +320,7 @@ def main():
     ]
     open(os.path.join(TESTS, "CompetitiveCatalogFixture.swift"), "w").write("\n".join(test))
 
-    print(f"exported {len(cases)} cases, catalog {catalog_fp}")
-    if missing_scores:
-        print(f"WARNING: {len(missing_scores)} derived scores not yet captured: run Phase14CatalogTests to capture them")
+    print(f"exported {len(cases)} cases, catalog {catalog_fp}, checksum {checksum}")
 
 
 if __name__ == "__main__":

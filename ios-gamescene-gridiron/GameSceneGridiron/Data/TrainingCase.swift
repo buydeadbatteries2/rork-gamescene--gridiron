@@ -98,7 +98,9 @@ nonisolated enum TrainingCase {
             (player: "rb", slot: "rb-right", profile: .fast),
             (player: "cb", slot: "cb-right", profile: .powerful),
             (player: "fs", slot: "fs-center", profile: .veteran)
-        ]
+        ],
+        // Practice only — never ranked, never in the competitive catalog.
+        isCompetitiveEligible: false
     )
 
     /// The runtime puzzle for the guided training session. Reuses the standard

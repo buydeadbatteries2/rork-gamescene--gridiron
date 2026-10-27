@@ -84,7 +84,7 @@ nonisolated enum CasePack9 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .fast),
                 (player: "te", slot: "te-right-line-3", profile: .powerful),
             ],
-            tier: .pro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 39, isCompetitiveEligible: true
         ),
 
         // The Patient Draft — red zone look (pro tier, band 1)
@@ -162,7 +162,7 @@ nonisolated enum CasePack9 {
                 (player: "lb", slot: "lb-mid-mid-2", profile: .veteran),
                 (player: "ol", slot: "ol-right-line-3", profile: .fast),
             ],
-            tier: .pro, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 42, isCompetitiveEligible: true
         ),
 
         // The Crooked Gate — goal line look (pro tier, band 2)
@@ -242,7 +242,7 @@ nonisolated enum CasePack9 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .powerful),
                 (player: "rb", slot: "rb-mid-back-3", profile: .veteran),
             ],
-            tier: .pro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 36, isCompetitiveEligible: true
         ),
 
         // The Wilted Audible — overload look (pro tier, band 3)
@@ -321,7 +321,7 @@ nonisolated enum CasePack9 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .fast),
                 (player: "wr", slot: "wr-left-mid-3", profile: .powerful),
             ],
-            tier: .pro, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 36, isCompetitiveEligible: true
         ),
 
         // The Quiet Margin — gun protection look (pro tier, band 4)
@@ -398,7 +398,7 @@ nonisolated enum CasePack9 {
                 (player: "ol", slot: "ol-mid-line-2", profile: .veteran),
                 (player: "qb", slot: "qb-mid-line-3", profile: .fast),
             ],
-            tier: .pro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 39, isCompetitiveEligible: true
         ),
 
         // The Bitter Settle — tight edge look (pro tier, band 5)
@@ -476,7 +476,7 @@ nonisolated enum CasePack9 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .powerful),
                 (player: "ol", slot: "ol-mid-line-3", profile: .veteran),
             ],
-            tier: .pro, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 42, isCompetitiveEligible: true
         ),
 
         // The Crooked Hook — trips look (pro tier, band 1)
@@ -556,7 +556,7 @@ nonisolated enum CasePack9 {
                 (player: "lb", slot: "lb-mid-mid-2", profile: .fast),
                 (player: "rb", slot: "rb-mid-back-3", profile: .powerful),
             ],
-            tier: .pro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 36, isCompetitiveEligible: true
         ),
 
         // The Blinking Count — bunch look (pro tier, band 2)
@@ -636,7 +636,7 @@ nonisolated enum CasePack9 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .veteran),
                 (player: "qb", slot: "qb-mid-line-3", profile: .fast),
             ],
-            tier: .pro, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 36, isCompetitiveEligible: true
         ),
 
         // The Restless Fountain — red zone look (pro tier, band 3)
@@ -714,7 +714,7 @@ nonisolated enum CasePack9 {
                 (player: "lb", slot: "lb-mid-mid-2", profile: .powerful),
                 (player: "rb", slot: "rb-mid-back-3", profile: .veteran),
             ],
-            tier: .pro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 39, isCompetitiveEligible: true
         ),
 
         // The Second Sweep — goal line look (pro tier, band 4)
@@ -794,7 +794,7 @@ nonisolated enum CasePack9 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .fast),
                 (player: "rb", slot: "rb-mid-back-3", profile: .powerful),
             ],
-            tier: .pro, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 42, isCompetitiveEligible: true
         ),
 
         // The Jagged Verdict — overload look (pro tier, band 5)
@@ -873,7 +873,7 @@ nonisolated enum CasePack9 {
                 (player: "lb", slot: "lb-mid-mid-2", profile: .veteran),
                 (player: "rb", slot: "rb-mid-back-3", profile: .fast),
             ],
-            tier: .pro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 36, isCompetitiveEligible: true
         ),
 
         // The Restless Corner — gun protection look (pro tier, band 1)
@@ -950,7 +950,7 @@ nonisolated enum CasePack9 {
                 (player: "ol", slot: "ol-mid-line-2", profile: .powerful),
                 (player: "qb", slot: "qb-mid-line-3", profile: .veteran),
             ],
-            tier: .pro, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 36, isCompetitiveEligible: true
         ),
 
         // The Broken Detour — tight edge look (pro tier, band 2)
@@ -1028,7 +1028,7 @@ nonisolated enum CasePack9 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .fast),
                 (player: "ol", slot: "ol-mid-line-3", profile: .powerful),
             ],
-            tier: .pro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 39, isCompetitiveEligible: true
         ),
 
         // The Second Clock — trips look (pro tier, band 3)
@@ -1108,7 +1108,7 @@ nonisolated enum CasePack9 {
                 (player: "lb", slot: "lb-mid-mid-2", profile: .veteran),
                 (player: "ss", slot: "ss-mid-deep-3", profile: .fast),
             ],
-            tier: .pro, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 42, isCompetitiveEligible: true
         ),
 
         // The Quiet Flood — bunch look (pro tier, band 4)
@@ -1188,7 +1188,7 @@ nonisolated enum CasePack9 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .powerful),
                 (player: "qb", slot: "qb-mid-line-3", profile: .veteran),
             ],
-            tier: .pro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 36, isCompetitiveEligible: true
         ),
 
         // The Willing Loop — red zone look (pro tier, band 5)
@@ -1266,7 +1266,7 @@ nonisolated enum CasePack9 {
                 (player: "lb", slot: "lb-mid-mid-2", profile: .fast),
                 (player: "ss", slot: "ss-mid-deep-3", profile: .powerful),
             ],
-            tier: .pro, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .pro, difficultyScore: 36, isCompetitiveEligible: true
         ),
 
     ]

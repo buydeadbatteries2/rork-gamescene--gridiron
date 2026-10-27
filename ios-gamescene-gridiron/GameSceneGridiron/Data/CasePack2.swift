@@ -81,7 +81,8 @@ nonisolated enum CasePack2 {
                 (player: "wr2", slot: "wr2-slot", profile: .fast),
                 (player: "de", slot: "de-edge", profile: .fast),
                 (player: "ss", slot: "ss-box", profile: .powerful)
-            ]
+            ],
+            tier: .pro, difficultyScore: 39, isCompetitiveEligible: true
         ),
 
         // 12 — The Fourth Corner (seed 11)
@@ -162,7 +163,8 @@ nonisolated enum CasePack2 {
                 (player: "cb1", slot: "cb-slot", profile: .powerful),
                 (player: "cb2", slot: "cb-left", profile: .fast),
                 (player: "lb", slot: "lb-right", profile: .veteran)
-            ]
+            ],
+            tier: .pro, difficultyScore: 39, isCompetitiveEligible: true
         ),
 
         // 13 — The Wall at One (seed 12)
@@ -241,7 +243,8 @@ nonisolated enum CasePack2 {
                 (player: "dl", slot: "dl-nose", profile: .powerful),
                 (player: "lb", slot: "lb-right", profile: .veteran),
                 (player: "ss", slot: "ss-box", profile: .powerful)
-            ]
+            ],
+            tier: .pro, difficultyScore: 37, isCompetitiveEligible: true
         ),
 
         // 14 — Pistol, Pocketed (seed 13)
@@ -323,7 +326,8 @@ nonisolated enum CasePack2 {
                 (player: "ol", slot: "ol-rt", profile: .powerful),
                 (player: "de", slot: "de-edge", profile: .fast),
                 (player: "fs", slot: "fs-deep-right", profile: .fast)
-            ]
+            ],
+            tier: .pro, difficultyScore: 40, isCompetitiveEligible: true
         ),
 
         // 15 — The Flooded Zone (seed 14)
@@ -401,7 +405,8 @@ nonisolated enum CasePack2 {
                 (player: "wr2", slot: "wr2-slot", profile: .fast),
                 (player: "cb", slot: "cb-slot", profile: .fast),
                 (player: "fs", slot: "fs-center", profile: .veteran)
-            ]
+            ],
+            tier: .pro, difficultyScore: 39, isCompetitiveEligible: true
         ),
 
         // 16 — The Strong-Side Leak (seed 15)
@@ -483,7 +488,8 @@ nonisolated enum CasePack2 {
                 (player: "dl", slot: "de-right", profile: .powerful),
                 (player: "lb", slot: "lb-right", profile: .powerful),
                 (player: "cb", slot: "cb-right", profile: .veteran)
-            ]
+            ],
+            tier: .pro, difficultyScore: 38, isCompetitiveEligible: true
         ),
 
         // 17 — The Screen Nobody Bought (seed 16)
@@ -565,7 +571,8 @@ nonisolated enum CasePack2 {
                 (player: "ol", slot: "ol-rt", profile: .powerful),
                 (player: "dl", slot: "dl-edge", profile: .veteran),
                 (player: "ss", slot: "ss-box-left", profile: .fast)
-            ]
+            ],
+            tier: .pro, difficultyScore: 41, isCompetitiveEligible: true
         ),
 
         // 18 — The Post and the Pillar (seed 17)
@@ -645,7 +652,8 @@ nonisolated enum CasePack2 {
                 (player: "cb", slot: "cb-right", profile: .fast),
                 (player: "fs", slot: "fs-center", profile: .veteran),
                 (player: "lb", slot: "lb-left", profile: .powerful)
-            ]
+            ],
+            tier: .pro, difficultyScore: 40, isCompetitiveEligible: true
         ),
 
         // 19 — Two Tights, One Hole (seed 18)
@@ -726,7 +734,8 @@ nonisolated enum CasePack2 {
                 (player: "ol", slot: "ol-rt", profile: .powerful),
                 (player: "dl", slot: "de-right", profile: .powerful),
                 (player: "lb", slot: "lb-right", profile: .veteran)
-            ]
+            ],
+            tier: .pro, difficultyScore: 37, isCompetitiveEligible: true
         ),
 
         // 20 — The A-Gap Whisper (seed 19)
@@ -807,7 +816,8 @@ nonisolated enum CasePack2 {
                 (player: "cb", slot: "cb-left", profile: .fast),
                 (player: "de", slot: "de-edge", profile: .fast),
                 (player: "fs", slot: "fs-center", profile: .veteran)
-            ]
+            ],
+            tier: .pro, difficultyScore: 38, isCompetitiveEligible: true
         )
     ]
 }

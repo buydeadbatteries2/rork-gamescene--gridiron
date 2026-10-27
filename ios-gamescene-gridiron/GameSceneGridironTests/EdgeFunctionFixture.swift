@@ -19,9 +19,19 @@ enum EdgeFunctionFixture {
 //   * Idempotent by match_id: a retried submission returns the stored result.
 //   * The service-role key comes from the function environment and never
 //     leaves the server.
+//   * Transactional: the single record_verified_ranked_result call inserts
+//     the result AND updates career stats/global_rating in one transaction.
+//     A rejection writes nothing but an audit row — the player's local solo
+//     outcome is never touched (the client only stops retrying).
+//   * Leaderboard week: completed_at is a CLAIM. The database honors it
+//     only after validating it against receipt time, start time, duration,
+//     account age and season order (else it uses receipt time) and returns
+//     the bucket it used (leaderboard_at / leaderboard_at_source).
+//   * Only 'client_bundled' catalog cases are valid here; 'server_assigned'
+//     cases are reserved for future server-assigned Versus/Faction matches.
 //
 // Responses:
-//   200 {"status":"verified","result_id","final_score","duplicate"}
+//   200 {"status":"verified","result_id","final_score","duplicate","leaderboard_at","leaderboard_at_source"}
 //   4xx {"status":"rejected","reason"}       — final; the client never retries
 //   401 / 429 / 5xx                          — transient; the client retries
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -32,9 +42,13 @@ const PROFILES = ["rookie", "veteran", "fast", "powerful", "overrated"];
 const REGULATION_QUARTERS = 4;
 const OVERTIME_INDEX = 4;
 const MAX_PLACEMENTS = 8;
+// Structural rejection bounds — equal to ranked_scoring_config's
+// max_clock_skew_seconds / max_offline_age_days / min_game_duration_seconds
+// (the database re-checks them when choosing the leaderboard week).
 const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
 const MAX_GAME_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const MIN_GAME_DURATION_MS = 20 * 1000;
+const SOLO_DISTRIBUTION = "client_bundled";
 const MAX_BODY_BYTES = 32 * 1024;
 const DEFAULT_SUBMISSIONS_PER_HOUR = 30;
 
@@ -282,11 +296,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // 5. Idempotency: an already-recorded match returns its stored result.
-  const { data: existing } = await admin
+  const { data: existing, error: existingError } = await admin
     .from("ranked_game_results")
-    .select("id, user_id, final_score")
+    .select("id, user_id, final_score, leaderboard_at, leaderboard_at_source")
     .eq("match_id", payload.match_id)
     .maybeSingle();
+  if (existingError) return json(503, { status: "error", reason: "lookup_failed" });
   if (existing) {
     if (existing.user_id !== userID) {
       await logAttempt(payload.match_id, "rejected", "match_id_conflict");
@@ -298,6 +313,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       result_id: existing.id,
       final_score: existing.final_score,
       duplicate: true,
+      leaderboard_at: existing.leaderboard_at,
+      leaderboard_at_source: existing.leaderboard_at_source,
     });
   }
 
@@ -305,7 +322,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const caseIDs = payload.case_results.map((c) => c.case_id);
   const { data: cases, error: casesError } = await admin
     .from("competitive_cases")
-    .select("case_id, case_version, active, competitive_eligible, solutions")
+    .select("case_id, case_version, active, competitive_eligible, distribution, solutions")
     .in("case_id", caseIDs);
   if (casesError) return json(503, { status: "error", reason: "catalog_unavailable" });
   const byID = new Map((cases ?? []).map((c) => [c.case_id as string, c]));
@@ -315,6 +332,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const entry = byID.get(result.case_id);
       require(entry !== undefined, "unknown_case");
       require(entry.active === true && entry.competitive_eligible === true, "case_not_eligible");
+      require(entry.distribution === SOLO_DISTRIBUTION, "case_not_eligible");
       require(entry.case_version === result.case_version, "case_version_mismatch");
       const solution = (entry.solutions as Record<string, Placement[]>)?.[payload.difficulty];
       validateCaseAgainstSolution(result, solution, canTrim);
@@ -345,7 +363,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   });
   if (recordError) {
     const message = recordError.message ?? "";
-    for (const reason of ["MATCH_ID_CONFLICT", "SEASON_DIFFICULTY_MISMATCH", "DUPLICATE_SEASON_GAME", "INVALID_DIFFICULTY"]) {
+    for (const reason of ["MATCH_ID_CONFLICT", "SEASON_DIFFICULTY_MISMATCH", "DUPLICATE_SEASON_GAME", "INVALID_DIFFICULTY", "INVALID_ARGUMENTS"]) {
       if (message.includes(reason)) {
         await logAttempt(payload.match_id, "rejected", reason.toLowerCase());
         return reject(reason.toLowerCase(), 409);
@@ -361,6 +379,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     result_id: row?.result_id,
     final_score: row?.final_score,
     duplicate: row?.duplicate ?? false,
+    leaderboard_at: row?.leaderboard_at,
+    leaderboard_at_source: row?.leaderboard_at_source,
   });
 });
 """#

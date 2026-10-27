@@ -82,7 +82,8 @@ nonisolated enum CasePack5 {
                 (player: "wr2", slot: "wr2-slot", profile: .fast),
                 (player: "de", slot: "de-edge", profile: .fast),
                 (player: "cb", slot: "cb-slot", profile: .powerful)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 83, isCompetitiveEligible: true
         ),
 
         // 42 — One Yard of Turf (seed 41)
@@ -165,7 +166,8 @@ nonisolated enum CasePack5 {
                 (player: "ol", slot: "ol-lg", profile: .veteran),
                 (player: "dl", slot: "dl-nose", profile: .powerful),
                 (player: "lb", slot: "lb-right", profile: .fast)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 82, isCompetitiveEligible: true
         ),
 
         // 43 — Trips Right, Two Deep (seed 42)
@@ -254,7 +256,8 @@ nonisolated enum CasePack5 {
                 (player: "cb", slot: "cb-trips", profile: .powerful),
                 (player: "ss", slot: "ss-box", profile: .veteran),
                 (player: "fs", slot: "fs-center", profile: .fast)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 89, isCompetitiveEligible: true
         ),
 
         // 44 — Fifty-Seven Yards of Air (seed 43)
@@ -336,7 +339,8 @@ nonisolated enum CasePack5 {
                 (player: "wr2", slot: "wr2-slot", profile: .veteran),
                 (player: "dl", slot: "dl-nose", profile: .powerful),
                 (player: "fs", slot: "fs-center", profile: .fast)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 83, isCompetitiveEligible: true
         ),
 
         // 45 — All-Out, Nothing Left (seed 44)
@@ -417,7 +421,8 @@ nonisolated enum CasePack5 {
                 (player: "dl", slot: "de-right", profile: .powerful),
                 (player: "lb", slot: "lb-right", profile: .veteran),
                 (player: "ss", slot: "ss-box", profile: .powerful)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 81, isCompetitiveEligible: true
         ),
 
         // 46 — The Stand at Midfield (seed 45)
@@ -500,7 +505,8 @@ nonisolated enum CasePack5 {
                 (player: "dl", slot: "dt-3tech", profile: .fast),
                 (player: "lb", slot: "lb-right", profile: .veteran),
                 (player: "cb", slot: "cb-right", profile: .veteran)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 83, isCompetitiveEligible: true
         ),
 
         // 47 — The Deep Crosser (seed 46)
@@ -589,7 +595,8 @@ nonisolated enum CasePack5 {
                 (player: "lb", slot: "lb-right", profile: .fast),
                 (player: "cb", slot: "cb-right", profile: .fast),
                 (player: "fs", slot: "fs-center", profile: .veteran)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 89, isCompetitiveEligible: true
         ),
 
         // 48 — Edge or Die (seed 47)
@@ -671,7 +678,8 @@ nonisolated enum CasePack5 {
                 (player: "de", slot: "de-edge", profile: .fast),
                 (player: "ss", slot: "ss-box", profile: .powerful),
                 (player: "fs", slot: "fs-deep-right", profile: .veteran)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 82, isCompetitiveEligible: true
         ),
 
         // 49 — Two Points or Nothing (seed 48)
@@ -753,7 +761,8 @@ nonisolated enum CasePack5 {
                 (player: "wr", slot: "wr-right", profile: .veteran),
                 (player: "cb", slot: "cb-right", profile: .fast),
                 (player: "lb", slot: "lb-right", profile: .powerful)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 81, isCompetitiveEligible: true
         ),
 
         // 50 — The Last Read (seed 49)
@@ -835,7 +844,8 @@ nonisolated enum CasePack5 {
                 (player: "dl", slot: "de-right", profile: .powerful),
                 (player: "cb", slot: "cb-right", profile: .fast),
                 (player: "fs", slot: "fs-center", profile: .veteran)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 83, isCompetitiveEligible: true
         )
     ]
 }

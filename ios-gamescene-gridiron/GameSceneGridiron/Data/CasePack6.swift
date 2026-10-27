@@ -74,7 +74,8 @@ nonisolated enum CasePack6 {
                 (player: "cb", slot: "cb-left", profile: .fast),
                 (player: "ol", slot: "ol-gap", profile: .powerful),
                 (player: "fs", slot: "fs-center", profile: .veteran)
-            ]
+            ],
+            tier: .allPro, difficultyScore: 55, isCompetitiveEligible: true
         ),
 
         // 2 — The Highlight Trap (seed 51)
@@ -152,7 +153,8 @@ nonisolated enum CasePack6 {
                 (player: "qb2", slot: "qb-gun", profile: .rookie),
                 (player: "lb", slot: "lb-left", profile: .overrated),
                 (player: "ss", slot: "ss-right", profile: .veteran)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 83, isCompetitiveEligible: true
         ),
 
         // 3 — The Reputation Deal (seed 52)
@@ -229,7 +231,8 @@ nonisolated enum CasePack6 {
                 (player: "ol", slot: "ol-gap", profile: .powerful),
                 (player: "dl", slot: "dl-left", profile: .fast),
                 (player: "fs", slot: "fs-center", profile: .veteran)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 81, isCompetitiveEligible: true
         )
     ]
 }

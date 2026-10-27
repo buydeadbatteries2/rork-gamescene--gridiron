@@ -82,7 +82,7 @@ nonisolated enum CasePack11 {
                 (player: "ol", slot: "ol-right-line-2", profile: .veteran),
                 (player: "rb", slot: "rb-mid-back-3", profile: .rookie),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Crooked Fountain — goal line look (allPro tier, band 3)
@@ -162,7 +162,7 @@ nonisolated enum CasePack11 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .overrated),
                 (player: "ss", slot: "ss-left-deep-3", profile: .fast),
             ],
-            tier: .allPro, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Copper Settle — overload look (allPro tier, band 4)
@@ -241,7 +241,7 @@ nonisolated enum CasePack11 {
                 (player: "lb", slot: "lb-mid-mid-2", profile: .powerful),
                 (player: "wr", slot: "wr-left-mid-3", profile: .veteran),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 59, isCompetitiveEligible: true
         ),
 
         // The Blinking Flood — gun protection look (allPro tier, band 5)
@@ -318,7 +318,7 @@ nonisolated enum CasePack11 {
                 (player: "ol", slot: "ol-mid-line-2", profile: .rookie),
                 (player: "qb", slot: "qb-mid-line-3", profile: .overrated),
             ],
-            tier: .allPro, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 62, isCompetitiveEligible: true
         ),
 
         // The Fading Gate — tight edge look (allPro tier, band 1)
@@ -396,7 +396,7 @@ nonisolated enum CasePack11 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .fast),
                 (player: "te", slot: "te-right-line-3", profile: .powerful),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Jagged Signal — trips look (allPro tier, band 2)
@@ -476,7 +476,7 @@ nonisolated enum CasePack11 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .veteran),
                 (player: "ss", slot: "ss-mid-deep-3", profile: .rookie),
             ],
-            tier: .allPro, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Velvet Bounce — bunch look (allPro tier, band 3)
@@ -556,7 +556,7 @@ nonisolated enum CasePack11 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .overrated),
                 (player: "qb", slot: "qb-mid-line-3", profile: .fast),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 59, isCompetitiveEligible: true
         ),
 
         // The Heavy Verdict — red zone look (allPro tier, band 4)
@@ -634,7 +634,7 @@ nonisolated enum CasePack11 {
                 (player: "ol", slot: "ol-right-line-2", profile: .powerful),
                 (player: "rb", slot: "rb-mid-back-3", profile: .veteran),
             ],
-            tier: .allPro, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 62, isCompetitiveEligible: true
         ),
 
         // The Velvet Bender — goal line look (allPro tier, band 5)
@@ -714,7 +714,7 @@ nonisolated enum CasePack11 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .rookie),
                 (player: "wr", slot: "wr-right-mid-3", profile: .overrated),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Quiet Draft — overload look (allPro tier, band 1)
@@ -793,7 +793,7 @@ nonisolated enum CasePack11 {
                 (player: "ol", slot: "ol-right-line-2", profile: .fast),
                 (player: "ss", slot: "ss-mid-deep-3", profile: .powerful),
             ],
-            tier: .allPro, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Reckless Trap — gun protection look (allPro tier, band 2)
@@ -870,7 +870,7 @@ nonisolated enum CasePack11 {
                 (player: "ol", slot: "ol-mid-line-2", profile: .veteran),
                 (player: "qb", slot: "qb-mid-line-3", profile: .rookie),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 59, isCompetitiveEligible: true
         ),
 
         // The Marble Dive — tight edge look (allPro tier, band 3)
@@ -948,7 +948,7 @@ nonisolated enum CasePack11 {
                 (player: "ol", slot: "ol-mid-line-2", profile: .overrated),
                 (player: "ss", slot: "ss-mid-deep-3", profile: .fast),
             ],
-            tier: .allPro, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 62, isCompetitiveEligible: true
         ),
 
         // The Willing Corner — trips look (allPro tier, band 4)
@@ -1028,7 +1028,7 @@ nonisolated enum CasePack11 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .powerful),
                 (player: "ss", slot: "ss-mid-mid-3", profile: .veteran),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Crooked Draft — short-yardage look (hallOfFamer tier, band 5)
@@ -1105,7 +1105,7 @@ nonisolated enum CasePack11 {
                 (player: "ol", slot: "ol-right-line-2", profile: .veteran),
                 (player: "rb", slot: "rb-mid-back-3", profile: .powerful),
             ],
-            tier: .hallOfFamer, difficultyScore: 50, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 81, isCompetitiveEligible: true
         ),
 
         // The Crooked Post — motion look (hallOfFamer tier, band 1)
@@ -1184,7 +1184,7 @@ nonisolated enum CasePack11 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .rookie),
                 (player: "ss", slot: "ss-left-deep-3", profile: .fast),
             ],
-            tier: .hallOfFamer, difficultyScore: 50, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 80, isCompetitiveEligible: true
         ),
 
         // The Crimson Trap — empty look (hallOfFamer tier, band 2)
@@ -1264,7 +1264,7 @@ nonisolated enum CasePack11 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .overrated),
                 (player: "te", slot: "te-right-line-3", profile: .veteran),
             ],
-            tier: .hallOfFamer, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 76, isCompetitiveEligible: true
         ),
 
     ]

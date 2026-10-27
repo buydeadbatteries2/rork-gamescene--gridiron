@@ -159,10 +159,15 @@ nonisolated enum CaseLibrary {
             hints: hints.map { CaseHint(playerKey: $0.player, text: $0.text) },
             solution: solution.map { CaseSolution(playerKey: $0.player, slotKey: $0.slot, profile: $0.profile) }
         )
-        let profile = CaseDifficultyProfile(of: prototype)
+        // Phase 14A: every library case authors its calibrated score
+        // explicitly (Phase14ACalibrationTests pin it to
+        // CaseDifficultyCalibration). The fallback below only serves cases
+        // outside the competitive library (the Training Case) and uses the
+        // same calibration model — never a placeholder.
+        let resolvedTier = tier ?? Self.tier(forBand: band)
         prototype.metadata = CaseMetadata(
-            tier: tier ?? Self.tier(forBand: band),
-            difficultyScore: min(100, max(1, difficultyScore ?? Int((profile.rating * 100).rounded()))),
+            tier: resolvedTier,
+            difficultyScore: min(100, max(1, difficultyScore ?? CaseDifficultyCalibration.score(of: prototype, tier: resolvedTier))),
             isCompetitiveEligible: isCompetitiveEligible
         )
         return prototype

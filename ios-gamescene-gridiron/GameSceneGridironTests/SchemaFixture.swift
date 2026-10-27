@@ -304,6 +304,15 @@ grant select on public.public_profiles to authenticated;
 --    their own result rows plus leaderboard-safe aggregates through the
 --    SECURITY DEFINER read functions at the end of this section, which join
 --    public.public_profiles (never real names or email).
+--
+--    Phase 14A honesty note: solo GameScene cases run fully offline, so the
+--    app binary necessarily holds enough case content to validate play
+--    locally — client case content is NOT secret. What stays server-side
+--    is the AUTHORITY: the private catalog copy, the scoring formula, the
+--    week bucketing and every stat write. Future Versus/Faction cases will
+--    use distribution = 'server_assigned' (content never bundled, assigned
+--    per match by the server) for stronger anti-cheat; the solo path below
+--    refuses them.
 -- ===========================================================================
 
 -- 7a. PRIVATE competitive case catalog. Populated by the GENERATED file
@@ -314,19 +323,76 @@ create table if not exists public.competitive_cases (
     case_id               text        primary key,
     case_version          int         not null check (case_version >= 1),
     difficulty            text        not null check (difficulty in ('rookie', 'pro', 'all_pro', 'hall_of_famer')),
-    difficulty_score      int         not null default 0,
+    -- Calibrated 1–100 score (CaseDifficultyCalibration) — never a default.
+    difficulty_score      int         not null,
     band                  int         not null default 0,
     missing_count         int         not null check (missing_count between 1 and 8),
     active                boolean     not null default true,
     competitive_eligible  boolean     not null default true,
+    -- 'client_bundled' = shipped in the app (solo leaderboards);
+    -- 'server_assigned' = reserved for future Versus/Faction matches.
+    distribution          text        not null default 'client_bundled',
     fingerprint           text        not null,
     -- {"rookie": [{player_key, slot_key, profile}…], "pro": […], "all_pro": […], "hall_of_famer": […]}
     solutions             jsonb       not null,
     updated_at            timestamptz not null default now()
 );
 
+-- Idempotent upgrades for a table created by an earlier paste.
+alter table public.competitive_cases add column if not exists distribution text not null default 'client_bundled';
+alter table public.competitive_cases alter column difficulty_score drop default;
+alter table public.competitive_cases drop constraint if exists competitive_cases_difficulty_score_check;
+alter table public.competitive_cases add constraint competitive_cases_difficulty_score_check
+    check (difficulty_score between 1 and 100);
+alter table public.competitive_cases drop constraint if exists competitive_cases_distribution_check;
+alter table public.competitive_cases add constraint competitive_cases_distribution_check
+    check (distribution in ('client_bundled', 'server_assigned'));
+
 alter table public.competitive_cases enable row level security;
+alter table public.competitive_cases force row level security;
+revoke all on public.competitive_cases from public;
 revoke all on public.competitive_cases from anon, authenticated;
+
+-- 7a.1 Catalog drift detection. competitive_catalog.sql records the export's
+--      expected checksum here and then recomputes it from the stored rows;
+--      a mismatch aborts that paste. Service role only.
+create table if not exists public.competitive_catalog_meta (
+    id                   int         primary key default 1 check (id = 1),
+    case_count           int         not null,
+    catalog_fingerprint  text        not null,
+    expected_checksum    text        not null,
+    updated_at           timestamptz not null default now()
+);
+
+alter table public.competitive_catalog_meta enable row level security;
+revoke all on public.competitive_catalog_meta from public;
+revoke all on public.competitive_catalog_meta from anon, authenticated;
+
+-- md5 over one canonical line per ACTIVE case, ordered by case_id (C
+-- collation): id|version|difficulty|score|band|missing|active|eligible|
+-- distribution|fingerprint|md5(solutions jsonb text). The export script and
+-- the iOS tests build the identical lines.
+create or replace function public.competitive_catalog_checksum()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+    select md5(coalesce(string_agg(
+        c.case_id || '|' || c.case_version || '|' || c.difficulty || '|' || c.difficulty_score || '|'
+            || c.band || '|' || c.missing_count || '|'
+            || (case when c.active then 'true' else 'false' end) || '|'
+            || (case when c.competitive_eligible then 'true' else 'false' end) || '|'
+            || c.distribution || '|' || c.fingerprint || '|' || md5(c.solutions::text),
+        E'\n' order by c.case_id collate "C"
+    ), ''))
+    from public.competitive_cases c
+    where c.active;
+$$;
+
+revoke all on function public.competitive_catalog_checksum() from public, anon, authenticated;
+grant execute on function public.competitive_catalog_checksum() to service_role;
 
 -- 7b. The ONE scoring configuration. Edit the row (never code) to rebalance;
 --     the score function reads it on every verified result.
@@ -346,15 +412,26 @@ create table if not exists public.ranked_scoring_config (
     alltime_best_games          int          not null,
     provisional_min_games       int          not null,
     submissions_per_hour        int          not null,
+    -- Phase 14A: leaderboard-week trust window for client completion times.
+    max_offline_age_days        int          not null default 30,
+    min_game_duration_seconds   int          not null default 20,
+    max_trusted_game_hours      int          not null default 168,
+    max_clock_skew_seconds      int          not null default 300,
     updated_at                  timestamptz  not null default now()
 );
+
+alter table public.ranked_scoring_config add column if not exists max_offline_age_days      int not null default 30;
+alter table public.ranked_scoring_config add column if not exists min_game_duration_seconds int not null default 20;
+alter table public.ranked_scoring_config add column if not exists max_trusted_game_hours    int not null default 168;
+alter table public.ranked_scoring_config add column if not exists max_clock_skew_seconds    int not null default 300;
 
 insert into public.ranked_scoring_config (
     id, quarter_solved_points, game_win_points, overtime_win_points,
     perfect_regulation_points, no_hints_points, no_wrong_placements_points,
     rookie_multiplier, pro_multiplier, all_pro_multiplier, hall_of_famer_multiplier,
-    weekly_best_games, alltime_best_games, provisional_min_games, submissions_per_hour
-) values (1, 10, 10, 5, 5, 3, 3, 1.00, 1.25, 1.50, 2.00, 10, 25, 5, 30)
+    weekly_best_games, alltime_best_games, provisional_min_games, submissions_per_hour,
+    max_offline_age_days, min_game_duration_seconds, max_trusted_game_hours, max_clock_skew_seconds
+) values (1, 10, 10, 5, 5, 3, 3, 1.00, 1.25, 1.50, 2.00, 10, 25, 5, 30, 30, 20, 168, 300)
 on conflict (id) do update set
     quarter_solved_points      = excluded.quarter_solved_points,
     game_win_points            = excluded.game_win_points,
@@ -370,9 +447,14 @@ on conflict (id) do update set
     alltime_best_games         = excluded.alltime_best_games,
     provisional_min_games      = excluded.provisional_min_games,
     submissions_per_hour       = excluded.submissions_per_hour,
+    max_offline_age_days       = excluded.max_offline_age_days,
+    min_game_duration_seconds  = excluded.min_game_duration_seconds,
+    max_trusted_game_hours     = excluded.max_trusted_game_hours,
+    max_clock_skew_seconds     = excluded.max_clock_skew_seconds,
     updated_at                 = now();
 
 alter table public.ranked_scoring_config enable row level security;
+revoke all on public.ranked_scoring_config from public;
 revoke all on public.ranked_scoring_config from anon, authenticated;
 
 -- 7c. Verified ranked results. One row per competitive match id (unique),
@@ -400,6 +482,13 @@ create table if not exists public.ranked_game_results (
     started_at                  timestamptz,
     completed_at                timestamptz,
     game_version                text,
+    -- Phase 14A: the instant that decides the leaderboard WEEK — the
+    -- server-validated completion time, or the receipt time when the
+    -- client's timestamps cannot be trusted. Set only by
+    -- record_verified_ranked_result.
+    leaderboard_at              timestamptz  not null default now(),
+    leaderboard_at_source       text         not null default 'received_at'
+                                check (leaderboard_at_source in ('completed_at', 'received_at')),
     created_at                  timestamptz  not null default now(),
     constraint ranked_game_results_match_id_key unique (match_id),
     constraint ranked_game_results_quarters_check
@@ -411,8 +500,13 @@ create table if not exists public.ranked_game_results (
 create unique index if not exists ranked_game_results_season_game_key
     on public.ranked_game_results (user_id, season_id, game_number)
     where season_id is not null;
+alter table public.ranked_game_results add column if not exists leaderboard_at timestamptz not null default now();
+alter table public.ranked_game_results add column if not exists leaderboard_at_source text not null default 'received_at';
+
 create index if not exists ranked_game_results_created_at_idx
     on public.ranked_game_results (created_at);
+create index if not exists ranked_game_results_leaderboard_at_idx
+    on public.ranked_game_results (leaderboard_at);
 create index if not exists ranked_game_results_user_idx
     on public.ranked_game_results (user_id, final_score desc);
 
@@ -423,7 +517,9 @@ create policy "ranked_results_select_own" on public.ranked_game_results
     for select to authenticated
     using (auth.uid() = user_id);
 
+revoke all on public.ranked_game_results from public;
 revoke all on public.ranked_game_results from anon;
+revoke insert, update, delete, truncate, references, trigger on public.ranked_game_results from authenticated;
 revoke insert, update, delete on public.ranked_game_results from authenticated;
 grant select on public.ranked_game_results to authenticated;
 
@@ -440,13 +536,28 @@ create index if not exists ranked_submission_attempts_user_idx
     on public.ranked_submission_attempts (user_id, created_at);
 
 alter table public.ranked_submission_attempts enable row level security;
+revoke all on public.ranked_submission_attempts from public;
 revoke all on public.ranked_submission_attempts from anon, authenticated;
+revoke all on sequence public.ranked_submission_attempts_id_seq from public, anon, authenticated;
 
 -- 7e. THE ONLY WRITER of ranked results and career stats. Called by the Edge
 --     Function (service_role) AFTER it validated every case against the
 --     private catalog. Idempotent by match id: a repeated submission returns
 --     the stored result with duplicate = true and changes nothing.
 --     Championships are NOT incremented here (future verified path only).
+--     Runs as one statement = one transaction: the result row, the career
+--     stats and global_rating commit together or not at all.
+--
+--     Leaderboard week (Phase 14A): the client's completed_at is honored
+--     ONLY when the server can validate it — started < completed, completed
+--     no later than receipt (+ clock skew), started within the maximum
+--     offline age (30 days), a plausible duration (20 s … 168 h), not before
+--     the account existed, and consistent with the season's other verified
+--     games (game N never completes before game N-1 or after game N+1).
+--     The bucket instant is then least(completed_at, receipt). Anything
+--     else falls back to the server receipt time, so a client can never
+--     freely backdate a game into a past week.
+drop function if exists public.record_verified_ranked_result(uuid, uuid, uuid, int, text, int, boolean, boolean, boolean, int, int, jsonb, timestamptz, timestamptz, text);
 create or replace function public.record_verified_ranked_result(
     p_user_id                    uuid,
     p_match_id                   uuid,
@@ -464,26 +575,40 @@ create or replace function public.record_verified_ranked_result(
     p_completed_at               timestamptz,
     p_game_version               text
 )
-returns table (result_id uuid, final_score int, duplicate boolean)
+returns table (
+    result_id              uuid,
+    final_score            int,
+    duplicate              boolean,
+    leaderboard_at         timestamptz,
+    leaderboard_at_source  text
+)
 language plpgsql
 security definer
 set search_path = public
 as $$
 #variable_conflict use_column
 declare
-    cfg       public.ranked_scoring_config%rowtype;
-    existing  public.ranked_game_results%rowtype;
-    v_base    int;
-    v_mult    numeric(4,2);
-    v_final   int;
-    v_id      uuid;
+    cfg         public.ranked_scoring_config%rowtype;
+    existing    public.ranked_game_results%rowtype;
+    v_base      int;
+    v_mult      numeric(4,2);
+    v_final     int;
+    v_id        uuid;
+    v_received  timestamptz := now();
+    v_trusted   boolean;
+    v_board_at  timestamptz;
+    v_source    text;
 begin
+    if p_user_id is null or p_match_id is null then
+        raise exception 'INVALID_ARGUMENTS';
+    end if;
+
     select * into existing from public.ranked_game_results r where r.match_id = p_match_id;
     if found then
         if existing.user_id <> p_user_id then
             raise exception 'MATCH_ID_CONFLICT';
         end if;
-        return query select existing.id, existing.final_score, true;
+        return query select existing.id, existing.final_score, true, existing.leaderboard_at, existing.leaderboard_at_source;
         return;
     end if;
 
@@ -526,19 +651,53 @@ begin
     -- Consistent rounding: numeric round() is half away from zero.
     v_final := round(v_base::numeric * v_mult)::int;
 
+    -- Leaderboard week: validated completion time, else receipt time.
+    v_trusted := coalesce(
+        p_started_at is not null
+        and p_completed_at is not null
+        and p_started_at < p_completed_at
+        and p_completed_at <= v_received + make_interval(secs => cfg.max_clock_skew_seconds)
+        and p_started_at >= v_received - make_interval(days => cfg.max_offline_age_days)
+        and p_completed_at - p_started_at >= make_interval(secs => cfg.min_game_duration_seconds)
+        and p_completed_at - p_started_at <= make_interval(hours => cfg.max_trusted_game_hours),
+        false);
+    if v_trusted and exists (
+        select 1 from public.profiles p
+        where p.id = p_user_id and p_started_at < p.created_at - make_interval(secs => cfg.max_clock_skew_seconds)
+    ) then
+        v_trusted := false;
+    end if;
+    if v_trusted and p_season_id is not null and exists (
+        select 1 from public.ranked_game_results r
+        where r.user_id = p_user_id and r.season_id = p_season_id and r.completed_at is not null
+          and ((r.game_number < p_game_number and r.completed_at > p_completed_at)
+            or (r.game_number > p_game_number and r.completed_at < p_completed_at))
+    ) then
+        v_trusted := false;
+    end if;
+    if v_trusted then
+        v_board_at := least(p_completed_at, v_received);
+        v_source := 'completed_at';
+    else
+        v_board_at := v_received;
+        v_source := 'received_at';
+    end if;
+
     begin
         insert into public.ranked_game_results (
             match_id, user_id, season_id, game_number, difficulty,
             regulation_quarters_solved, regulation_quarters_lost, game_won,
             overtime_played, overtime_won, wrong_placements, hints_used,
             base_score, difficulty_multiplier, final_score, verified,
-            case_results, started_at, completed_at, game_version
+            case_results, started_at, completed_at, game_version,
+            leaderboard_at, leaderboard_at_source
         ) values (
             p_match_id, p_user_id, p_season_id, p_game_number, p_difficulty,
             p_regulation_quarters_solved, 4 - p_regulation_quarters_solved, p_game_won,
             p_overtime_played, p_overtime_won, p_wrong_placements, p_hints_used,
             v_base, v_mult, v_final, true,
-            coalesce(p_case_results, '[]'::jsonb), p_started_at, p_completed_at, p_game_version
+            coalesce(p_case_results, '[]'::jsonb), p_started_at, p_completed_at, p_game_version,
+            v_board_at, v_source
         )
         returning id into v_id;
     exception
@@ -546,7 +705,7 @@ begin
             -- A concurrent retry of the same match won the race: idempotent.
             select * into existing from public.ranked_game_results r where r.match_id = p_match_id;
             if found and existing.user_id = p_user_id then
-                return query select existing.id, existing.final_score, true;
+                return query select existing.id, existing.final_score, true, existing.leaderboard_at, existing.leaderboard_at_source;
                 return;
             end if;
             raise exception 'DUPLICATE_SEASON_GAME';
@@ -571,7 +730,7 @@ begin
         )
     where p.id = p_user_id;
 
-    return query select v_id, v_final, false;
+    return query select v_id, v_final, false, v_board_at, v_source;
 end;
 $$;
 
@@ -579,8 +738,9 @@ revoke all on function public.record_verified_ranked_result(uuid, uuid, uuid, in
 grant execute on function public.record_verified_ranked_result(uuid, uuid, uuid, int, text, int, boolean, boolean, boolean, int, int, jsonb, timestamptz, timestamptz, text) to service_role;
 
 -- 7f. INTERNAL leaderboard aggregation (not callable by clients).
---     WEEKLY: Monday 00:00 UTC → Sunday 23:59:59 UTC, bucketed by the
---     server's received time; score = SUM of the best N verified games.
+--     WEEKLY: Monday 00:00 UTC → Sunday 23:59:59 UTC, bucketed by each
+--     result's leaderboard_at (server-validated completion time, receipt
+--     time as fallback — see 7e); score = SUM of the best N verified games.
 --     ALL-TIME: score = AVERAGE of the best N verified games (1 decimal);
 --     fewer than provisional_min_games verified games = PROVISIONAL (listed
 --     after established players). Difficulty filter uses each game's
@@ -621,7 +781,9 @@ as $$
         from public.ranked_game_results r
         where r.verified
           and (p_difficulty = 'all' or r.difficulty = p_difficulty)
-          and (p_board = 'alltime' or r.created_at >= (select w.ts from week_start w))
+          and (p_board = 'alltime' or (
+                r.leaderboard_at >= (select w.ts from week_start w)
+                and r.leaderboard_at < (select w.ts from week_start w) + interval '7 days'))
     ),
     ordered as (
         select e.*,

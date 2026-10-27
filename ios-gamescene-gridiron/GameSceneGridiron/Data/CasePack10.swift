@@ -84,7 +84,7 @@ nonisolated enum CasePack10 {
                 (player: "lb", slot: "lb-mid-mid-2", profile: .fast),
                 (player: "ss", slot: "ss-mid-deep-3", profile: .powerful),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Quiet Statue — bunch look (allPro tier, band 2)
@@ -164,7 +164,7 @@ nonisolated enum CasePack10 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .veteran),
                 (player: "ss", slot: "ss-mid-deep-3", profile: .rookie),
             ],
-            tier: .allPro, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Borrowed Bender — red zone look (allPro tier, band 3)
@@ -242,7 +242,7 @@ nonisolated enum CasePack10 {
                 (player: "lb", slot: "lb-mid-mid-2", profile: .overrated),
                 (player: "te", slot: "te-right-line-3", profile: .fast),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 59, isCompetitiveEligible: true
         ),
 
         // The Copper Mirror — goal line look (allPro tier, band 4)
@@ -322,7 +322,7 @@ nonisolated enum CasePack10 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .powerful),
                 (player: "ss", slot: "ss-mid-mid-3", profile: .veteran),
             ],
-            tier: .allPro, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 62, isCompetitiveEligible: true
         ),
 
         // The Patient Statue — overload look (allPro tier, band 5)
@@ -401,7 +401,7 @@ nonisolated enum CasePack10 {
                 (player: "lb", slot: "lb-mid-mid-2", profile: .rookie),
                 (player: "wr", slot: "wr-left-mid-3", profile: .overrated),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Sudden Cadence — gun protection look (allPro tier, band 1)
@@ -478,7 +478,7 @@ nonisolated enum CasePack10 {
                 (player: "ol", slot: "ol-mid-line-2", profile: .fast),
                 (player: "rb", slot: "rb-mid-back-3", profile: .powerful),
             ],
-            tier: .allPro, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Second Detour — tight edge look (allPro tier, band 2)
@@ -556,7 +556,7 @@ nonisolated enum CasePack10 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .veteran),
                 (player: "te", slot: "te-right-line-3", profile: .rookie),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 59, isCompetitiveEligible: true
         ),
 
         // The Jagged Draft — trips look (allPro tier, band 3)
@@ -636,7 +636,7 @@ nonisolated enum CasePack10 {
                 (player: "lb", slot: "lb-mid-mid-2", profile: .overrated),
                 (player: "wr", slot: "wr-right-mid-3", profile: .fast),
             ],
-            tier: .allPro, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 62, isCompetitiveEligible: true
         ),
 
         // The Hollow Detour — bunch look (allPro tier, band 4)
@@ -716,7 +716,7 @@ nonisolated enum CasePack10 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .powerful),
                 (player: "te", slot: "te-right-line-3", profile: .veteran),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Broken Interval — red zone look (allPro tier, band 5)
@@ -794,7 +794,7 @@ nonisolated enum CasePack10 {
                 (player: "lb", slot: "lb-mid-mid-2", profile: .rookie),
                 (player: "te", slot: "te-right-line-3", profile: .overrated),
             ],
-            tier: .allPro, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Blinking Clock — goal line look (allPro tier, band 1)
@@ -874,7 +874,7 @@ nonisolated enum CasePack10 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .fast),
                 (player: "wr", slot: "wr-right-mid-3", profile: .powerful),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 59, isCompetitiveEligible: true
         ),
 
         // The Second Slant — overload look (allPro tier, band 2)
@@ -953,7 +953,7 @@ nonisolated enum CasePack10 {
                 (player: "lb", slot: "lb-mid-mid-2", profile: .veteran),
                 (player: "wr", slot: "wr-left-mid-3", profile: .rookie),
             ],
-            tier: .allPro, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 62, isCompetitiveEligible: true
         ),
 
         // The Golden Hook — gun protection look (allPro tier, band 3)
@@ -1030,7 +1030,7 @@ nonisolated enum CasePack10 {
                 (player: "ol", slot: "ol-mid-line-2", profile: .overrated),
                 (player: "qb", slot: "qb-mid-line-3", profile: .fast),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Golden Sweep — tight edge look (allPro tier, band 4)
@@ -1108,7 +1108,7 @@ nonisolated enum CasePack10 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .powerful),
                 (player: "ol", slot: "ol-mid-line-3", profile: .veteran),
             ],
-            tier: .allPro, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 56, isCompetitiveEligible: true
         ),
 
         // The Patient Rebate — trips look (allPro tier, band 5)
@@ -1188,7 +1188,7 @@ nonisolated enum CasePack10 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .rookie),
                 (player: "ss", slot: "ss-left-deep-3", profile: .overrated),
             ],
-            tier: .allPro, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 59, isCompetitiveEligible: true
         ),
 
         // The Ivory Curl — bunch look (allPro tier, band 1)
@@ -1268,7 +1268,7 @@ nonisolated enum CasePack10 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .fast),
                 (player: "qb", slot: "qb-mid-line-3", profile: .powerful),
             ],
-            tier: .allPro, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .allPro, difficultyScore: 62, isCompetitiveEligible: true
         ),
 
     ]

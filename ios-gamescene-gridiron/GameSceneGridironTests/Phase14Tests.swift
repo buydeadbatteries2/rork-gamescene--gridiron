@@ -399,7 +399,9 @@ struct Phase14ScoringTests {
         let close = try #require(sql.range(of: ")", range: start.upperBound..<sql.endIndex))
         let values = ("1, " + sql[start.upperBound..<close.lowerBound])
             .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-        try #require(values.count == 15)
+        // 15 scoring/board values + 4 Phase 14A trust-window values (30, 20, 168, 300).
+        try #require(values.count == 19)
+        #expect(Array(values[15...]) == ["30", "20", "168", "300"])
         func int(_ i: Int) -> Int { Int(values[i]) ?? -1 }
         func hundredths(_ i: Int) -> Int { Int(((Double(values[i]) ?? -1) * 100).rounded()) }
         return Config(
@@ -504,7 +506,7 @@ struct Phase14SecurityTests {
 
     @Test func recordFunctionIsIdempotentAndNeverTouchesChampionships() {
         let body = P14.function(named: "create or replace function public.record_verified_ranked_result(")
-        #expect(body.contains("return query select existing.id, existing.final_score, true;"))
+        #expect(body.contains("return query select existing.id, existing.final_score, true, existing.leaderboard_at, existing.leaderboard_at_source;"))
         #expect(body.contains("raise exception 'MATCH_ID_CONFLICT'"))
         #expect(body.contains("raise exception 'SEASON_DIFFICULTY_MISMATCH'"))
         #expect(body.contains("when unique_violation then"))

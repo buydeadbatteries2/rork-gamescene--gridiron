@@ -92,7 +92,8 @@ nonisolated enum CasePack4 {
                 (player: "ss", slot: "ss-box", profile: .veteran),
                 (player: "fs", slot: "fs-deep-right", profile: .veteran),
                 (player: "lb", slot: "lb-right", profile: .powerful)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 91, isCompetitiveEligible: true
         ),
 
         // 32 — Three Levels Deep (seed 31)
@@ -180,7 +181,8 @@ nonisolated enum CasePack4 {
                 (player: "cb", slot: "cb-right", profile: .fast),
                 (player: "fs", slot: "fs-center", profile: .veteran),
                 (player: "ss", slot: "ss-box", profile: .powerful)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 90, isCompetitiveEligible: true
         ),
 
         // 33 — The Wedge (seed 32)
@@ -262,7 +264,8 @@ nonisolated enum CasePack4 {
                 (player: "ol", slot: "ol-rt", profile: .powerful),
                 (player: "dl", slot: "de-right", profile: .powerful),
                 (player: "lb", slot: "lb-right", profile: .veteran)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 82, isCompetitiveEligible: true
         ),
 
         // 34 — The Scramble Drill (seed 33)
@@ -344,7 +347,8 @@ nonisolated enum CasePack4 {
                 (player: "te", slot: "te-right", profile: .powerful),
                 (player: "dl", slot: "de-right", profile: .powerful),
                 (player: "ss", slot: "ss-box", profile: .fast)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 81, isCompetitiveEligible: true
         ),
 
         // 35 — Right All Along (seed 34)
@@ -427,7 +431,8 @@ nonisolated enum CasePack4 {
                 (player: "ol", slot: "ol-rt", profile: .powerful),
                 (player: "lb", slot: "lb-right", profile: .powerful),
                 (player: "cb", slot: "cb-slot", profile: .fast)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 81, isCompetitiveEligible: true
         ),
 
         // 36 — Zero Help (seed 35)
@@ -509,7 +514,8 @@ nonisolated enum CasePack4 {
                 (player: "de", slot: "de-edge", profile: .powerful),
                 (player: "dl2", slot: "dt-nose", profile: .powerful),
                 (player: "fs", slot: "fs-center", profile: .veteran)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 81, isCompetitiveEligible: true
         ),
 
         // 37 — Broken Gap Integrity (seed 36)
@@ -592,7 +598,8 @@ nonisolated enum CasePack4 {
                 (player: "dl", slot: "dt-3tech", profile: .fast),
                 (player: "lb", slot: "lb-right", profile: .veteran),
                 (player: "ss", slot: "ss-box", profile: .powerful)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 84, isCompetitiveEligible: true
         ),
 
         // 38 — The Double Move (seed 37)
@@ -674,7 +681,8 @@ nonisolated enum CasePack4 {
                 (player: "cb", slot: "cb-right", profile: .fast),
                 (player: "fs", slot: "fs-center", profile: .veteran),
                 (player: "lb", slot: "lb-left", profile: .powerful)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 82, isCompetitiveEligible: true
         ),
 
         // 39 — Two Minutes, Five Wide (seed 38)
@@ -756,7 +764,8 @@ nonisolated enum CasePack4 {
                 (player: "wr2", slot: "wr2-slot", profile: .fast),
                 (player: "ol", slot: "ol-rt", profile: .powerful),
                 (player: "de", slot: "de-edge", profile: .fast)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 81, isCompetitiveEligible: true
         ),
 
         // 40 — The Red-Zone Stamp (seed 39)
@@ -839,7 +848,8 @@ nonisolated enum CasePack4 {
                 (player: "dl", slot: "de-right", profile: .powerful),
                 (player: "cb", slot: "cb-right", profile: .fast),
                 (player: "ss", slot: "ss-box", profile: .powerful)
-            ]
+            ],
+            tier: .hallOfFamer, difficultyScore: 82, isCompetitiveEligible: true
         )
     ]
 }

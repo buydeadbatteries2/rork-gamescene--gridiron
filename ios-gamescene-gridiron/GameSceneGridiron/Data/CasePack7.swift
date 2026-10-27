@@ -84,7 +84,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "lb", slot: "lb-right-mid-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 23, isCompetitiveEligible: true
         ),
 
         // The Reckless Blind — overload look (rookie tier, band 2)
@@ -163,7 +163,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "lb", slot: "lb-mid-mid-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 16, isCompetitiveEligible: true
         ),
 
         // The Patient Clock — gun protection look (rookie tier, band 3)
@@ -240,7 +240,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "ol", slot: "ol-mid-line-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 16, isCompetitiveEligible: true
         ),
 
         // The Willing Post — tight edge look (rookie tier, band 4)
@@ -318,7 +318,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-left-deep-2", profile: .veteran),
                 (player: "lb", slot: "lb-right-mid-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 20, isCompetitiveEligible: true
         ),
 
         // The Narrow Margin — trips look (rookie tier, band 5)
@@ -398,7 +398,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "lb", slot: "lb-mid-mid-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 23, isCompetitiveEligible: true
         ),
 
         // The Borrowed Bootleg — bunch look (rookie tier, band 1)
@@ -478,7 +478,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "qb", slot: "qb-mid-line-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 16, isCompetitiveEligible: true
         ),
 
         // The Quiet Screen — red zone look (rookie tier, band 2)
@@ -556,7 +556,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "ol", slot: "ol-mid-line-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 16, isCompetitiveEligible: true
         ),
 
         // The Copper Flood — goal line look (rookie tier, band 3)
@@ -636,7 +636,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "lb", slot: "lb-right-mid-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 20, isCompetitiveEligible: true
         ),
 
         // The Second Interval — overload look (rookie tier, band 4)
@@ -715,7 +715,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "ol", slot: "ol-mid-line-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 23, isCompetitiveEligible: true
         ),
 
         // The Jagged Post — gun protection look (rookie tier, band 5)
@@ -792,7 +792,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "ol", slot: "ol-mid-line-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 16, isCompetitiveEligible: true
         ),
 
         // The Crimson Bender — tight edge look (rookie tier, band 1)
@@ -870,7 +870,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-left-deep-2", profile: .veteran),
                 (player: "ol", slot: "ol-mid-line-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 16, isCompetitiveEligible: true
         ),
 
         // The Iron Settle — trips look (rookie tier, band 2)
@@ -950,7 +950,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "rb", slot: "rb-mid-back-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 20, isCompetitiveEligible: true
         ),
 
         // The Velvet Ledger — bunch look (rookie tier, band 3)
@@ -1030,7 +1030,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "qb", slot: "qb-mid-line-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 23, isCompetitiveEligible: true
         ),
 
         // The Copper Bracket — red zone look (rookie tier, band 4)
@@ -1108,7 +1108,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "rb", slot: "rb-mid-back-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 16, isCompetitiveEligible: true
         ),
 
         // The Sudden Swing — goal line look (rookie tier, band 5)
@@ -1188,7 +1188,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "rb", slot: "rb-mid-back-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 16, isCompetitiveEligible: true
         ),
 
         // The Marble Screen — overload look (rookie tier, band 1)
@@ -1267,7 +1267,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "rb", slot: "rb-mid-back-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 48, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 20, isCompetitiveEligible: true
         ),
 
         // The Blinking Pitch — gun protection look (rookie tier, band 2)
@@ -1344,7 +1344,7 @@ nonisolated enum CasePack7 {
                 (player: "fs", slot: "fs-mid-deep-2", profile: .veteran),
                 (player: "qb", slot: "qb-mid-line-3", profile: .rookie),
             ],
-            tier: .rookie, difficultyScore: 51, isCompetitiveEligible: true
+            tier: .rookie, difficultyScore: 23, isCompetitiveEligible: true
         ),
 
     ]

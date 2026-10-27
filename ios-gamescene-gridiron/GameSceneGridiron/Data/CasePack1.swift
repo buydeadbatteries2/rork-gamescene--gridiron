@@ -81,7 +81,8 @@ nonisolated enum CasePack1 {
                 (player: "wr", slot: "wr-right", profile: .veteran),
                 (player: "cb", slot: "cb-left", profile: .fast),
                 (player: "fs", slot: "fs-center", profile: .veteran)
-            ]
+            ],
+            tier: .pro, difficultyScore: 37, isCompetitiveEligible: true
         ),
 
         // 2 — The Unblinking Gun (seed 1)
@@ -151,7 +152,8 @@ nonisolated enum CasePack1 {
                 (player: "ol", slot: "ol-gap", profile: .powerful),
                 (player: "cb", slot: "cb-right", profile: .fast),
                 (player: "ss", slot: "ss-box", profile: .veteran)
-            ]
+            ],
+            tier: .pro, difficultyScore: 37, isCompetitiveEligible: true
         ),
 
         // 3 — The Unplugged Gap (seed 2)
@@ -220,7 +222,8 @@ nonisolated enum CasePack1 {
                 (player: "wr", slot: "wr-left", profile: .fast),
                 (player: "lb", slot: "lb-right", profile: .veteran),
                 (player: "fs", slot: "fs-left", profile: .fast)
-            ]
+            ],
+            tier: .pro, difficultyScore: 36, isCompetitiveEligible: true
         ),
 
         // 4 — The Quiet Edge (seed 3)
@@ -290,7 +293,8 @@ nonisolated enum CasePack1 {
                 (player: "ol", slot: "ol-gap", profile: .veteran),
                 (player: "dl", slot: "dl-edge", profile: .powerful),
                 (player: "cb", slot: "cb-left", profile: .fast)
-            ]
+            ],
+            tier: .pro, difficultyScore: 33, isCompetitiveEligible: true
         ),
 
         // 5 — The Telegraphed Blitz (seed 4)
@@ -363,7 +367,8 @@ nonisolated enum CasePack1 {
                 (player: "rb", slot: "rb-right", profile: .veteran),
                 (player: "wr", slot: "wr-right", profile: .fast),
                 (player: "ss", slot: "ss-box", profile: .powerful)
-            ]
+            ],
+            tier: .pro, difficultyScore: 34, isCompetitiveEligible: true
         ),
 
         // 6 — Trips, Unannounced (seed 5)
@@ -434,7 +439,8 @@ nonisolated enum CasePack1 {
                 (player: "te", slot: "te-left", profile: .powerful),
                 (player: "lb", slot: "lb-right", profile: .veteran),
                 (player: "fs", slot: "fs-center", profile: .fast)
-            ]
+            ],
+            tier: .pro, difficultyScore: 34, isCompetitiveEligible: true
         ),
 
         // 7 — The Interior Push (seed 6)
@@ -504,7 +510,8 @@ nonisolated enum CasePack1 {
                 (player: "ol", slot: "ol-rt", profile: .powerful),
                 (player: "de", slot: "de-right", profile: .fast),
                 (player: "fs", slot: "fs-center", profile: .fast)
-            ]
+            ],
+            tier: .pro, difficultyScore: 34, isCompetitiveEligible: true
         ),
 
         // 8 — The Crowded Bunch (seed 7)
@@ -586,7 +593,8 @@ nonisolated enum CasePack1 {
                 (player: "wr", slot: "wr-bunch-in", profile: .fast),
                 (player: "cb", slot: "cb-right", profile: .powerful),
                 (player: "ss", slot: "ss-box-left", profile: .veteran)
-            ]
+            ],
+            tier: .pro, difficultyScore: 40, isCompetitiveEligible: true
         ),
 
         // 9 — The Leftward Drift (seed 8)
@@ -667,7 +675,8 @@ nonisolated enum CasePack1 {
                 (player: "dl", slot: "dl-edge", profile: .powerful),
                 (player: "cb", slot: "cb-left", profile: .veteran),
                 (player: "fs", slot: "fs-center", profile: .veteran)
-            ]
+            ],
+            tier: .pro, difficultyScore: 40, isCompetitiveEligible: true
         ),
 
         // 10 — Red Zone Mirror (seed 9)
@@ -738,7 +747,8 @@ nonisolated enum CasePack1 {
                 (player: "ol", slot: "ol-rt", profile: .powerful),
                 (player: "lb", slot: "lb-right", profile: .fast),
                 (player: "ss", slot: "ss-box-left", profile: .powerful)
-            ]
+            ],
+            tier: .pro, difficultyScore: 37, isCompetitiveEligible: true
         )
     ]
 }

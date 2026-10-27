@@ -82,7 +82,7 @@ nonisolated enum CasePack12 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .powerful),
                 (player: "te", slot: "te-right-mid-3", profile: .rookie),
             ],
-            tier: .hallOfFamer, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 77, isCompetitiveEligible: true
         ),
 
         // The Quiet Sweep — spread look (hallOfFamer tier, band 4)
@@ -160,7 +160,7 @@ nonisolated enum CasePack12 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .fast),
                 (player: "te", slot: "te-right-line-3", profile: .overrated),
             ],
-            tier: .hallOfFamer, difficultyScore: 50, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 81, isCompetitiveEligible: true
         ),
 
         // The Rusted Pivot — singleback look (hallOfFamer tier, band 5)
@@ -238,7 +238,7 @@ nonisolated enum CasePack12 {
                 (player: "lb", slot: "lb-mid-mid-2", profile: .veteran),
                 (player: "rb", slot: "rb-mid-back-3", profile: .powerful),
             ],
-            tier: .hallOfFamer, difficultyScore: 50, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 80, isCompetitiveEligible: true
         ),
 
         // The Borrowed Statue — two-back look (hallOfFamer tier, band 1)
@@ -319,7 +319,7 @@ nonisolated enum CasePack12 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .rookie),
                 (player: "qb", slot: "qb-mid-line-3", profile: .fast),
             ],
-            tier: .hallOfFamer, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 76, isCompetitiveEligible: true
         ),
 
         // The Reckless Curl — short-yardage look (hallOfFamer tier, band 2)
@@ -396,7 +396,7 @@ nonisolated enum CasePack12 {
                 (player: "ol", slot: "ol-mid-line-2", profile: .overrated),
                 (player: "wr", slot: "wr-left-mid-3", profile: .veteran),
             ],
-            tier: .hallOfFamer, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 77, isCompetitiveEligible: true
         ),
 
         // The Marble Corner — motion look (hallOfFamer tier, band 3)
@@ -475,7 +475,7 @@ nonisolated enum CasePack12 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .powerful),
                 (player: "wr", slot: "wr-left-mid-3", profile: .rookie),
             ],
-            tier: .hallOfFamer, difficultyScore: 50, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 81, isCompetitiveEligible: true
         ),
 
         // The Golden Count — empty look (hallOfFamer tier, band 4)
@@ -555,7 +555,7 @@ nonisolated enum CasePack12 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .fast),
                 (player: "wr", slot: "wr-left-mid-3", profile: .overrated),
             ],
-            tier: .hallOfFamer, difficultyScore: 50, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 80, isCompetitiveEligible: true
         ),
 
         // The Bitter Pitch — field tornado look (hallOfFamer tier, band 5)
@@ -633,7 +633,7 @@ nonisolated enum CasePack12 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .veteran),
                 (player: "te", slot: "te-right-mid-3", profile: .powerful),
             ],
-            tier: .hallOfFamer, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 76, isCompetitiveEligible: true
         ),
 
         // The Slate Mirror — spread look (hallOfFamer tier, band 1)
@@ -711,7 +711,7 @@ nonisolated enum CasePack12 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .rookie),
                 (player: "te", slot: "te-right-line-3", profile: .fast),
             ],
-            tier: .hallOfFamer, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 77, isCompetitiveEligible: true
         ),
 
         // The Broken Edge — singleback look (hallOfFamer tier, band 2)
@@ -789,7 +789,7 @@ nonisolated enum CasePack12 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .overrated),
                 (player: "wr", slot: "wr-left-mid-3", profile: .veteran),
             ],
-            tier: .hallOfFamer, difficultyScore: 50, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 81, isCompetitiveEligible: true
         ),
 
         // The Sudden Signal — two-back look (hallOfFamer tier, band 3)
@@ -870,7 +870,7 @@ nonisolated enum CasePack12 {
                 (player: "lb", slot: "lb-right-mid-2", profile: .powerful),
                 (player: "qb", slot: "qb-mid-line-3", profile: .rookie),
             ],
-            tier: .hallOfFamer, difficultyScore: 50, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 80, isCompetitiveEligible: true
         ),
 
         // The Narrow Pitch — short-yardage look (hallOfFamer tier, band 4)
@@ -947,7 +947,7 @@ nonisolated enum CasePack12 {
                 (player: "ol", slot: "ol-right-line-2", profile: .fast),
                 (player: "wr", slot: "wr-left-mid-3", profile: .overrated),
             ],
-            tier: .hallOfFamer, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 76, isCompetitiveEligible: true
         ),
 
         // The Iron Wall — motion look (hallOfFamer tier, band 5)
@@ -1026,7 +1026,7 @@ nonisolated enum CasePack12 {
                 (player: "ss", slot: "ss-mid-mid-2", profile: .veteran),
                 (player: "te", slot: "te-left-line-3", profile: .powerful),
             ],
-            tier: .hallOfFamer, difficultyScore: 47, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 77, isCompetitiveEligible: true
         ),
 
         // The Sudden Gate — empty look (hallOfFamer tier, band 1)
@@ -1106,7 +1106,7 @@ nonisolated enum CasePack12 {
                 (player: "rb", slot: "rb-mid-back-2", profile: .rookie),
                 (player: "wr", slot: "wr-left-mid-3", profile: .fast),
             ],
-            tier: .hallOfFamer, difficultyScore: 50, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 81, isCompetitiveEligible: true
         ),
 
         // The Stubborn Settle — field tornado look (hallOfFamer tier, band 2)
@@ -1184,7 +1184,7 @@ nonisolated enum CasePack12 {
                 (player: "ss", slot: "ss-mid-deep-2", profile: .overrated),
                 (player: "te", slot: "te-right-mid-3", profile: .veteran),
             ],
-            tier: .hallOfFamer, difficultyScore: 50, isCompetitiveEligible: true
+            tier: .hallOfFamer, difficultyScore: 80, isCompetitiveEligible: true
         ),
 
     ]
