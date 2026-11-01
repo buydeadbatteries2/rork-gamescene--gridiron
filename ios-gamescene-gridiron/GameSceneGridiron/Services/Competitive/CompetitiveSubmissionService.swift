@@ -6,7 +6,8 @@ import Supabase
 
 /// Sends one payload to the `submit-ranked-result` Edge Function. The JWT
 /// comes from the signed-in Supabase session; the iOS app never holds a
-/// service-role key.
+/// service-role key. 426 (client_outdated) / 410 (assignment_expired) are
+/// final rejections like every other non-transient 4xx.
 protocol CompetitiveResultSubmitting: Sendable {
     func submit(_ payload: CompetitiveResultPayload) async -> CompetitiveSubmitResponse
 }
@@ -121,20 +122,26 @@ final class CompetitiveSubmissionService {
 
     /// Entry point from a finished game. Ineligible games are only noted
     /// (DEBUG diagnostics) — the local result is never affected.
-    func handle(_ outcome: CompetitivePayloadBuilder.Outcome) {
+    /// `owner` is the signed-in account that played the game (the payload
+    /// itself carries no user id — the server uses the JWT).
+    func handle(_ outcome: CompetitivePayloadBuilder.Outcome, owner: UUID?) {
         switch outcome {
         case .ineligible(let reason):
             lastIneligibleReason = reason
         case .eligible(let payload):
+            guard let owner else {
+                lastIneligibleReason = .guestPlayer
+                return
+            }
             lastIneligibleReason = nil
-            enqueue(payload)
+            enqueue(payload, owner: owner)
             Task { await flush() }
         }
     }
 
     /// Durably records the game (no-op for an already-queued match ID).
-    func enqueue(_ payload: CompetitiveResultPayload) {
-        guard queue.enqueue(payload, owner: payload.userID, now: now()) else { return }
+    func enqueue(_ payload: CompetitiveResultPayload, owner: UUID) {
+        guard queue.enqueue(payload, owner: owner, now: now()) else { return }
         persist()
     }
 

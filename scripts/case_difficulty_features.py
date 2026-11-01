@@ -50,6 +50,31 @@ def split_clues(clue_block):
     return [clue_block[starts[i]:starts[i + 1]] for i in range(len(starts) - 1)]
 
 
+_CONSTRAINT_RE = re.compile(
+    r'\.(nearEvidence)\(player: "([^"]+)", evidence: "([^"]+)", radius: (-?[\d.]+)\)'
+    r'|\.(nearestToEvidence|farthestFromEvidence)\(player: "([^"]+)", evidence: "([^"]+)"\)'
+    r'|\.(depthBand|xBand)\(player: "([^"]+)", (?:yMin|xMin): (-?[\d.]+), (?:yMax|xMax): (-?[\d.]+)\)'
+    r'|\.(yAbove|yBelow)\(a: "([^"]+)", b: "([^"]+)", gap: (-?[\d.]+)\)'
+    r'|\.(sameSideOfBall|oppositeSideOfBall)\(a: "([^"]+)", b: "([^"]+)"\)'
+    r'|\.(profileIs|profileIsNot)\(player: "([^"]+)", profile: \.(\w+)\)'
+)
+
+
+def parse_constraints(text):
+    """Ordered constraint tuples (kind, *args); numbers as float."""
+    out = []
+    for m in _CONSTRAINT_RE.finditer(text):
+        g = [x for x in m.groups() if x is not None]
+        kind = g[0]
+        if kind in ("nearEvidence", "yAbove", "yBelow"):
+            out.append((kind, g[1], g[2], float(g[3])))
+        elif kind in ("depthBand", "xBand"):
+            out.append((kind, g[1], float(g[2]), float(g[3])))
+        else:
+            out.append(tuple(g))
+    return out
+
+
 def parse_pack(n):
     path = os.path.join(DATA, f"CasePack{n}.swift")
     text = open(path).read()
@@ -59,15 +84,27 @@ def parse_pack(n):
         seed = int(re.search(r'seed: (\d+)', block).group(1))
         band = int(re.search(r'band: (\d+)', block).group(1))
         missing = re.findall(r'\(key: "([^"]+)", position: \.(\w+)\)', block_between(block, "missing: [", "evidence: ["))
-        evidence = re.findall(r'\(key: "([^"]+)", kind: \.(\w+)', block_between(block, "evidence: [", "slots: ["))
-        slots = re.findall(r'\(key: "([^"]+)", x:', block_between(block, "slots: [", "clues: ["))
+        evidence_block = block_between(block, "evidence: [", "slots: [")
+        evidence = re.findall(r'\(key: "([^"]+)", kind: \.(\w+)', evidence_block)
+        # Phase 14B: coordinates + full constraints feed the adapter port
+        # (scripts/case_adapter_port.py).
+        evidence_xy = [(k, float(x), float(y)) for k, x, y in re.findall(
+            r'\(key: "([^"]+)", kind: \.\w+, x: (-?[\d.]+), y: (-?[\d.]+)', evidence_block)]
+        slot_block = block_between(block, "slots: [", "clues: [")
+        slots = re.findall(r'\(key: "([^"]+)", x:', slot_block)
+        slots_xy = [(k, float(x), float(y)) for k, x, y in re.findall(
+            r'\(key: "([^"]+)", x: (-?[\d.]+), y: (-?[\d.]+)\)', slot_block)]
         clue_block = block_between(block, "clues: [", "hints: [")
         clues = []
         for raw in split_clues(clue_block):
+            player = re.search(r'\(player: "([^"]+)", family:', raw).group(1)
             fam = re.search(r'family: \.(\w+)', raw).group(1)
             diff = re.search(r'difficulty: \.(\w+)', raw).group(1)
-            cons = re.findall(r'\.(\w+)\((?:player|a): ', raw[raw.index("constraints: ["):])
-            clues.append(dict(family=fam, difficulty=diff, constraints=cons))
+            cons_text = raw[raw.index("constraints: ["):]
+            cons = re.findall(r'\.(\w+)\((?:player|a): ', cons_text)
+            full = parse_constraints(cons_text)
+            assert [f[0] for f in full] == cons, (cid, cons, full)
+            clues.append(dict(player=player, family=fam, difficulty=diff, constraints=cons, full=full))
         hints = re.findall(r'\(player: "[^"]+", text:', block_between(block, "hints: [", "solution: ["))
         solution = re.findall(r'\(player: "([^"]+)", slot: "([^"]+)", profile: \.(\w+)\)', block)
         tail = block[block.index("solution: ["):]
@@ -75,8 +112,10 @@ def parse_pack(n):
         score_m = re.search(r'difficultyScore: (\d+)', tail)
         elig_m = re.search(r'isCompetitiveEligible: (true|false)', tail)
         assert missing and slots and solution and clues, cid
+        assert len(evidence_xy) == len(evidence) and len(slots_xy) == len(slots), cid
         cases.append(dict(
             id=cid, seed=seed, band=band, missing=missing, evidence=evidence, slots=slots,
+            evidence_xy=evidence_xy, slots_xy=slots_xy,
             clues=clues, clue_count=len(clues), hint_count=len(hints), solution=solution,
             tier=tier_m.group(1) if tier_m else band_tier(band),
             explicit_tier=bool(tier_m),

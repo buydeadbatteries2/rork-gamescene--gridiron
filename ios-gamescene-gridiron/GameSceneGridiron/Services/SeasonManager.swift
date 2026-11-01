@@ -146,10 +146,6 @@ final class SeasonManager {
                 scheduled.difficulty = DifficultyManager.shared.selected
                 persist()
             }
-            // Phase 14: stamp older saves with a ranked season identity.
-            if scheduled.competitiveSeasonID == nil {
-                scheduled.competitiveSeasonID = UUID()
-            }
             season = scheduled
             if scheduled != loaded {
                 // Persist the repair/schedule immediately so it survives restarts.
@@ -214,8 +210,44 @@ final class SeasonManager {
     /// The difficulty the active (or most recent) season was started with.
     var activeSeasonDifficulty: DifficultyLevel? { season?.difficulty }
 
-    /// Phase 14: the running season's ranked identity (payload season_id).
-    var competitiveSeasonID: UUID? { season?.competitiveSeasonID }
+    /// Phase 14B: the running season's SERVER ranked identity (payload
+    /// season_id) — nil until the game-1 assignment created it.
+    var rankedSeasonID: UUID? { season?.rankedSeasonID }
+
+    /// Next unplayed game number: 1–10 regular season, 11 semifinal,
+    /// 12 championship; nil once the season (or the user's run) is over.
+    var nextRankedGameNumber: Int? {
+        guard let season else { return nil }
+        switch season.phase {
+        case .regularSeason:
+            return season.currentWeek
+        case .postseason:
+            guard let matchup = pendingPlayoffMatchup else { return nil }
+            return season.bracket?.championship == matchup ? 12 : 11
+        case .complete:
+            return nil
+        }
+    }
+
+    /// What the ranked assignment prefetcher needs (nil = nothing to rank).
+    var rankedSeasonContext: RankedSeasonContext? {
+        guard let season, let difficulty = season.difficulty, let next = nextRankedGameNumber else { return nil }
+        return RankedSeasonContext(
+            seasonNumber: season.seasonNumber,
+            rankedSeasonID: season.rankedSeasonID,
+            nextGameNumber: next,
+            difficulty: difficulty
+        )
+    }
+
+    /// Stores the server season id returned with the game-1 assignment —
+    /// only for the same local season and only once.
+    func adoptRankedSeasonID(_ id: UUID, seasonNumber: Int) {
+        guard var current = season, current.seasonNumber == seasonNumber, current.rankedSeasonID == nil else { return }
+        current.rankedSeasonID = id
+        season = current
+        persist()
+    }
 
     /// Starts a new season (or advances to the next one) at `difficulty` —
     /// the choice made on the SELECT DIFFICULTY screen. The choice is stored
@@ -231,7 +263,8 @@ final class SeasonManager {
         let nextNumber = (season?.seasonNumber ?? 0) + 1
         var next = Self.generateSeason(userTeamID: userTeam.id, seasonNumber: nextNumber)
         next.difficulty = resolved
-        next.competitiveSeasonID = UUID()
+        // Phase 14B: the server season id arrives with game 1's assignment.
+        next.rankedSeasonID = nil
         season = next
         DifficultyManager.shared.selectUnlocked(resolved)
         persist()

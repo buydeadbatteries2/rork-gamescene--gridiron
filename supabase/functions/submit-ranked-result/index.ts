@@ -1,28 +1,32 @@
-// GameScene: Gridiron — Phase 14 ranked result verification.
+// GameScene: Gridiron — Phase 14B ranked result verification.
 //
 // POST /functions/v1/submit-ranked-result  (Authorization: Bearer <user JWT>)
 //
 // Trust model:
-//   * The user is derived from the JWT ONLY. A body user_id that differs is
-//     rejected — it is never an authority.
-//   * The client never sends a score. This function validates the raw game
-//     facts against the PRIVATE competitive_cases solutions, then calls
-//     record_verified_ranked_result (service_role only), which computes the
-//     score from the single ranked_scoring_config row and updates career
-//     stats. No scoring constants live here.
+//   * The user is derived from the JWT ONLY. The payload carries no user_id;
+//     one sent by an old client is ignored, never an authority.
+//   * Every ranked game is bound to a SERVER assignment created by
+//     start-ranked-match. record_verified_ranked_result (service_role only,
+//     SECURITY DEFINER, search_path='') loads the assignment by match_id FOR
+//     UPDATE and verifies owner, season, game number, difficulty, case ids,
+//     case order and case versions, rejects consumed / replaced / expired
+//     assignments, and checks every placement against the EXACT adapted
+//     solution snapshotted at issue time (no "any length-1 subset" leeway).
+//   * This function is a thin STRUCTURAL validator. It holds no catalog,
+//     solution or scoring logic; the client sends no score and no summary.
+//     The database computes the score from ranked_scoring_config and updates
+//     career stats after the insert, in one transaction.
+//   * Hints and wrong placements are SELF-REPORTED, stored for display only,
+//     never scored and never called verified.
+//   * Bundled case solutions ship in the app and are NOT secret: this is
+//     consistency checking against server assignments, not anti-cheat.
 //   * Idempotent by match_id: a retried submission returns the stored result.
-//   * The service-role key comes from the function environment and never
-//     leaves the server.
-//   * Transactional: the single record_verified_ranked_result call inserts
-//     the result AND updates career stats/global_rating in one transaction.
-//     A rejection writes nothing but an audit row — the player's local solo
-//     outcome is never touched (the client only stops retrying).
-//   * Leaderboard week: completed_at is a CLAIM. The database honors it
-//     only after validating it against receipt time, start time, duration,
-//     account age and season order (else it uses receipt time) and returns
-//     the bucket it used (leaderboard_at / leaderboard_at_source).
-//   * Only 'client_bundled' catalog cases are valid here; 'server_assigned'
-//     cases are reserved for future server-assigned Versus/Faction matches.
+//   * Leaderboard week: completed_at is a CLAIM. The database honors it only
+//     after validating it against receipt time, assignment issue time,
+//     duration, account age and the player's previous TRUSTED games; else it
+//     uses receipt time and returns the bucket it used.
+//   * Order: method → auth → Content-Length precheck → atomic rate limit →
+//     bounded read → parse → structure → record.
 //
 // Responses:
 //   200 {"status":"verified","result_id","final_score","duplicate","leaderboard_at","leaderboard_at_source"}
@@ -33,18 +37,10 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const DIFFICULTIES = ["rookie", "pro", "all_pro", "hall_of_famer"] as const;
 type Difficulty = (typeof DIFFICULTIES)[number];
 const PROFILES = ["rookie", "veteran", "fast", "powerful", "overrated"];
-const REGULATION_QUARTERS = 4;
 const OVERTIME_INDEX = 4;
 const MAX_PLACEMENTS = 8;
-// Structural rejection bounds — equal to ranked_scoring_config's
-// max_clock_skew_seconds / max_offline_age_days / min_game_duration_seconds
-// (the database re-checks them when choosing the leaderboard week).
-const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
-const MAX_GAME_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-const MIN_GAME_DURATION_MS = 20 * 1000;
-const SOLO_DISTRIBUTION = "client_bundled";
 const MAX_BODY_BYTES = 32 * 1024;
-const DEFAULT_SUBMISSIONS_PER_HOUR = 30;
+const MAX_GAME_VERSION = 40;
 
 interface Placement {
   player_key: string;
@@ -62,23 +58,16 @@ interface CaseResult {
   placements: Placement[];
 }
 
-interface Payload {
+export interface Payload {
   match_id: string;
-  user_id: string;
-  season_id: string | null;
+  season_id: string;
   game_number: number;
   difficulty: Difficulty;
   started_at: string;
   completed_at: string;
-  regulation_quarters_solved: number;
-  regulation_quarters_lost: number;
-  game_won: boolean;
-  overtime_played: boolean;
-  overtime_won: boolean;
-  wrong_placements: number;
-  hints_used: number;
   case_results: CaseResult[];
   game_version: string;
+  ranked_protocol: number;
 }
 
 class Rejection extends Error {
@@ -105,116 +94,100 @@ function isInt(value: unknown, min: number, max: number): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max;
 }
 
-function require(condition: boolean, reason: string): asserts condition {
+function ensure(condition: boolean, reason: string): asserts condition {
   if (!condition) throw new Rejection(reason);
 }
 
 // ---------------------------------------------------------------------------
-// Structural validation (pure)
+// Structural validation (pure). The database is the authority for everything
+// semantic: assignment binding, exact solutions, overtime rules, scoring and
+// timestamp trust. A body user_id is ignored (never read).
 // ---------------------------------------------------------------------------
 
-export function validateStructure(body: unknown, now: number): Payload {
-  require(typeof body === "object" && body !== null, "malformed_body");
+export function validateStructure(body: unknown): Payload {
+  ensure(typeof body === "object" && body !== null && !Array.isArray(body), "malformed_body");
   const p = body as Payload;
-  require(typeof p.match_id === "string" && UUID_RE.test(p.match_id), "invalid_match_id");
-  require(typeof p.user_id === "string" && UUID_RE.test(p.user_id), "invalid_user_id");
-  require(p.season_id === null || p.season_id === undefined ||
-    (typeof p.season_id === "string" && UUID_RE.test(p.season_id)), "invalid_season_id");
-  require(isInt(p.game_number, 1, 12), "invalid_game_number");
-  require(DIFFICULTIES.includes(p.difficulty), "invalid_difficulty");
-  require(typeof p.game_version === "string" && p.game_version.length <= 40, "invalid_game_version");
-  require(typeof p.game_won === "boolean" && typeof p.overtime_played === "boolean" &&
-    typeof p.overtime_won === "boolean", "invalid_flags");
-  require(isInt(p.regulation_quarters_solved, 0, 4) && isInt(p.regulation_quarters_lost, 0, 4),
-    "invalid_quarters");
-  require(isInt(p.hints_used, 0, 500) && isInt(p.wrong_placements, 0, 500), "invalid_totals");
+  ensure(typeof p.match_id === "string" && UUID_RE.test(p.match_id), "invalid_match_id");
+  ensure(typeof p.season_id === "string" && UUID_RE.test(p.season_id), "invalid_season_id");
+  ensure(isInt(p.game_number, 1, 12), "invalid_game_number");
+  ensure(DIFFICULTIES.includes(p.difficulty), "invalid_difficulty");
+  ensure(typeof p.game_version === "string" && p.game_version.trim().length >= 1 &&
+    p.game_version.trim().length <= MAX_GAME_VERSION, "invalid_game_version");
+  ensure(isInt(p.ranked_protocol, 1, 1000), "client_outdated");
 
-  // Timestamps: real, ordered, plausible.
   const started = Date.parse(p.started_at);
   const completed = Date.parse(p.completed_at);
-  require(Number.isFinite(started) && Number.isFinite(completed), "invalid_timestamps");
-  require(started < completed, "invalid_timestamps");
-  require(completed <= now + MAX_FUTURE_SKEW_MS, "completed_in_future");
-  require(started >= now - MAX_GAME_AGE_MS, "result_too_old");
-  require(completed - started >= MIN_GAME_DURATION_MS, "implausible_duration");
+  ensure(typeof p.started_at === "string" && typeof p.completed_at === "string" &&
+    Number.isFinite(started) && Number.isFinite(completed) && started < completed, "invalid_timestamps");
 
-  // Case results: 4 regulation (+1 overtime), distinct cases, ordered indexes.
-  require(Array.isArray(p.case_results), "invalid_case_results");
-  require(p.case_results.length === 4 || p.case_results.length === 5, "invalid_case_count");
+  ensure(Array.isArray(p.case_results), "invalid_case_results");
+  ensure(p.case_results.length === 4 || p.case_results.length === 5, "invalid_case_count");
   const caseIDs = new Set<string>();
   p.case_results.forEach((c, i) => {
-    require(typeof c === "object" && c !== null, "invalid_case_results");
-    require(typeof c.case_id === "string" && KEY_RE.test(c.case_id), "invalid_case_id");
-    require(isInt(c.case_version, 1, 100000), "invalid_case_version");
-    require(c.quarter_index === i && isInt(c.quarter_index, 0, OVERTIME_INDEX), "invalid_quarter_index");
-    require(c.outcome === "solved" || c.outcome === "failed", "invalid_outcome");
-    require(isInt(c.hints_used, 0, 100) && isInt(c.wrong_placements, 0, 100), "invalid_case_totals");
-    require(Array.isArray(c.placements) && c.placements.length <= MAX_PLACEMENTS, "invalid_placements");
+    ensure(typeof c === "object" && c !== null, "invalid_case_results");
+    ensure(typeof c.case_id === "string" && KEY_RE.test(c.case_id), "invalid_case_id");
+    ensure(isInt(c.case_version, 1, 100000), "invalid_case_version");
+    ensure(c.quarter_index === i && isInt(c.quarter_index, 0, OVERTIME_INDEX), "invalid_quarter_index");
+    ensure(c.outcome === "solved" || c.outcome === "failed", "invalid_outcome");
+    ensure(isInt(c.hints_used, 0, 100) && isInt(c.wrong_placements, 0, 100), "invalid_case_totals");
+    ensure(Array.isArray(c.placements) && c.placements.length <= MAX_PLACEMENTS, "invalid_placements");
     const players = new Set<string>();
     const slots = new Set<string>();
     for (const pl of c.placements) {
-      require(typeof pl === "object" && pl !== null && typeof pl.player_key === "string" &&
+      ensure(typeof pl === "object" && pl !== null && typeof pl.player_key === "string" &&
         typeof pl.slot_key === "string" && KEY_RE.test(pl.player_key) && KEY_RE.test(pl.slot_key) &&
         PROFILES.includes(pl.profile), "invalid_placement");
-      require(!players.has(pl.player_key) && !slots.has(pl.slot_key), "duplicate_placement");
+      ensure(!players.has(pl.player_key) && !slots.has(pl.slot_key), "duplicate_placement");
       players.add(pl.player_key);
       slots.add(pl.slot_key);
     }
-    require(!caseIDs.has(c.case_id), "duplicate_case");
+    ensure(!caseIDs.has(c.case_id), "duplicate_case");
     caseIDs.add(c.case_id);
   });
-
-  // The summary must be exactly what the per-case results say.
-  const regulation = p.case_results.slice(0, REGULATION_QUARTERS);
-  const overtime = p.case_results[OVERTIME_INDEX];
-  const solved = regulation.filter((c) => c.outcome === "solved").length;
-  const overtimePlayed = solved === 2;
-  require((overtime !== undefined) === overtimePlayed, "overtime_mismatch");
-  const overtimeWon = overtime?.outcome === "solved";
-  require(p.regulation_quarters_solved === solved, "summary_mismatch");
-  require(p.regulation_quarters_lost === REGULATION_QUARTERS - solved, "summary_mismatch");
-  require(p.overtime_played === overtimePlayed && p.overtime_won === overtimeWon, "summary_mismatch");
-  require(p.game_won === (solved >= 3 || overtimeWon), "summary_mismatch");
-  const hints = p.case_results.reduce((sum, c) => sum + c.hints_used, 0);
-  const wrong = p.case_results.reduce((sum, c) => sum + c.wrong_placements, 0);
-  require(p.hints_used === hints && p.wrong_placements === wrong, "summary_mismatch");
   return p;
 }
 
-// ---------------------------------------------------------------------------
-// Solution validation against the PRIVATE catalog (pure)
-// ---------------------------------------------------------------------------
-
-/// Easier tiers may trim one missing player (rookie always; pro in the
-/// season's opening weeks) — mirrors CaseDifficultyAdapter.
-export function trimAllowed(difficulty: Difficulty, gameNumber: number): boolean {
-  return difficulty === "rookie" || (difficulty === "pro" && gameNumber <= 3);
+/// Only the fields the writer needs, re-serialized (drops unknown keys).
+export function sanitizedCaseResults(results: CaseResult[]): CaseResult[] {
+  return results.map((c) => ({
+    case_id: c.case_id,
+    case_version: c.case_version,
+    quarter_index: c.quarter_index,
+    outcome: c.outcome,
+    hints_used: c.hints_used,
+    wrong_placements: c.wrong_placements,
+    placements: c.placements.map((pl) => ({ player_key: pl.player_key, slot_key: pl.slot_key, profile: pl.profile })),
+  }));
 }
 
-function key(p: Placement): string {
-  return `${p.player_key}|${p.slot_key}|${p.profile}`;
-}
+/// Database error → (reason, HTTP status). 4xx is final; unknown → 503.
+export const RECORD_ERRORS: ReadonlyArray<readonly [string, number]> = [
+  ["MATCH_ID_CONFLICT", 409],
+  ["CLIENT_OUTDATED", 426],
+  ["INVALID_GAME_VERSION", 422],
+  ["ASSIGNMENT_NOT_FOUND", 404],
+  ["ASSIGNMENT_OWNER_MISMATCH", 403],
+  ["ASSIGNMENT_MISMATCH", 409],
+  ["ASSIGNMENT_CONSUMED", 409],
+  ["ASSIGNMENT_REPLACED", 409],
+  ["ASSIGNMENT_EXPIRED", 410],
+  ["DUPLICATE_SEASON_GAME", 409],
+  ["CASE_VERSION_MISMATCH", 409],
+  ["CASE_MISMATCH", 409],
+  ["PLACEMENT_MISMATCH", 422],
+  ["SOLVED_CASE_INCOMPLETE", 422],
+  ["FAILED_CASE_COMPLETE", 422],
+  ["OVERTIME_MISMATCH", 422],
+  ["INVALID_CASE_RESULTS", 422],
+  ["INVALID_DIFFICULTY", 422],
+  ["INVALID_ARGUMENTS", 422],
+];
 
-export function validateCaseAgainstSolution(
-  result: CaseResult,
-  solution: Placement[],
-  canTrim: boolean,
-): void {
-  require(Array.isArray(solution) && solution.length > 0, "solution_missing");
-  const truth = new Set(solution.map(key));
-  // Every submitted placement must be a correct one (wrong ones are never
-  // recorded as placements — they count only as wrong_placements).
-  for (const placement of result.placements) {
-    require(truth.has(key(placement)), "placement_mismatch");
+export function mapRecordError(message: string): { reason: string; status: number } {
+  for (const [code, status] of RECORD_ERRORS) {
+    if (message.includes(code)) return { reason: code.toLowerCase(), status };
   }
-  const count = result.placements.length;
-  if (result.outcome === "solved") {
-    const full = count === solution.length;
-    const trimmed = canTrim && solution.length > 4 && count === solution.length - 1;
-    require(full || trimmed, "solved_case_incomplete");
-  } else {
-    require(count <= solution.length - 1, "failed_case_complete");
-  }
+  return { reason: "record_failed", status: 503 };
 }
 
 // ---------------------------------------------------------------------------
@@ -222,13 +195,14 @@ export function validateCaseAgainstSolution(
 // ---------------------------------------------------------------------------
 
 Deno.serve(async (req: Request): Promise<Response> => {
+  // 1. Method.
   if (req.method !== "POST") return json(405, { status: "error", reason: "method_not_allowed" });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceRoleKey) return json(500, { status: "error", reason: "server_misconfigured" });
 
-  // 1. Authenticate: the user comes from the JWT, never from the body.
+  // 2. Authenticate: the user comes from the JWT, never from the body.
   const authHeader = req.headers.get("Authorization") ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
   if (!token) return json(401, { status: "error", reason: "unauthorized" });
@@ -240,32 +214,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (userError || !userID) return json(401, { status: "error", reason: "unauthorized" });
 
   const logAttempt = async (matchID: string | null, outcome: string, reason: string | null) => {
-    await admin.from("ranked_submission_attempts").insert({
-      user_id: userID,
-      match_id: matchID,
-      outcome,
-      reason,
-    });
+    await admin.from("ranked_submission_attempts").insert({ user_id: userID, match_id: matchID, outcome, reason });
   };
 
-  // 2. Rate limit (per user, rolling hour).
-  const { data: config } = await admin
-    .from("ranked_scoring_config")
-    .select("submissions_per_hour")
-    .eq("id", 1)
-    .maybeSingle();
-  const perHour = config?.submissions_per_hour ?? DEFAULT_SUBMISSIONS_PER_HOUR;
-  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { count: recent } = await admin
-    .from("ranked_submission_attempts")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userID)
-    .gte("created_at", since);
-  if ((recent ?? 0) >= perHour) return json(429, { status: "error", reason: "rate_limited" });
+  // 3. Declared size precheck BEFORE reading the body.
+  const declared = Number(req.headers.get("Content-Length") ?? "0");
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return reject("body_too_large", 413);
 
-  // 3. Parse.
+  // 4. Atomic per-user rate limit ('submit' bucket) — one upsert, race-free.
+  const { data: allowed, error: limitError } = await admin.rpc("consume_ranked_rate_limit", {
+    p_user_id: userID,
+    p_bucket: "submit",
+  });
+  if (limitError) return json(503, { status: "error", reason: "rate_limit_unavailable" });
+  if (allowed !== true) return json(429, { status: "error", reason: "rate_limited" });
+
+  // 5. Bounded read (Content-Length may be absent or understated).
   const raw = await req.text();
-  if (raw.length > MAX_BODY_BYTES) return reject("body_too_large", 413);
+  if (new TextEncoder().encode(raw).length > MAX_BODY_BYTES) return reject("body_too_large", 413);
   let body: unknown;
   try {
     body = JSON.parse(raw);
@@ -274,106 +240,51 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return reject("malformed_body", 400);
   }
 
+  // 6. Structure.
   let payload: Payload;
   try {
-    payload = validateStructure(body, Date.now());
+    payload = validateStructure(body);
   } catch (error) {
     const reason = error instanceof Rejection ? error.reason : "malformed_body";
     await logAttempt(null, "rejected", reason);
-    return reject(reason);
+    return reject(reason, reason === "client_outdated" ? 426 : 422);
   }
 
-  // 4. The body's user_id is informational only — a mismatch is rejected.
-  if (payload.user_id.toLowerCase() !== userID.toLowerCase()) {
-    await logAttempt(payload.match_id, "rejected", "user_mismatch");
-    return reject("user_mismatch", 403);
-  }
-
-  // 5. Idempotency: an already-recorded match returns its stored result.
-  const { data: existing, error: existingError } = await admin
-    .from("ranked_game_results")
-    .select("id, user_id, final_score, leaderboard_at, leaderboard_at_source")
-    .eq("match_id", payload.match_id)
-    .maybeSingle();
-  if (existingError) return json(503, { status: "error", reason: "lookup_failed" });
-  if (existing) {
-    if (existing.user_id !== userID) {
-      await logAttempt(payload.match_id, "rejected", "match_id_conflict");
-      return reject("match_id_conflict", 409);
-    }
-    await logAttempt(payload.match_id, "duplicate", null);
-    return json(200, {
-      status: "verified",
-      result_id: existing.id,
-      final_score: existing.final_score,
-      duplicate: true,
-      leaderboard_at: existing.leaderboard_at,
-      leaderboard_at_source: existing.leaderboard_at_source,
-    });
-  }
-
-  // 6. Validate every case against the private catalog.
-  const caseIDs = payload.case_results.map((c) => c.case_id);
-  const { data: cases, error: casesError } = await admin
-    .from("competitive_cases")
-    .select("case_id, case_version, active, competitive_eligible, distribution, solutions")
-    .in("case_id", caseIDs);
-  if (casesError) return json(503, { status: "error", reason: "catalog_unavailable" });
-  const byID = new Map((cases ?? []).map((c) => [c.case_id as string, c]));
-  const canTrim = trimAllowed(payload.difficulty, payload.game_number);
-  try {
-    for (const result of payload.case_results) {
-      const entry = byID.get(result.case_id);
-      require(entry !== undefined, "unknown_case");
-      require(entry.active === true && entry.competitive_eligible === true, "case_not_eligible");
-      require(entry.distribution === SOLO_DISTRIBUTION, "case_not_eligible");
-      require(entry.case_version === result.case_version, "case_version_mismatch");
-      const solution = (entry.solutions as Record<string, Placement[]>)?.[payload.difficulty];
-      validateCaseAgainstSolution(result, solution, canTrim);
-    }
-  } catch (error) {
-    const reason = error instanceof Rejection ? error.reason : "validation_failed";
-    await logAttempt(payload.match_id, "rejected", reason);
-    return reject(reason);
-  }
-
-  // 7. Record — the database computes the score and updates career stats.
+  // 7. Record — the database verifies the assignment + exact solutions,
+  //    computes the score and updates career stats (idempotent by match_id).
   const { data: recorded, error: recordError } = await admin.rpc("record_verified_ranked_result", {
     p_user_id: userID,
     p_match_id: payload.match_id,
-    p_season_id: payload.season_id ?? null,
+    p_season_id: payload.season_id,
     p_game_number: payload.game_number,
     p_difficulty: payload.difficulty,
-    p_regulation_quarters_solved: payload.regulation_quarters_solved,
-    p_game_won: payload.game_won,
-    p_overtime_played: payload.overtime_played,
-    p_overtime_won: payload.overtime_won,
-    p_wrong_placements: payload.wrong_placements,
-    p_hints_used: payload.hints_used,
-    p_case_results: payload.case_results,
+    p_case_results: sanitizedCaseResults(payload.case_results),
     p_started_at: payload.started_at,
     p_completed_at: payload.completed_at,
     p_game_version: payload.game_version,
+    p_ranked_protocol: payload.ranked_protocol,
   });
   if (recordError) {
-    const message = recordError.message ?? "";
-    for (const reason of ["MATCH_ID_CONFLICT", "SEASON_DIFFICULTY_MISMATCH", "DUPLICATE_SEASON_GAME", "INVALID_DIFFICULTY", "INVALID_ARGUMENTS"]) {
-      if (message.includes(reason)) {
-        await logAttempt(payload.match_id, "rejected", reason.toLowerCase());
-        return reject(reason.toLowerCase(), 409);
-      }
+    const mapped = mapRecordError(recordError.message ?? "");
+    if (mapped.status >= 500) {
+      await logAttempt(payload.match_id, "error", mapped.reason);
+      return json(mapped.status, { status: "error", reason: mapped.reason });
     }
+    await logAttempt(payload.match_id, "rejected", mapped.reason);
+    return reject(mapped.reason, mapped.status);
+  }
+  const row = (Array.isArray(recorded) ? recorded[0] : recorded) as Record<string, unknown> | undefined;
+  if (!row) {
     await logAttempt(payload.match_id, "error", "record_failed");
     return json(503, { status: "error", reason: "record_failed" });
   }
-  const row = Array.isArray(recorded) ? recorded[0] : recorded;
-  await logAttempt(payload.match_id, row?.duplicate ? "duplicate" : "verified", null);
+  await logAttempt(payload.match_id, row.duplicate ? "duplicate" : "verified", null);
   return json(200, {
     status: "verified",
-    result_id: row?.result_id,
-    final_score: row?.final_score,
-    duplicate: row?.duplicate ?? false,
-    leaderboard_at: row?.leaderboard_at,
-    leaderboard_at_source: row?.leaderboard_at_source,
+    result_id: row.result_id,
+    final_score: row.final_score,
+    duplicate: row.duplicate === true,
+    leaderboard_at: row.leaderboard_at,
+    leaderboard_at_source: row.leaderboard_at_source,
   });
 });

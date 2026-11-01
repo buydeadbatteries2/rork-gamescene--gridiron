@@ -144,7 +144,10 @@ nonisolated struct CompetitiveSubmissionQueue: Codable, Hashable, Sendable {
 // MARK: Persistence
 
 nonisolated enum CompetitiveSubmissionStore {
-    static let key = "gamescene.gridiron.competitiveQueue"
+    /// Phase 14B: v2. Pre-14B items (client season ids, no assignment) can
+    /// never verify against a server assignment, so the old key is simply
+    /// left unread rather than resubmitted.
+    static let key = "gamescene.gridiron.competitiveQueue.v2"
 
     static func load(defaults: UserDefaults = .standard) -> CompetitiveSubmissionQueue {
         guard let data = defaults.data(forKey: key),

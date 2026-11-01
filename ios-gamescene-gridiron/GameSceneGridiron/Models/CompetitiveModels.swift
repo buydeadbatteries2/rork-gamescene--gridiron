@@ -2,13 +2,14 @@ import Foundation
 
 // MARK: - Phase 14 — competitive (ranked) results
 //
-// The client NEVER computes or sends an authoritative score. A finished,
-// eligible season game produces a `CompetitiveResultPayload` — the raw facts
-// of the game (which case versions were played, what was placed where,
-// hints, wrong placements, timestamps). The `submit-ranked-result` Edge
-// Function re-validates every fact against the private server catalog,
-// derives the user from the JWT, computes the score from the single server
-// scoring config, and only then records the result and career stats.
+// The client NEVER computes or sends an authoritative score. Phase 14B: a
+// ranked game is bound to a server assignment (`RankedAssignment`, issued by
+// `start-ranked-match`). A finished, eligible game produces a
+// `CompetitiveResultPayload` — the raw facts (assigned case versions, what
+// was placed where, timestamps; hints / wrong placements as self-reported
+// display stats). The server verifies them against the assignment's EXACT
+// adapted solutions, derives the user from the JWT, computes the score from
+// the single scoring config, and only then records the result.
 
 // MARK: Catalog entry (generated data lives in Data/CompetitiveCaseCatalog.swift)
 
@@ -129,25 +130,37 @@ nonisolated struct CompetitiveCaseResult: Codable, Hashable, Sendable {
 // MARK: Match-level competitive state (persisted with the active match)
 
 /// Lives on `ActiveMatchRecord` so the competitive identity survives
-/// backgrounding, termination and relaunch. The match ID is generated ONCE
-/// when a real season game starts and never regenerated for that game.
+/// backgrounding, termination and relaunch. Phase 14B: a rankable game is
+/// bound to a SERVER assignment — its match ID is the server's, its cases are
+/// the assigned ones, and the snapshot travels with the resume record so a
+/// relaunch replays exactly the assigned cases.
 nonisolated struct CompetitiveMatchState: Codable, Hashable, Sendable {
     let competitiveMatchID: UUID
     let startedAt: Date
     var caseResults: [CompetitiveCaseResult]
-    /// Set when something makes the game ineligible (legacy resume record,
-    /// unknown case version…). An ineligible game is never submitted; its
-    /// local outcome is unaffected.
+    /// Set when something makes the game ineligible (no assignment, legacy
+    /// resume record, catalog mismatch…). An ineligible game is never
+    /// submitted; its local outcome is unaffected.
     var ineligibleReason: CompetitiveIneligibility?
+    /// Phase 14B: the server assignment this game plays. nil = unranked
+    /// (optional so records saved before 14B keep decoding).
+    var assignment: RankedAssignment? = nil
 
-    static func fresh(now: Date = Date()) -> CompetitiveMatchState {
-        CompetitiveMatchState(competitiveMatchID: UUID(), startedAt: now, caseResults: [], ineligibleReason: nil)
+    /// A ranked game bound to a server assignment.
+    static func ranked(_ assignment: RankedAssignment, now: Date = Date()) -> CompetitiveMatchState {
+        CompetitiveMatchState(competitiveMatchID: assignment.matchID, startedAt: now, caseResults: [],
+                              ineligibleReason: nil, assignment: assignment)
+    }
+
+    /// A season game with no usable assignment: played normally, never ranked.
+    static func unranked(_ reason: CompetitiveIneligibility, now: Date = Date()) -> CompetitiveMatchState {
+        CompetitiveMatchState(competitiveMatchID: UUID(), startedAt: now, caseResults: [], ineligibleReason: reason)
     }
 
     /// A resumed game whose saved record predates competitive tracking: it
     /// keeps playing normally but can never be ranked.
     static func legacyResume(now: Date = Date()) -> CompetitiveMatchState {
-        CompetitiveMatchState(competitiveMatchID: UUID(), startedAt: now, caseResults: [], ineligibleReason: .recoveredWithoutCompetitiveIdentity)
+        unranked(.recoveredWithoutCompetitiveIdentity, now: now)
     }
 }
 
@@ -160,49 +173,51 @@ nonisolated enum CompetitiveIneligibility: String, Codable, Hashable, Sendable {
     case inconsistentCaseResults
     case guestPlayer
     case invalidGameNumber
+    /// Phase 14B: no server assignment was available when the game started
+    /// (offline without a prefetched assignment, signed out, mid-season
+    /// migration from a pre-14B build).
+    case noAssignment
+    /// The assignment's cases/versions are not in this build's catalog.
+    case assignmentCatalogMismatch
+    /// The finished game does not match its assignment (owner, game number,
+    /// difficulty, case ids or versions).
+    case assignmentMismatch
 }
 
 // MARK: Payload
 
+/// Phase 14B wire payload. No user id (the server uses the JWT), no score
+/// and no summary fields (the server derives everything from the case
+/// results it verifies against the assignment). Hints and wrong placements
+/// per case are SELF-REPORTED stats, stored for display and never scored.
 nonisolated struct CompetitiveResultPayload: Codable, Hashable, Sendable {
     let matchID: UUID
-    /// Informational only — the server derives the user from the JWT and
-    /// rejects a mismatch. Never an authority.
-    let userID: UUID
-    let seasonID: UUID?
+    /// Server season id from the assignment.
+    let seasonID: UUID
     /// 1–10 regular season, 11 semifinal, 12 championship.
     let gameNumber: Int
     /// Server enum value (rookie / pro / all_pro / hall_of_famer).
     let difficulty: String
     let startedAt: Date
     let completedAt: Date
-    let regulationQuartersSolved: Int
-    let regulationQuartersLost: Int
-    let gameWon: Bool
-    let overtimePlayed: Bool
-    let overtimeWon: Bool
-    let wrongPlacements: Int
-    let hintsUsed: Int
     let caseResults: [CompetitiveCaseResult]
     let gameVersion: String
+    let rankedProtocol: Int
+
+    /// Bumped when the wire contract changes; the server rejects anything
+    /// below ranked_scoring_config.min_ranked_protocol (CLIENT_OUTDATED).
+    static let currentRankedProtocol = 2
 
     enum CodingKeys: String, CodingKey {
         case matchID = "match_id"
-        case userID = "user_id"
         case seasonID = "season_id"
         case gameNumber = "game_number"
         case difficulty
         case startedAt = "started_at"
         case completedAt = "completed_at"
-        case regulationQuartersSolved = "regulation_quarters_solved"
-        case regulationQuartersLost = "regulation_quarters_lost"
-        case gameWon = "game_won"
-        case overtimePlayed = "overtime_played"
-        case overtimeWon = "overtime_won"
-        case wrongPlacements = "wrong_placements"
-        case hintsUsed = "hints_used"
         case caseResults = "case_results"
         case gameVersion = "game_version"
+        case rankedProtocol = "ranked_protocol"
     }
 
     static var currentGameVersion: String {
@@ -246,7 +261,6 @@ nonisolated enum CompetitivePayloadBuilder {
         gameNumber: Int,
         activeDifficulty: DifficultyLevel,
         seasonDifficulty: DifficultyLevel?,
-        seasonID: UUID?,
         userID: UUID?,
         completedAt: Date,
         gameVersion: String = CompetitiveResultPayload.currentGameVersion
@@ -256,7 +270,14 @@ nonisolated enum CompetitivePayloadBuilder {
         guard let userID else { return .ineligible(.guestPlayer) }
         guard (1...12).contains(gameNumber) else { return .ineligible(.invalidGameNumber) }
         guard let seasonDifficulty, seasonDifficulty == activeDifficulty else { return .ineligible(.difficultyMismatch) }
-        guard match.isComplete, let result = match.result else { return .ineligible(.incompleteGame) }
+        guard let assignment = state.assignment else { return .ineligible(.noAssignment) }
+        guard assignment.isWellFormed, assignment.ownerUserID == userID,
+              assignment.matchID == state.competitiveMatchID,
+              assignment.gameNumber == gameNumber,
+              assignment.difficulty == activeDifficulty.serverValue else {
+            return .ineligible(.assignmentMismatch)
+        }
+        guard match.isComplete, match.result != nil else { return .ineligible(.incompleteGame) }
 
         let regulation = state.caseResults.filter { $0.quarterIndex < GameMatch.regulationQuarters }
         let overtime = state.caseResults.filter { $0.quarterIndex == GameMatch.regulationQuarters }
@@ -278,24 +299,24 @@ nonisolated enum CompetitivePayloadBuilder {
         guard state.caseResults.allSatisfy({ $0.caseVersion != nil }) else { return .ineligible(.unknownCaseVersion) }
 
         let ordered = state.caseResults.sorted { $0.quarterIndex < $1.quarterIndex }
-        let solved = regulation.filter { $0.outcome == .solved }.count
+        // Every played case must be EXACTLY the assigned one, in order.
+        for result in ordered {
+            guard result.quarterIndex < assignment.caseIDs.count,
+                  assignment.caseIDs[result.quarterIndex] == result.caseID,
+                  assignment.caseVersions[result.quarterIndex] == result.caseVersion else {
+                return .ineligible(.assignmentMismatch)
+            }
+        }
         return .eligible(CompetitiveResultPayload(
-            matchID: state.competitiveMatchID,
-            userID: userID,
-            seasonID: seasonID,
+            matchID: assignment.matchID,
+            seasonID: assignment.seasonID,
             gameNumber: gameNumber,
             difficulty: activeDifficulty.serverValue,
             startedAt: state.startedAt,
             completedAt: completedAt,
-            regulationQuartersSolved: solved,
-            regulationQuartersLost: GameMatch.regulationQuarters - solved,
-            gameWon: result.isWin,
-            overtimePlayed: overtimePlayed,
-            overtimeWon: overtime.first?.outcome == .solved,
-            wrongPlacements: ordered.reduce(0) { $0 + $1.wrongPlacements },
-            hintsUsed: ordered.reduce(0) { $0 + $1.hintsUsed },
             caseResults: ordered,
-            gameVersion: gameVersion
+            gameVersion: gameVersion,
+            rankedProtocol: CompetitiveResultPayload.currentRankedProtocol
         ))
     }
 }

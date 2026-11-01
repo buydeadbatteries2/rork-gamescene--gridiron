@@ -17,6 +17,8 @@ struct HomeView: View {
     @State private var isShowingProfile: Bool = false
     @State private var isShowingLeaderboard: Bool = false
     @State private var isShowingLeaderboardGate: Bool = false
+    @State private var isShowingRanked: Bool = false
+    @State private var isShowingRankedGate: Bool = false
     @State private var lockedMessage: String?
     @State private var hasAppeared: Bool = false
     @State private var glow: Bool = false
@@ -129,6 +131,21 @@ struct HomeView: View {
 
                         Button {
                             Haptics.tick()
+                            // Server-verified competition needs an account; guests
+                            // see the same CLEARANCE gate as the leaderboard.
+                            if AccountGatePolicy.requiresAccount(auth.state) {
+                                isShowingRankedGate = true
+                            } else {
+                                isShowingRanked = true
+                            }
+                        } label: {
+                            UnlockedFolderTile(title: "RANKED", symbol: "flame.fill")
+                        }
+                        .buttonStyle(PressableButtonStyle(scale: 0.97))
+                        .accessibilityIdentifier("home.ranked")
+
+                        Button {
+                            Haptics.tick()
                             // Online competition needs an account; guests see ACCOUNT REQUIRED.
                             if AccountGatePolicy.requiresAccount(auth.state) {
                                 isShowingLeaderboardGate = true
@@ -200,6 +217,13 @@ struct HomeView: View {
         }
         .sheet(isPresented: $isShowingLeaderboardGate) {
             NavigationStack { AccountGateView(featureName: "Leaderboards") }
+                .preferredColorScheme(.dark)
+        }
+        .fullScreenCover(isPresented: $isShowingRanked) {
+            RankedView()
+        }
+        .sheet(isPresented: $isShowingRankedGate) {
+            NavigationStack { AccountGateView(featureName: "Ranked") }
                 .preferredColorScheme(.dark)
         }
         .sheet(isPresented: $isShowingSettings) {

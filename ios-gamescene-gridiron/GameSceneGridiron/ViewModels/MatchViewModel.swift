@@ -69,7 +69,9 @@ final class MatchViewModel {
     ///   - difficulty: overrides the persisted selection (tests/previews).
     ///   - resume: a saved active-investigation record for this exact game;
     ///     when it matches, the match resumes at the saved quarter.
-    init(isPlayoff: Bool = false, isChampionship: Bool = false, seasonNumber: Int = 0, week: Int = 1, difficulty: DifficultyLevel? = nil, resume: ActiveMatchRecord? = nil) {
+    ///   - rankedAssignment: Phase 14B — the server assignment to play
+    ///     (tests); nil looks up a prefetched one for this season game.
+    init(isPlayoff: Bool = false, isChampionship: Bool = false, seasonNumber: Int = 0, week: Int = 1, difficulty: DifficultyLevel? = nil, resume: ActiveMatchRecord? = nil, rankedAssignment: RankedAssignment? = nil) {
         self.isPlayoff = isPlayoff
         self.isChampionship = isChampionship
         self.seasonNumber = seasonNumber
@@ -81,15 +83,42 @@ final class MatchViewModel {
         activeDifficulty = selected
         // Phase 11.6: season games are identity-stable — leaving and
         // reopening resumes the same investigation, quarter for quarter.
+        let resumeMatches = resume.map {
+            Self.matchesContext($0, seasonNumber: seasonNumber, week: week, isPlayoff: isPlayoff, isChampionship: isChampionship)
+        } ?? false
+        var initialCompetitive: CompetitiveMatchState?
         if seasonNumber > 0 {
-            competitive = .fresh()
             matchID = Self.stableMatchID(
                 seasonNumber: seasonNumber, week: week,
                 isPlayoff: isPlayoff, isChampionship: isChampionship
             )
+            // Phase 14B: a season game is rankable only when it plays a
+            // server assignment. A resumed game keeps its saved identity
+            // (and assignment snapshot); a record saved before ranked play
+            // existed can never be ranked.
+            if resumeMatches, let resume {
+                initialCompetitive = resume.competitive ?? .legacyResume()
+            } else if let assignment = rankedAssignment ?? RankedAssignmentService.shared.playableAssignment(
+                seasonID: SeasonManager.shared.rankedSeasonID, gameNumber: week, difficulty: selected
+            ) {
+                initialCompetitive = assignment.matchesLocalCatalog() && assignment.gameNumber == week
+                    && assignment.difficulty == selected.serverValue
+                    ? .ranked(assignment) : .unranked(.assignmentCatalogMismatch)
+            } else {
+                initialCompetitive = .unranked(.noAssignment)
+            }
         }
+        competitive = initialCompetitive
         let target = DifficultyResolver.target(selected: selected, stage: .forWeek(week))
-        let ids = CaseScheduler.gameCaseIDs(seasonNumber: seasonNumber, week: week)
+        // Ranked games play exactly the assigned cases (quarters 1–4, then
+        // overtime); every other game uses the local deterministic schedule.
+        let ids: (regulation: [String], overtime: String)
+        if let assignment = initialCompetitive?.assignment, initialCompetitive?.ineligibleReason == nil,
+           let overtimeID = assignment.overtimeCaseID {
+            ids = (assignment.regulationCaseIDs, overtimeID)
+        } else {
+            ids = CaseScheduler.gameCaseIDs(seasonNumber: seasonNumber, week: week)
+        }
         var maps: [[String: RosterIdentity]] = []
         var statMaps: [[String: PlayerStat]] = []
         if isPlayoff {
@@ -121,14 +150,9 @@ final class MatchViewModel {
         statEventMaps = statMaps
         // Resume path: a saved record for this exact game restores the match
         // (quarters already decided, running totals) instead of starting over.
-        if let resume, Self.matchesContext(resume, seasonNumber: seasonNumber, week: week, isPlayoff: isPlayoff, isChampionship: isChampionship) {
+        if resumeMatches, let resume {
             match = resume.match
             matchID = resume.matchID
-            // Same competitive identity as before the exit; a record saved
-            // before ranked play existed can never be ranked.
-            if seasonNumber > 0 {
-                competitive = resume.competitive ?? .legacyResume()
-            }
         }
     }
 
@@ -368,7 +392,7 @@ final class MatchViewModel {
     }
 
     /// Pure payload build for this finished game (tests call it directly).
-    func competitivePayload(userID: UUID?, seasonID: UUID?, seasonDifficulty: DifficultyLevel?, completedAt: Date = Date()) -> CompetitivePayloadBuilder.Outcome {
+    func competitivePayload(userID: UUID?, seasonDifficulty: DifficultyLevel?, completedAt: Date = Date()) -> CompetitivePayloadBuilder.Outcome {
         CompetitivePayloadBuilder.build(
             state: competitive,
             match: match,
@@ -376,7 +400,6 @@ final class MatchViewModel {
             gameNumber: week,
             activeDifficulty: activeDifficulty,
             seasonDifficulty: seasonDifficulty,
-            seasonID: seasonID,
             userID: userID,
             completedAt: completedAt
         )
@@ -386,14 +409,18 @@ final class MatchViewModel {
         guard competitive != nil, competitiveOutcome == nil else { return }
         var userID: UUID?
         if case .authenticated(let profile) = AuthService.shared.state { userID = profile.authUserID }
-        let seasons = SeasonManager.shared
         let outcome = competitivePayload(
             userID: userID,
-            seasonID: seasons.competitiveSeasonID,
-            seasonDifficulty: seasons.activeSeasonDifficulty
+            seasonDifficulty: SeasonManager.shared.activeSeasonDifficulty
         )
         competitiveOutcome = outcome
-        CompetitiveSubmissionService.shared.handle(outcome)
+        CompetitiveSubmissionService.shared.handle(outcome, owner: userID)
+        // The assignment is spent either way; prefetch the next games.
+        if let assignment = competitive?.assignment {
+            let assignments = RankedAssignmentService.shared
+            assignments.consume(matchID: assignment.matchID)
+            Task { await assignments.refresh() }
+        }
     }
 
     // MARK: Game Ball economy (Phase 11.7)

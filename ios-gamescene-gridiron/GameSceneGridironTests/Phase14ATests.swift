@@ -193,10 +193,13 @@ struct Phase14AServerTests {
 
     @Test func checksumFunctionIsServiceOnly() {
         let sql = P14A.sql
-        #expect(sql.contains("create or replace function public.competitive_catalog_checksum()"))
-        #expect(sql.contains("revoke all on function public.competitive_catalog_checksum() from public, anon, authenticated;"))
-        #expect(sql.contains("grant execute on function public.competitive_catalog_checksum() to service_role;"))
+        #expect(sql.contains("create or replace function public.competitive_catalog_checksum(p_distribution text default 'client_bundled')"))
+        #expect(sql.contains("revoke all on function public.competitive_catalog_checksum(text) from public, anon, authenticated;"))
+        #expect(sql.contains("grant execute on function public.competitive_catalog_checksum(text) to service_role;"))
         #expect(sql.contains("md5(c.solutions::text)"))
+        // Phase 14B: scoped per distribution — server_assigned rows never
+        // affect the client_bundled checksum (and get their own).
+        #expect(sql.contains("where c.active and c.distribution = p_distribution;"))
         #expect(sql.contains("revoke all on public.competitive_catalog_meta from anon, authenticated;"))
     }
 
@@ -206,7 +209,7 @@ struct Phase14AServerTests {
         // The SQL fixture holds schema.sql only; the catalog SQL's drift guard
         // is proven by scripts/verify-supabase-sql.mjs. Here we pin that the
         // schema exposes the function the guard calls.
-        #expect(P14A.sql.contains("public.competitive_catalog_checksum()"))
+        #expect(P14A.sql.contains("public.competitive_catalog_checksum(text)"))
     }
 
     @Test func weeklyBoardUsesValidatedLeaderboardTime() {
@@ -232,10 +235,12 @@ struct Phase14AServerTests {
         #expect(sql.contains("min_game_duration_seconds int not null default 20"))
         #expect(sql.contains("max_trusted_game_hours int not null default 168"))
         #expect(sql.contains("max_clock_skew_seconds int not null default 300"))
+        // Phase 14B: the edge does no age/future rejection — an untrusted
+        // timestamp just falls back to receipt time in the database.
         let edge = P14A.edge
-        #expect(edge.contains("const MAX_GAME_AGE_MS = 30 * 24 * 60 * 60 * 1000;"))
-        #expect(edge.contains("const MIN_GAME_DURATION_MS = 20 * 1000;"))
-        #expect(edge.contains("const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;"))
+        #expect(!edge.contains("MAX_GAME_AGE_MS"))
+        #expect(!edge.contains("MAX_FUTURE_SKEW_MS"))
+        #expect(edge.contains("const MAX_GAME_VERSION = 40;"))
     }
 
     @Test func scoringStaysServerSideAtSpecValues() {
@@ -244,13 +249,14 @@ struct Phase14AServerTests {
         for forbidden in ["quarter_solved_points", "multiplier", "p_final_score", "base_score", "1.25", "2.00"] {
             #expect(!edge.contains(forbidden), "edge must not hold scoring: \(forbidden)")
         }
-        #expect(sql.contains("10, 10, 5, 5, 3, 3, 1.00, 1.25, 1.50, 2.00"))
+        #expect(sql.contains("10, 10, 5, 5, 0, 0, 1.00, 1.25, 1.50, 2.00"))
+        #expect(!sql.contains("10, 10, 5, 5, 3, 3,"))
     }
 
-    @Test func edgeRequiresBundledDistributionAndNeverLeaksSolutions() {
+    @Test func assignmentsUseBundledCasesAndNeverLeakSolutions() {
+        let issuer = P14A.section(from: "create or replace function public.issue_ranked_match_assignment(", to: "end; $$;")
+        #expect(issuer.contains("and c.distribution = 'client_bundled'"))
         let edge = P14A.edge
-        #expect(edge.contains("const SOLO_DISTRIBUTION = \"client_bundled\";"))
-        #expect(edge.contains("require(entry.distribution === SOLO_DISTRIBUTION, \"case_not_eligible\");"))
         #expect(edge.contains("leaderboard_at"))
         #expect(!edge.contains("solutions: entry"))
         #expect(!edge.contains("SUPABASE_ANON_KEY"))

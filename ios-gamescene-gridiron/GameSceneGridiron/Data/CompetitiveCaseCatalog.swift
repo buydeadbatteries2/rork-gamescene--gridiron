@@ -11,7 +11,7 @@ nonisolated enum CompetitiveCaseCatalog {
     static let catalogFingerprint = "a30cb39044dc193b"
     /// md5 over the canonical active-row lines — equals
     /// public.competitive_catalog_checksum() on a correctly pasted server.
-    static let catalogChecksum = "6b0cd81c0de69563687e0ea915242d25"
+    static let catalogChecksum = "2069916b392ca193e9989f33c5e4a1d4"
     static let caseCount = 150
 
     static let entries: [String: CompetitiveCatalogEntry] = [

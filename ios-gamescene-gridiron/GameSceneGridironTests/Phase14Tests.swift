@@ -6,9 +6,10 @@ import Testing
 //
 // The client never computes an authoritative score. These suites pin:
 //  * the exported competitive catalog against the live CaseLibrary,
-//  * that every legitimately solved case at every difficulty/week passes the
-//    server's solution check (Swift mirror of validateCaseAgainstSolution),
-//  * the eligibility gate + payload shape (no score field ever sent),
+//  * that the server's per-VARIANT solutions are EXACTLY what the Swift
+//    adapter produces for every difficulty/week (Phase 14B: no trimming
+//    tolerance — the assignment's snapshot must equal the adapter output),
+//  * the eligibility gate + payload shape (no score, no user id ever sent),
 //  * the single SQL scoring config / formula (oracle from the spec),
 //  * schema + Edge Function security properties (fixtures),
 //  * the durable submission queue and its flush service,
@@ -18,34 +19,52 @@ import Testing
 // MARK: Shared helpers
 
 private enum P14 {
-    /// caseID → difficulty → set of "player|slot|profile".
+    /// caseID → solution variant → set of "player|slot|profile".
     static let fixtureSolutions: [String: [String: Set<String>]] = {
         var map: [String: [String: Set<String>]] = [:]
+        for (caseID, byVariant) in fixtureSolutionLists {
+            map[caseID] = byVariant.mapValues(Set.init)
+        }
+        return map
+    }()
+
+    /// caseID → solution variant → ordered list (duplicates preserved).
+    static let fixtureSolutionLists: [String: [String: [String]]] = {
+        var map: [String: [String: [String]]] = [:]
         for line in CompetitiveCatalogFixture.solutions.split(separator: "\n") {
             let parts = line.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
             guard parts.count == 3 else { continue }
             let placements = parts[2].split(separator: ",").map { item -> String in
                 item.split(separator: ":").joined(separator: "|")
             }
-            map[parts[0], default: [:]][parts[1]] = Set(placements)
+            map[parts[0], default: [:]][parts[1]] = placements
         }
         return map
     }()
 
-    /// Mirror of the Edge Function's `trimAllowed`.
-    static func serverTrimAllowed(_ level: DifficultyLevel, gameNumber: Int) -> Bool {
-        level == .rookie || (level == .pro && gameNumber <= 3)
+    static let variants: Set<String> = ["rookie", "pro_early", "pro", "all_pro", "hall_of_famer"]
+
+    /// Mirror of public.ranked_solution_variant(difficulty, game_number).
+    static func variant(_ level: DifficultyLevel, gameNumber: Int) -> String {
+        switch level {
+        case .rookie: "rookie"
+        case .pro: gameNumber <= 3 ? "pro_early" : "pro"
+        case .allPro: "all_pro"
+        case .hallOfFamer: "hall_of_famer"
+        }
     }
 
-    /// Mirror of the Edge Function's `validateCaseAgainstSolution`.
-    static func serverAccepts(placements: [String], solved: Bool, solution: Set<String>, canTrim: Bool) -> Bool {
+    /// Mirror of record_verified_ranked_result's per-case check (Phase 14B):
+    /// every placement is part of the EXACT expected solution, no player or
+    /// slot twice; solved = the full solution, failed = strictly less.
+    static func serverAccepts(placements: [String], solved: Bool, solution: [String]) -> Bool {
         guard !solution.isEmpty else { return false }
-        guard placements.allSatisfy({ solution.contains($0) }) else { return false }
-        if solved {
-            return placements.count == solution.count
-                || (canTrim && solution.count > 4 && placements.count == solution.count - 1)
-        }
-        return placements.count <= solution.count - 1
+        let truth = Set(solution)
+        guard placements.allSatisfy({ truth.contains($0) }) else { return false }
+        let players = placements.map { $0.split(separator: "|").first.map(String.init) ?? "" }
+        let slots = placements.map { $0.split(separator: "|").dropFirst().first.map(String.init) ?? "" }
+        guard Set(players).count == players.count, Set(slots).count == slots.count else { return false }
+        return solved ? placements.count == solution.count : placements.count < solution.count
     }
 
     static func normalizedSQL(_ raw: String) -> String {
@@ -78,6 +97,18 @@ private enum P14 {
 
     static let start = Date(timeIntervalSince1970: 1_790_000_000)
     static let end = Date(timeIntervalSince1970: 1_790_000_900)
+    static let user = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
+    static let season = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+
+    /// A server assignment for `caseIDs` (versions 1) owned by `user`.
+    static func assignment(owner: UUID = user, gameNumber: Int = 5, difficulty: String = "pro", versions: [Int] = [1, 1, 1, 1, 1]) -> RankedAssignment {
+        RankedAssignment(
+            assignmentID: UUID(), matchID: UUID(), seasonID: season, gameNumber: gameNumber,
+            difficulty: difficulty, caseIDs: caseIDs, caseVersions: versions,
+            issuedAt: start.addingTimeInterval(-60), expiresAt: start.addingTimeInterval(14 * 86_400),
+            catalogFingerprint: CompetitiveCaseCatalog.catalogFingerprint, ownerUserID: owner
+        )
+    }
 
     static func caseResult(_ index: Int, _ outcome: QuarterOutcome, hints: Int = 0, wrong: Int = 0, version: Int? = 1) -> CompetitiveCaseResult {
         CompetitiveCaseResult(
@@ -87,8 +118,9 @@ private enum P14 {
         )
     }
 
-    /// A finished match + matching competitive state.
-    static func game(_ outcomes: [QuarterOutcome], overtime: QuarterOutcome? = nil, hints: Int = 0, wrong: Int = 0) -> (GameMatch, CompetitiveMatchState) {
+    /// A finished match + matching competitive state bound to an assignment.
+    static func game(_ outcomes: [QuarterOutcome], overtime: QuarterOutcome? = nil, hints: Int = 0, wrong: Int = 0,
+                     assignment: RankedAssignment = assignment()) -> (GameMatch, CompetitiveMatchState) {
         var match = GameMatch.fresh()
         var results: [CompetitiveCaseResult] = []
         for (index, outcome) in outcomes.enumerated() {
@@ -103,7 +135,8 @@ private enum P14 {
                                 correctPlacements: 4, wrongPlacements: 0, livesLost: 0, hintsUsed: 0)
             results.append(caseResult(4, overtime))
         }
-        let state = CompetitiveMatchState(competitiveMatchID: UUID(), startedAt: start, caseResults: results, ineligibleReason: nil)
+        var state = CompetitiveMatchState.ranked(assignment, now: start)
+        state.caseResults = results
         return (match, state)
     }
 
@@ -111,21 +144,20 @@ private enum P14 {
         _ state: CompetitiveMatchState?, _ match: GameMatch,
         seasonNumber: Int = 1, gameNumber: Int = 5,
         active: DifficultyLevel = .pro, locked: DifficultyLevel? = .pro,
-        user: UUID? = UUID()
+        user: UUID? = P14.user
     ) -> CompetitivePayloadBuilder.Outcome {
         CompetitivePayloadBuilder.build(
             state: state, match: match, seasonNumber: seasonNumber, gameNumber: gameNumber,
-            activeDifficulty: active, seasonDifficulty: locked, seasonID: UUID(),
+            activeDifficulty: active, seasonDifficulty: locked,
             userID: user, completedAt: end, gameVersion: "ios-test(1)"
         )
     }
 
-    static func payload(matchID: UUID = UUID(), user: UUID) -> CompetitiveResultPayload {
+    static func payload(matchID: UUID = UUID()) -> CompetitiveResultPayload {
         CompetitiveResultPayload(
-            matchID: matchID, userID: user, seasonID: UUID(), gameNumber: 4, difficulty: "pro",
-            startedAt: start, completedAt: end, regulationQuartersSolved: 3, regulationQuartersLost: 1,
-            gameWon: true, overtimePlayed: false, overtimeWon: false, wrongPlacements: 0, hintsUsed: 0,
-            caseResults: [], gameVersion: "ios-test(1)"
+            matchID: matchID, seasonID: season, gameNumber: 4, difficulty: "pro",
+            startedAt: start, completedAt: end, caseResults: [], gameVersion: "ios-test(1)",
+            rankedProtocol: CompetitiveResultPayload.currentRankedProtocol
         )
     }
 
@@ -181,9 +213,9 @@ struct Phase14CatalogTests {
         #expect(CompetitiveCaseCatalog.competitiveVersion(forCaseID: "case_does_not_exist") == nil)
     }
 
-    @Test func fixtureHasAllFourDifficultiesPerCase() {
-        for (caseID, byDifficulty) in P14.fixtureSolutions {
-            #expect(Set(byDifficulty.keys) == Set(DifficultyLevel.allCases.map(\.serverValue)), "\(caseID)")
+    @Test func fixtureHasEverySolutionVariantPerCase() {
+        for (caseID, byVariant) in P14.fixtureSolutions {
+            #expect(Set(byVariant.keys) == P14.variants, "\(caseID)")
         }
     }
 
@@ -194,61 +226,84 @@ struct Phase14CatalogTests {
         #expect(DifficultyLevel(serverValue: "legend") == nil)
     }
 
-    /// Client trimming must never exceed what the server tolerates.
-    @Test func clientTrimOnlyWhereServerAllowsIt() {
-        for level in DifficultyLevel.allCases {
-            for week in 1...12 {
-                let target = DifficultyResolver.target(selected: level, stage: .forWeek(week))
-                if target.maxMissingPlayers < Int.max {
-                    #expect(P14.serverTrimAllowed(level, gameNumber: week), "\(level) week \(week) trims but server forbids")
-                }
-            }
-        }
+    /// The Swift variant mapping is byte-for-byte the SQL one.
+    @Test func variantMappingMirrorsTheDatabase() {
+        let body = P14.sqlFunction(named: "create or replace function public.ranked_solution_variant(")
+        #expect(body.contains("when p_difficulty = 'rookie' then 'rookie'"))
+        #expect(body.contains("when p_difficulty = 'pro' and p_game_number <= 3 then 'pro_early'"))
+        #expect(body.contains("when p_difficulty = 'pro' then 'pro'"))
+        #expect(body.contains("when p_difficulty = 'all_pro' then 'all_pro'"))
+        #expect(body.contains("when p_difficulty = 'hall_of_famer' then 'hall_of_famer'"))
+        #expect(P14.variant(.pro, gameNumber: 3) == "pro_early")
+        #expect(P14.variant(.pro, gameNumber: 4) == "pro")
     }
 
-    /// Every case, solved legitimately at every difficulty and every week,
-    /// passes the server's per-case solution check.
-    @Test func legitimatelySolvedCasesPassServerValidation() {
+    /// Cross-language fixture (Phase 14B): for every case, difficulty and
+    /// week, the Swift adapter output EQUALS the server variant solution —
+    /// same placements, same count. No length−1 tolerance exists anywhere.
+    @Test func swiftAdapterEqualsServerVariantExactly() {
         var failures: [String] = []
         for level in DifficultyLevel.allCases {
-            // The adapted solution depends only on the level's profile pool
-            // and the missing-player cap — group weeks by the cap.
-            var weeksByCap: [Int: [Int]] = [:]
+            // Group weeks by (variant, missing cap) — the adapted solution
+            // depends only on the level's profile pool and the cap.
+            var groups: [String: [Int]] = [:]
             for week in 1...12 {
                 let cap = DifficultyResolver.target(selected: level, stage: .forWeek(week)).maxMissingPlayers
-                weeksByCap[cap, default: []].append(week)
+                groups["\(P14.variant(level, gameNumber: week))#\(cap)", default: []].append(week)
             }
-            for (_, weeks) in weeksByCap {
+            for (_, weeks) in groups {
+                let variant = P14.variant(level, gameNumber: weeks[0])
                 let target = DifficultyResolver.target(selected: level, stage: .forWeek(weeks[0]))
                 for puzzleCase in CaseLibrary.all {
                     let adapted = CaseDifficultyAdapter.adapt(puzzleCase, to: target)
                     let placements = adapted.solution.map { "\($0.playerKey)|\($0.slotKey)|\($0.profile.rawValue)" }
-                    guard let truth = P14.fixtureSolutions[puzzleCase.id]?[level.serverValue] else {
-                        failures.append("\(puzzleCase.id)/\(level.serverValue): missing solution")
+                    guard let truth = P14.fixtureSolutionLists[puzzleCase.id]?[variant] else {
+                        failures.append("\(puzzleCase.id)/\(variant): missing")
                         continue
                     }
-                    for week in weeks where !P14.serverAccepts(
-                        placements: placements, solved: true, solution: truth,
-                        canTrim: P14.serverTrimAllowed(level, gameNumber: week)
-                    ) {
-                        failures.append("\(puzzleCase.id)/\(level.serverValue)/w\(week)")
+                    if Set(placements) != Set(truth) || placements.count != truth.count
+                        || !P14.serverAccepts(placements: placements, solved: true, solution: truth) {
+                        failures.append("\(puzzleCase.id)/\(variant)/w\(weeks)")
                     }
                 }
             }
         }
-        #expect(failures.isEmpty, "Rejected legit solves (\(failures.count)): \(failures.prefix(6))")
+        #expect(failures.isEmpty, "Adapter ≠ server variant (\(failures.count)): \(failures.prefix(6))")
+    }
+
+    /// The trimmed variants really are shorter for trimmed cases — so an
+    /// "almost complete" HoF solve can no longer pass as a rookie trim.
+    @Test func trimmedVariantsDifferFromFullSolutions() {
+        var trimmed = 0
+        for (_, byVariant) in P14.fixtureSolutionLists {
+            guard let rookie = byVariant["rookie"], let full = byVariant["all_pro"] else { continue }
+            if rookie.count < full.count { trimmed += 1 }
+        }
+        #expect(trimmed > 0, "catalog must contain rookie-trimmed cases")
     }
 
     @Test func serverRejectsWrongOrIncompleteSolves() {
-        let truth: Set<String> = ["a|1|fast", "b|2|veteran", "c|3|rookie", "d|4|powerful", "e|5|veteran"]
+        let truth = ["a|1|fast", "b|2|veteran", "c|3|rookie", "d|4|powerful", "e|5|veteran"]
         // A placement that is not part of the solution.
-        #expect(!P14.serverAccepts(placements: ["a|1|fast", "b|2|veteran", "c|3|rookie", "d|4|powerful", "e|5|fast"], solved: true, solution: truth, canTrim: false))
-        // Solved with one missing — only when trimming is allowed.
-        let four = ["a|1|fast", "b|2|veteran", "c|3|rookie", "d|4|powerful"]
-        #expect(!P14.serverAccepts(placements: four, solved: true, solution: truth, canTrim: false))
-        #expect(P14.serverAccepts(placements: four, solved: true, solution: truth, canTrim: true))
+        #expect(!P14.serverAccepts(placements: ["a|1|fast", "b|2|veteran", "c|3|rookie", "d|4|powerful", "e|5|fast"], solved: true, solution: truth))
+        // Solved with one missing is ALWAYS rejected now (no subset trims).
+        let four = Array(truth.prefix(4))
+        #expect(!P14.serverAccepts(placements: four, solved: true, solution: truth))
+        #expect(P14.serverAccepts(placements: four, solved: false, solution: truth))
         // A failed case can never carry the complete solution.
-        #expect(!P14.serverAccepts(placements: Array(truth), solved: false, solution: truth, canTrim: true))
+        #expect(!P14.serverAccepts(placements: truth, solved: false, solution: truth))
+        // Duplicated player/slot never counts twice.
+        #expect(!P14.serverAccepts(placements: ["a|1|fast", "a|1|fast", "c|3|rookie", "d|4|powerful", "e|5|veteran"], solved: true, solution: truth))
+        #expect(P14.serverAccepts(placements: truth, solved: true, solution: truth))
+    }
+
+    @Test func databaseRequiresTheExactSolution() {
+        let body = P14.function(named: "create or replace function public.record_verified_ranked_result(")
+        #expect(body.contains("v_expected := v_asg.expected_solutions -> v_i;"))
+        #expect(body.contains("if v_outcome = 'solved' and cardinality(v_players) <> jsonb_array_length(v_expected) then raise exception 'SOLVED_CASE_INCOMPLETE';"))
+        #expect(body.contains("if v_outcome = 'failed' and cardinality(v_players) >= jsonb_array_length(v_expected) then raise exception 'FAILED_CASE_COMPLETE';"))
+        #expect(!body.contains("jsonb_array_length(v_expected) - 1"))
+        #expect(!body.contains("can_trim"))
     }
 
     @Test func placementsStripRuntimePrefixesAndSortDeterministically() {
@@ -266,31 +321,33 @@ struct Phase14CatalogTests {
 @Suite("Phase 14 — eligibility and payload")
 struct Phase14PayloadTests {
 
-    @Test func cleanWinIsEligibleWithExactSummary() throws {
+    @Test func cleanWinIsEligibleAndBoundToTheAssignment() throws {
         let (match, state) = P14.game([.solved, .solved, .solved, .failed], hints: 2, wrong: 1)
         guard case .eligible(let payload) = P14.build(state, match) else {
             Issue.record("expected eligible"); return
         }
+        let assignment = try #require(state.assignment)
+        #expect(payload.matchID == assignment.matchID)
         #expect(payload.matchID == state.competitiveMatchID)
-        #expect(payload.regulationQuartersSolved == 3)
-        #expect(payload.regulationQuartersLost == 1)
-        #expect(payload.gameWon)
-        #expect(!payload.overtimePlayed)
-        #expect(payload.hintsUsed == 2)
-        #expect(payload.wrongPlacements == 1)
+        #expect(payload.seasonID == assignment.seasonID)
+        #expect(payload.gameNumber == 5)
         #expect(payload.difficulty == "pro")
+        #expect(payload.rankedProtocol == CompetitiveResultPayload.currentRankedProtocol)
         #expect(payload.caseResults.map(\.quarterIndex) == [0, 1, 2, 3])
+        #expect(payload.caseResults.map(\.caseID) == Array(assignment.caseIDs.prefix(4)))
+        // Self-reported stats travel per case; they are never summarized.
+        #expect(payload.caseResults[0].hintsUsed == 2)
+        #expect(payload.caseResults[0].wrongPlacements == 1)
     }
 
-    @Test func overtimeWinIsReported() {
+    @Test func overtimeIsTheFifthAssignedCase() throws {
         let (match, state) = P14.game([.solved, .failed, .solved, .failed], overtime: .solved)
         guard case .eligible(let payload) = P14.build(state, match) else {
             Issue.record("expected eligible"); return
         }
-        #expect(payload.overtimePlayed)
-        #expect(payload.overtimeWon)
-        #expect(payload.gameWon)
         #expect(payload.caseResults.count == 5)
+        #expect(payload.caseResults[4].quarterIndex == 4)
+        #expect(payload.caseResults[4].caseID == state.assignment?.overtimeCaseID)
     }
 
     @Test func guestsNeverSubmit() {
@@ -307,6 +364,46 @@ struct Phase14PayloadTests {
     @Test func recoveredLegacyGameIsIneligible() {
         let (match, _) = P14.game([.solved, .solved, .solved, .solved])
         #expect(P14.build(.legacyResume(), match) == .ineligible(.recoveredWithoutCompetitiveIdentity))
+    }
+
+    @Test func gameWithoutAssignmentIsNeverRanked() {
+        let (match, ranked) = P14.game([.solved, .solved, .solved, .solved])
+        #expect(P14.build(.unranked(.noAssignment), match) == .ineligible(.noAssignment))
+        var stripped = ranked
+        stripped.assignment = nil
+        #expect(P14.build(stripped, match) == .ineligible(.noAssignment))
+    }
+
+    @Test func assignmentOwnerMustBeTheSignedInUser() {
+        let (match, state) = P14.game([.solved, .solved, .solved, .solved])
+        #expect(P14.build(state, match, user: UUID()) == .ineligible(.assignmentMismatch))
+    }
+
+    @Test func assignmentGameAndDifficultyMustMatch() {
+        let (match, state) = P14.game([.solved, .solved, .solved, .solved])
+        #expect(P14.build(state, match, gameNumber: 6) == .ineligible(.assignmentMismatch))
+        let (hofMatch, hofState) = P14.game([.solved, .solved, .solved, .solved], assignment: P14.assignment(difficulty: "rookie"))
+        #expect(P14.build(hofState, hofMatch) == .ineligible(.assignmentMismatch))
+    }
+
+    @Test func playedCasesMustEqualTheAssignedOnes() {
+        let (match, state) = P14.game([.solved, .solved, .solved, .failed])
+        var swapped = state
+        swapped.caseResults[0] = CompetitiveCaseResult(
+            caseID: CompetitiveCaseCatalog.entries.keys.sorted()[9], caseVersion: 1, quarterIndex: 0,
+            outcome: .solved, hintsUsed: 0, wrongPlacements: 0, placements: []
+        )
+        #expect(P14.build(swapped, match) == .ineligible(.assignmentMismatch))
+        let (vMatch, vState) = P14.game([.solved, .solved, .solved, .failed], assignment: P14.assignment(versions: [1, 2, 1, 1, 1]))
+        #expect(P14.build(vState, vMatch) == .ineligible(.assignmentMismatch))
+    }
+
+    @Test func matchIDMustBeTheAssignmentsMatchID() {
+        let (match, state) = P14.game([.solved, .solved, .solved, .solved])
+        let forged = CompetitiveMatchState(competitiveMatchID: UUID(), startedAt: P14.start,
+                                           caseResults: state.caseResults, ineligibleReason: nil,
+                                           assignment: state.assignment)
+        #expect(P14.build(forged, match) == .ineligible(.assignmentMismatch))
     }
 
     @Test func difficultyMustMatchSeasonLock() {
@@ -351,8 +448,8 @@ struct Phase14PayloadTests {
         #expect(P14.build(flagged, match) == .ineligible(.unknownCaseVersion))
     }
 
-    /// The wire format carries raw facts only — never a score.
-    @Test func payloadNeverContainsAScore() throws {
+    /// The wire format carries raw facts only — never a score, never a user.
+    @Test func payloadNeverContainsAScoreOrUser() throws {
         let (match, state) = P14.game([.solved, .solved, .solved, .solved])
         guard case .eligible(let payload) = P14.build(state, match) else {
             Issue.record("expected eligible"); return
@@ -361,20 +458,33 @@ struct Phase14PayloadTests {
         let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         let keys = Set(object.keys)
         #expect(keys == [
-            "match_id", "user_id", "season_id", "game_number", "difficulty", "started_at", "completed_at",
-            "regulation_quarters_solved", "regulation_quarters_lost", "game_won", "overtime_played",
-            "overtime_won", "wrong_placements", "hints_used", "case_results", "game_version",
+            "match_id", "season_id", "game_number", "difficulty", "started_at", "completed_at",
+            "case_results", "game_version", "ranked_protocol",
         ])
+        #expect(!keys.contains("user_id"))
         #expect(!keys.contains { $0.contains("score") || $0.contains("multiplier") || $0.contains("rating") })
+        #expect(!keys.contains { $0.hasPrefix("regulation_") || $0.hasPrefix("overtime_") || $0 == "game_won" })
         let decoded = try CompetitiveResultPayload.decoder().decode(CompetitiveResultPayload.self, from: data)
         #expect(decoded == payload)
     }
 
-    @Test func matchIDIsStableAcrossPersistence() throws {
-        let state = CompetitiveMatchState.fresh(now: P14.start)
+    @Test func rankedStateSurvivesPersistenceWithItsAssignment() throws {
+        let assignment = P14.assignment()
+        let state = CompetitiveMatchState.ranked(assignment, now: P14.start)
+        #expect(state.competitiveMatchID == assignment.matchID)
         let data = try CompetitiveResultPayload.encoder().encode(state)
         let restored = try CompetitiveResultPayload.decoder().decode(CompetitiveMatchState.self, from: data)
         #expect(restored.competitiveMatchID == state.competitiveMatchID)
+        #expect(restored.assignment == assignment)
+    }
+
+    @Test func preAssignmentRecordsStillDecode() throws {
+        // A Phase 14A resume record has no `assignment` key.
+        let json = #"{"competitiveMatchID":"\#(UUID().uuidString)","startedAt":"2026-10-01T10:00:00Z","caseResults":[]}"#
+        let restored = try CompetitiveResultPayload.decoder().decode(CompetitiveMatchState.self, from: Data(json.utf8))
+        #expect(restored.assignment == nil)
+        let (match, _) = P14.game([.solved, .solved, .solved, .solved])
+        #expect(P14.build(restored, match) == .ineligible(.noAssignment))
     }
 }
 
@@ -399,9 +509,11 @@ struct Phase14ScoringTests {
         let close = try #require(sql.range(of: ")", range: start.upperBound..<sql.endIndex))
         let values = ("1, " + sql[start.upperBound..<close.lowerBound])
             .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-        // 15 scoring/board values + 4 Phase 14A trust-window values (30, 20, 168, 300).
-        try #require(values.count == 19)
-        #expect(Array(values[15...]) == ["30", "20", "168", "300"])
+        // 15 scoring/board values + 4 Phase 14A trust-window values + 5
+        // Phase 14B values (protocol, prefetch, ttl h, grace d, assigns/h).
+        try #require(values.count == 24)
+        #expect(Array(values[15...18]) == ["30", "20", "168", "300"])
+        #expect(Array(values[19...]) == ["2", "3", "336", "30", "60"])
         func int(_ i: Int) -> Int { Int(values[i]) ?? -1 }
         func hundredths(_ i: Int) -> Int { Int(((Double(values[i]) ?? -1) * 100).rounded()) }
         return Config(
@@ -412,46 +524,46 @@ struct Phase14ScoringTests {
     }
 
     /// Oracle of record_verified_ranked_result's formula (numeric round,
-    /// half away from zero — scores are never negative).
-    static func score(_ c: Config, solved: Int, won: Bool, otWon: Bool, hints: Int, wrong: Int, difficulty: String) -> Int {
-        let base = solved * c.quarter + (won ? c.win : 0) + (otWon ? c.overtimeWin : 0)
-            + (solved == 4 ? c.perfect : 0) + (hints == 0 ? c.noHints : 0) + (wrong == 0 ? c.noWrong : 0)
+    /// half away from zero — scores are never negative). Phase 14B: hints
+    /// and wrong placements are NOT inputs.
+    static func score(_ c: Config, solved: Int, won: Bool, otWon: Bool, difficulty: String) -> Int {
+        let base = solved * c.quarter + (won ? c.win : 0) + (otWon ? c.overtimeWin : 0) + (solved == 4 ? c.perfect : 0)
         return (base * (c.multipliers[difficulty] ?? 0) + 50) / 100
     }
 
     @Test func configMatchesTheSpec() throws {
         let c = try Self.parsedConfig()
         #expect(c.quarter == 10 && c.win == 10 && c.overtimeWin == 5 && c.perfect == 5)
-        #expect(c.noHints == 3 && c.noWrong == 3)
+        // Self-reported bonuses retired.
+        #expect(c.noHints == 0 && c.noWrong == 0)
         #expect(c.multipliers == ["rookie": 100, "pro": 125, "all_pro": 150, "hall_of_famer": 200])
         #expect(c.weeklyBest == 10 && c.allTimeBest == 25 && c.provisionalMin == 5)
     }
 
     @Test func workedExamples() throws {
         let c = try Self.parsedConfig()
-        // Perfect, clean Hall of Famer: (40+10+5+3+3) × 2.00
-        #expect(Self.score(c, solved: 4, won: true, otWon: false, hints: 0, wrong: 0, difficulty: "hall_of_famer") == 122)
-        // Rookie 3–1 with a hint and a wrong placement: (30+10) × 1.00
-        #expect(Self.score(c, solved: 3, won: true, otWon: false, hints: 1, wrong: 1, difficulty: "rookie") == 40)
-        // Pro 2–2 OT win, clean: (20+10+5+3+3) × 1.25 = 51.25 → 51
-        #expect(Self.score(c, solved: 2, won: true, otWon: true, hints: 0, wrong: 0, difficulty: "pro") == 51)
-        // All-Pro 1–3 loss with hints, no wrong: (10+3) × 1.5 = 19.5 → 20
-        #expect(Self.score(c, solved: 1, won: false, otWon: false, hints: 2, wrong: 0, difficulty: "all_pro") == 20)
-        // Hints only cost the +3 clean bonus.
-        let clean = Self.score(c, solved: 3, won: true, otWon: false, hints: 0, wrong: 0, difficulty: "pro")
-        let hinted = Self.score(c, solved: 3, won: true, otWon: false, hints: 5, wrong: 0, difficulty: "pro")
-        #expect(clean - hinted == 4) // 57.5 → 58 vs 53.75 → 54
+        // Perfect Hall of Famer: (40+10+5) × 2.00
+        #expect(Self.score(c, solved: 4, won: true, otWon: false, difficulty: "hall_of_famer") == 110)
+        // Rookie 3–1: (30+10) × 1.00
+        #expect(Self.score(c, solved: 3, won: true, otWon: false, difficulty: "rookie") == 40)
+        // Pro 2–2 OT win: (20+10+5) × 1.25 = 43.75 → 44
+        #expect(Self.score(c, solved: 2, won: true, otWon: true, difficulty: "pro") == 44)
+        // All-Pro 1–3 loss: 10 × 1.5 = 15
+        #expect(Self.score(c, solved: 1, won: false, otWon: false, difficulty: "all_pro") == 15)
+        // Pro 3–1: 40 × 1.25 = 50
+        #expect(Self.score(c, solved: 3, won: true, otWon: false, difficulty: "pro") == 50)
     }
 
     @Test func formulaLivesOnlyInTheDatabaseFunction() {
         let body = P14.function(named: "create or replace function public.record_verified_ranked_result(")
-        #expect(body.contains("p_regulation_quarters_solved * cfg.quarter_solved_points"))
-        #expect(body.contains("when p_game_won then cfg.game_win_points"))
-        #expect(body.contains("when p_overtime_won then cfg.overtime_win_points"))
-        #expect(body.contains("when p_regulation_quarters_solved = 4 then cfg.perfect_regulation_points"))
-        #expect(body.contains("when p_hints_used = 0 then cfg.no_hints_points"))
-        #expect(body.contains("when p_wrong_placements = 0 then cfg.no_wrong_placements_points"))
+        #expect(body.contains("v_base := v_solved * cfg.quarter_solved_points"))
+        #expect(body.contains("when v_won then cfg.game_win_points"))
+        #expect(body.contains("when v_ot_won then cfg.overtime_win_points"))
+        #expect(body.contains("when v_solved = 4 then cfg.perfect_regulation_points"))
         #expect(body.contains("round(v_base::numeric * v_mult)::int"))
+        // Hints / wrong placements never reach the score.
+        #expect(!body.contains("cfg.no_hints_points"))
+        #expect(!body.contains("cfg.no_wrong_placements_points"))
         // The Edge Function never holds scoring constants.
         let edge = EdgeFunctionFixture.submitRankedResult
         #expect(!edge.contains("quarter_solved_points"))
@@ -464,7 +576,9 @@ struct Phase14ScoringTests {
         #expect(rows.contains("when p_board = 'weekly' then cfg.weekly_best_games else cfg.alltime_best_games"))
         #expect(rows.contains("when p_board = 'weekly' then a.total_score else a.average_score"))
         #expect(rows.contains("a.total_games < cfg.provisional_min_games"))
-        #expect(rows.contains("order by s.is_provisional asc, s.score desc, s.average_score desc, s.wins desc, s.quarters_solved desc, s.hints_used asc, s.wrong_placements asc"))
+        // Tiebreakers use server-derived facts only (no self-reported stats).
+        #expect(rows.contains("order by s.is_provisional asc, s.score desc, s.average_score desc, s.wins desc, s.quarters_solved desc )"))
+        #expect(!rows.contains("s.hints_used asc"))
         #expect(rows.contains("rank() over"))
         #expect(rows.contains("join public.public_profiles pp"))
         #expect(!rows.contains("email"))
@@ -497,7 +611,7 @@ struct Phase14SecurityTests {
     }
 
     @Test func onlyServiceRoleRecordsResults() {
-        let sig = "public.record_verified_ranked_result(uuid, uuid, uuid, int, text, int, boolean, boolean, boolean, int, int, jsonb, timestamptz, timestamptz, text)"
+        let sig = "public.record_verified_ranked_result(uuid, uuid, uuid, int, text, jsonb, timestamptz, timestamptz, text, int)"
         #expect(P14.sql.contains("revoke all on function \(sig) from public, anon, authenticated;"))
         #expect(P14.sql.contains("grant execute on function \(sig) to service_role;"))
         #expect(!P14.sql.contains("grant execute on function \(sig) to authenticated"))
@@ -508,7 +622,7 @@ struct Phase14SecurityTests {
         let body = P14.function(named: "create or replace function public.record_verified_ranked_result(")
         #expect(body.contains("return query select existing.id, existing.final_score, true, existing.leaderboard_at, existing.leaderboard_at_source;"))
         #expect(body.contains("raise exception 'MATCH_ID_CONFLICT'"))
-        #expect(body.contains("raise exception 'SEASON_DIFFICULTY_MISMATCH'"))
+        #expect(body.contains("raise exception 'ASSIGNMENT_CONSUMED'"))
         #expect(body.contains("when unique_violation then"))
         #expect(!body.contains("championships"))
         #expect(!body.contains("or true"))
@@ -528,9 +642,11 @@ struct Phase14SecurityTests {
         let edge = EdgeFunctionFixture.submitRankedResult
         #expect(edge.contains("admin.auth.getUser(token)"))
         #expect(edge.contains("p_user_id: userID"))
-        #expect(edge.contains("return reject(\"user_mismatch\", 403);"))
         #expect(edge.contains("reason: \"unauthorized\""))
-        #expect(edge.contains("reason: \"rate_limited\""))
+        // A body user_id is never read — there is nothing to mismatch.
+        for forbidden in ["p.user_id", "payload.user_id", "body.user_id", "user_mismatch"] {
+            #expect(!edge.contains(forbidden), "\(forbidden)")
+        }
     }
 
     @Test func edgeFunctionNeverReadsAClientScore() {
@@ -541,19 +657,17 @@ struct Phase14SecurityTests {
         #expect(!edge.contains("p_final_score"))
     }
 
-    @Test func edgeFunctionIsIdempotentByMatchID() {
+    @Test func edgeFunctionDelegatesVerificationToTheDatabase() {
         let edge = EdgeFunctionFixture.submitRankedResult
-        #expect(edge.contains(".eq(\"match_id\", payload.match_id)"))
-        #expect(edge.contains("duplicate: true"))
-        #expect(edge.contains("return reject(\"match_id_conflict\", 409);"))
-    }
-
-    @Test func edgeFunctionValidatesAgainstPrivateCatalog() {
-        let edge = EdgeFunctionFixture.submitRankedResult
-        #expect(edge.contains("require(entry.case_version === result.case_version, \"case_version_mismatch\");"))
-        #expect(edge.contains("entry.active === true && entry.competitive_eligible === true"))
-        #expect(edge.contains("return difficulty === \"rookie\" || (difficulty === \"pro\" && gameNumber <= 3);"))
-        #expect(edge.contains("require(p.game_won === (solved >= 3 || overtimeWon), \"summary_mismatch\");"))
+        #expect(edge.contains("p_match_id"))
+        #expect(edge.contains("p_season_id"))
+        #expect(edge.contains("[\"ASSIGNMENT_NOT_FOUND\", 404]"))
+        #expect(edge.contains("[\"ASSIGNMENT_OWNER_MISMATCH\", 403]"))
+        #expect(edge.contains("[\"ASSIGNMENT_CONSUMED\", 409]"))
+        #expect(edge.contains("[\"CLIENT_OUTDATED\", 426]"))
+        // No catalog or solution logic left in the edge.
+        #expect(!edge.contains("trimAllowed"))
+        #expect(!edge.contains("competitive_cases"))
         #expect(!edge.contains("SUPABASE_ANON_KEY"))
     }
 
@@ -562,7 +676,9 @@ struct Phase14SecurityTests {
         #expect(SupabaseCompetitiveSubmitter.classify(statusCode: 429, reason: "rate_limited") == .retryable(category: "rate_limited"))
         #expect(SupabaseCompetitiveSubmitter.classify(statusCode: 503, reason: nil) == .retryable(category: "server_503"))
         #expect(SupabaseCompetitiveSubmitter.classify(statusCode: 422, reason: "placement_mismatch") == .rejected(reason: "placement_mismatch"))
-        #expect(SupabaseCompetitiveSubmitter.classify(statusCode: 409, reason: "duplicate_season_game") == .rejected(reason: "duplicate_season_game"))
+        #expect(SupabaseCompetitiveSubmitter.classify(statusCode: 409, reason: "assignment_consumed") == .rejected(reason: "assignment_consumed"))
+        #expect(SupabaseCompetitiveSubmitter.classify(statusCode: 410, reason: "assignment_expired") == .rejected(reason: "assignment_expired"))
+        #expect(SupabaseCompetitiveSubmitter.classify(statusCode: 426, reason: "client_outdated") == .rejected(reason: "client_outdated"))
     }
 }
 
@@ -575,7 +691,7 @@ struct Phase14QueueTests {
     @Test func enqueueIsIdempotentPerMatchID() {
         var queue = CompetitiveSubmissionQueue()
         let user = UUID()
-        let payload = P14.payload(user: user)
+        let payload = P14.payload()
         let first = queue.enqueue(payload, owner: user, now: P14.start)
         let second = queue.enqueue(payload, owner: user, now: P14.start)
         #expect(first)
@@ -594,7 +710,7 @@ struct Phase14QueueTests {
     @Test func retryableSchedulesNextAttempt() {
         var queue = CompetitiveSubmissionQueue()
         let user = UUID()
-        let payload = P14.payload(user: user)
+        let payload = P14.payload()
         queue.enqueue(payload, owner: user, now: P14.start)
         queue.markSubmitting(payload.matchID)
         queue.apply(.retryable(category: "network"), to: payload.matchID, now: P14.start)
@@ -609,7 +725,7 @@ struct Phase14QueueTests {
     @Test func rejectionIsFinal() {
         var queue = CompetitiveSubmissionQueue()
         let user = UUID()
-        let payload = P14.payload(user: user)
+        let payload = P14.payload()
         queue.enqueue(payload, owner: user, now: P14.start)
         queue.apply(.rejected(reason: "placement_mismatch"), to: payload.matchID, now: P14.start)
         queue.apply(.verified(finalScore: 99, duplicate: false), to: payload.matchID, now: P14.start)
@@ -621,7 +737,7 @@ struct Phase14QueueTests {
     @Test func onlyTheOwnerMaySubmit() {
         var queue = CompetitiveSubmissionQueue()
         let owner = UUID()
-        queue.enqueue(P14.payload(user: owner), owner: owner, now: P14.start)
+        queue.enqueue(P14.payload(), owner: owner, now: P14.start)
         #expect(queue.dueItems(for: UUID(), now: P14.start).isEmpty)
         #expect(queue.dueItems(for: owner, now: P14.start).count == 1)
     }
@@ -635,10 +751,10 @@ struct Phase14QueueTests {
     @Test func finishedHistoryIsPrunedButPendingKept() {
         var queue = CompetitiveSubmissionQueue()
         let user = UUID()
-        let pending = P14.payload(user: user)
+        let pending = P14.payload()
         queue.enqueue(pending, owner: user, now: P14.start)
         for i in 0..<30 {
-            let p = P14.payload(user: user)
+            let p = P14.payload()
             queue.enqueue(p, owner: user, now: P14.start)
             queue.apply(.verified(finalScore: i, duplicate: false), to: p.matchID, now: P14.start.addingTimeInterval(Double(i)))
         }
@@ -650,7 +766,7 @@ struct Phase14QueueTests {
         let defaults = P14.defaults()
         var queue = CompetitiveSubmissionQueue()
         let user = UUID()
-        let payload = P14.payload(user: user)
+        let payload = P14.payload()
         queue.enqueue(payload, owner: user, now: P14.start)
         queue.markSubmitting(payload.matchID)
         CompetitiveSubmissionStore.save(queue, defaults: defaults)
@@ -686,8 +802,8 @@ struct Phase14ServiceTests {
         let submitter = MockCompetitiveSubmitter()
         submitter.responses = [.verified(finalScore: 77, duplicate: false)]
         let service = CompetitiveSubmissionService(defaults: defaults, submitter: submitter, currentUserID: { user }, now: { P14.start })
-        let payload = P14.payload(user: user)
-        service.enqueue(payload)
+        let payload = P14.payload()
+        service.enqueue(payload, owner: user)
         await service.flush()
         #expect(submitter.submitted == [payload.matchID])
         #expect(service.queue.item(matchID: payload.matchID)?.state == .verified)
@@ -706,10 +822,10 @@ struct Phase14ServiceTests {
         submitter.responses = [.retryable(category: "network")]
         var clock = P14.start
         let service = CompetitiveSubmissionService(defaults: defaults, submitter: submitter, currentUserID: { user }, now: { clock })
-        let first = P14.payload(user: user)
-        service.enqueue(first)
+        let first = P14.payload()
+        service.enqueue(first, owner: user)
         clock = clock.addingTimeInterval(1)
-        service.enqueue(P14.payload(user: user))
+        service.enqueue(P14.payload(), owner: user)
         await service.flush()
         #expect(submitter.submitted == [first.matchID])
         #expect(service.queue.pendingCount == 2)
@@ -727,10 +843,10 @@ struct Phase14ServiceTests {
         let submitter = MockCompetitiveSubmitter()
         let owner = UUID()
         let other = CompetitiveSubmissionService(defaults: P14.defaults(), submitter: submitter, currentUserID: { UUID() }, now: { P14.start })
-        other.enqueue(P14.payload(user: owner))
+        other.enqueue(P14.payload(), owner: owner)
         await other.flush()
         let guest = CompetitiveSubmissionService(defaults: P14.defaults(), submitter: submitter, currentUserID: { nil }, now: { P14.start })
-        guest.enqueue(P14.payload(user: owner))
+        guest.enqueue(P14.payload(), owner: owner)
         await guest.flush()
         #expect(submitter.submitted.isEmpty)
     }
@@ -739,14 +855,14 @@ struct Phase14ServiceTests {
         let user = UUID()
         let service = CompetitiveSubmissionService(defaults: P14.defaults(), submitter: nil, currentUserID: { user }, now: { P14.start })
         #expect(!service.isRepositoryConnected)
-        service.enqueue(P14.payload(user: user))
+        service.enqueue(P14.payload(), owner: user)
         await service.flush()
         #expect(service.queue.pendingCount == 1)
     }
 
     @Test func ineligibleOutcomeIsOnlyNoted() {
         let service = CompetitiveSubmissionService(defaults: P14.defaults(), submitter: MockCompetitiveSubmitter(), currentUserID: { UUID() }, now: { P14.start })
-        service.handle(.ineligible(.guestPlayer))
+        service.handle(.ineligible(.guestPlayer), owner: nil)
         #expect(service.lastIneligibleReason == .guestPlayer)
         #expect(service.queue.items.isEmpty)
     }
@@ -756,8 +872,8 @@ struct Phase14ServiceTests {
         let submitter = MockCompetitiveSubmitter()
         submitter.responses = [.rejected(reason: "placement_mismatch")]
         let service = CompetitiveSubmissionService(defaults: P14.defaults(), submitter: submitter, currentUserID: { user }, now: { P14.start })
-        let payload = P14.payload(user: user)
-        service.enqueue(payload)
+        let payload = P14.payload()
+        service.enqueue(payload, owner: user)
         await service.flush()
         await service.flush()
         #expect(submitter.submitted.count == 1)

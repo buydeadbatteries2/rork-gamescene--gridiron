@@ -45,7 +45,7 @@ struct Phase13DSchemaTests {
         // Trusted database logic: SECURITY DEFINER so the insert bypasses the
         // (unchanged) own-row RLS — no client session is required.
         #expect(fn.contains("security definer"))
-        #expect(fn.contains("set search_path = public"))
+        #expect(fn.contains("security definer set search_path = ''"))   // 14B: empty search_path
     }
 
     @Test func triggerRunsOnAuthUsersInsert() {
@@ -96,7 +96,7 @@ struct Phase13DSchemaTests {
         let fn = function(named: "create or replace function public.is_username_available(requested text)")
         #expect(fn.contains("security definer"))
         #expect(fn.contains("returns boolean"))
-        #expect(fn.contains("lower(username_normalized) = lower(btrim(requested))"))
+        #expect(fn.contains("where lower(p.username_normalized) = lower(btrim(requested))"))   // 14B: schema-qualified, format-first
         #expect(sql.contains("grant execute on function public.is_username_available(text) to anon, authenticated"))
     }
 

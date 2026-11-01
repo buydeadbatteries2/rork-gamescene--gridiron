@@ -166,11 +166,14 @@ nonisolated struct Season: Codable, Hashable, Sendable {
     /// so archive/trophy records always reflect the actual difficulty used.
     /// nil on saves from before difficulty locking existed.
     var difficulty: DifficultyLevel?
-    /// Phase 14: globally unique id for ranked submissions from this season
-    /// (`ranked_game_results.season_id`). Generated at season start; lazily
-    /// stamped on older saves. Lets the server enforce one result per game
-    /// number and a single locked difficulty per season.
+    /// Phase 14 (legacy): a CLIENT-generated ranked season id. Phase 14B
+    /// no longer sends it — the server ignores client season ids — and it
+    /// is kept only so older saves keep decoding.
     var competitiveSeasonID: UUID?
+    /// Phase 14B: the SERVER season id (`ranked_seasons.season_id`), set from
+    /// the game-1 assignment issued by `start-ranked-match`. nil until then;
+    /// stays nil for a season begun on a pre-14B build (unranked season).
+    var rankedSeasonID: UUID?
 
     // MARK: Queries
 

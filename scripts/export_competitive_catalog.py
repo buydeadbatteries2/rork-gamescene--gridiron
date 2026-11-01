@@ -18,11 +18,21 @@ bumped (state lives in competitive_case_versions.json). The Swift test
 `Phase14CatalogTests` recomputes fingerprints from the live CaseLibrary and
 fails when the app's case content drifts from this export.
 
-Per-difficulty solutions = the authored solution with every profile remapped
-into the difficulty's profile pool (exact port of ProfilePoolAdapter.remap).
-Rookie (and Pro games 1–3) may additionally trim one missing player; the
-Edge Function accepts exactly that, and the Swift tests prove every adapted
-case satisfies the server's acceptance rule.
+Phase 14B — per-VARIANT solutions. `solutions` holds the EXACT solution the
+client's deterministic CaseDifficultyAdapter produces for each of the five
+solution variants (scripts/case_adapter_port.py: rookie, pro_early, pro,
+all_pro, hall_of_famer). The server snapshots one variant per quarter into the
+ranked match assignment; no arbitrary trimmed subset is accepted.
+Phase14BAdapterParityTests run the real Swift adapter against the fixture.
+
+Phase 14B — version history. competitive_case_versions.json keeps every
+(version, fingerprint) a case has shipped with. The generator refuses a
+fingerprint change without a version bump and any version regression
+(verify_transition); the SQL trigger enforces the same on the server.
+
+Phase 14B — retirement and checksum are scoped to distribution
+'client_bundled'; future 'server_assigned' rows are never touched here and
+get their own checksum row in competitive_catalog_meta.
 
 Deterministic: no randomness, stable ordering. Re-run after any case edit:
   python3 scripts/export_competitive_catalog.py
@@ -32,6 +42,7 @@ import hashlib, json, os, re, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import case_difficulty_features as cdf  # noqa: E402
+import case_adapter_port as adapter  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = os.path.join(ROOT, "ios-gamescene-gridiron")
@@ -147,14 +158,91 @@ def fingerprint_values(c):
     return values
 
 
+_SOLUTION_CACHE = {}
+
+
 def solutions_for(c):
-    out = {}
-    for d in DIFFICULTY_ORDER:
-        pool = POOLS[d]
-        out[SERVER_DIFFICULTY[d]] = [
-            {"player_key": p, "slot_key": s, "profile": remap(prof, pool)} for p, s, prof in c["solution"]
-        ]
-    return out
+    """Exact adapted solution per variant (authored order)."""
+    if c["id"] not in _SOLUTION_CACHE:
+        _SOLUTION_CACHE[c["id"]] = {
+            v: [{"player_key": p, "slot_key": s, "profile": prof} for p, s, prof in sol]
+            for v, sol in adapter.variant_solutions(c).items()
+        }
+    return _SOLUTION_CACHE[c["id"]]
+
+
+# ------------------------------------------------------------ version history
+class ManifestError(Exception):
+    pass
+
+
+def normalize_entry(entry):
+    """Accept the pre-14B {version, fingerprint} shape (history = current)."""
+    hist = entry.get("history") or [{"version": entry["version"], "fingerprint": entry["fingerprint"]}]
+    return {"version": entry["version"], "fingerprint": entry["fingerprint"],
+            "history": [{"version": h["version"], "fingerprint": h["fingerprint"]} for h in hist]}
+
+
+def verify_manifest(state):
+    """Every entry: history strictly increasing in version, one fingerprint per
+    version, current == last history entry."""
+    for cid, raw in state.items():
+        e = normalize_entry(raw)
+        hist = e["history"]
+        if not hist:
+            raise ManifestError(f"{cid}: empty history")
+        for a, b in zip(hist, hist[1:]):
+            if b["version"] <= a["version"]:
+                raise ManifestError(f"CASE_VERSION_REGRESSION: {cid} history {a['version']} -> {b['version']}")
+        if hist[-1]["version"] != e["version"] or hist[-1]["fingerprint"] != e["fingerprint"]:
+            raise ManifestError(f"{cid}: current version/fingerprint is not the last history entry")
+        if e["version"] < 1:
+            raise ManifestError(f"{cid}: version < 1")
+    return True
+
+
+def verify_transition(old_state, new_state):
+    """Generator-side rule mirrored by the SQL trigger: a case's version never
+    goes down and a changed fingerprint always comes with a higher version."""
+    for cid, new_raw in new_state.items():
+        if cid not in old_state:
+            continue
+        old, new = normalize_entry(old_state[cid]), normalize_entry(new_raw)
+        if new["version"] < old["version"]:
+            raise ManifestError(f"CASE_VERSION_REGRESSION: {cid} {old['version']} -> {new['version']}")
+        if new["fingerprint"] != old["fingerprint"] and new["version"] == old["version"]:
+            raise ManifestError(f"CASE_FINGERPRINT_CHANGED_WITHOUT_VERSION_BUMP: {cid} v{new['version']}")
+        known = {h["version"]: h["fingerprint"] for h in old["history"]}
+        for h in new["history"]:
+            if h["version"] in known and known[h["version"]] != h["fingerprint"]:
+                raise ManifestError(f"CASE_FINGERPRINT_CHANGED_WITHOUT_VERSION_BUMP: {cid} v{h['version']}")
+    return True
+
+
+def compute_versions(fingerprints, old_state):
+    """fingerprints: {case_id: fp}. Pure: returns the new manifest. A changed
+    fingerprint gets max(history)+1 — even when reverting to older content."""
+    verify_manifest(old_state)
+    new_state = {}
+    for cid, fp in fingerprints.items():
+        prev = old_state.get(cid)
+        if prev is None:
+            new_state[cid] = {"version": 1, "fingerprint": fp, "history": [{"version": 1, "fingerprint": fp}]}
+            continue
+        prev = normalize_entry(prev)
+        if prev["fingerprint"] == fp:
+            new_state[cid] = prev
+        else:
+            v = max(h["version"] for h in prev["history"]) + 1
+            new_state[cid] = {"version": v, "fingerprint": fp,
+                              "history": prev["history"] + [{"version": v, "fingerprint": fp}]}
+    # Retired cases keep their history (a re-added case continues its numbering).
+    for cid, prev in old_state.items():
+        if cid not in new_state:
+            new_state[cid] = dict(normalize_entry(prev), retired=True)
+    verify_manifest(new_state)
+    verify_transition(old_state, new_state)
+    return new_state
 
 
 def sql_str(s):
@@ -172,19 +260,14 @@ def main():
     state = {}
     if os.path.exists(VERSIONS_PATH):
         state = json.load(open(VERSIONS_PATH))
-    new_state = {}
+    fps = {c["id"]: "%016x" % fnv1a(fingerprint_values(c)) for c in cases}
+    try:
+        new_state = compute_versions(fps, state)
+    except ManifestError as e:
+        sys.exit(f"competitive_case_versions.json: {e}")
     for c in cases:
-        fp = "%016x" % fnv1a(fingerprint_values(c))
-        prev = state.get(c["id"])
-        if prev is None:
-            version = 1
-        elif prev["fingerprint"] != fp:
-            version = prev["version"] + 1
-        else:
-            version = prev["version"]
-        c["fingerprint"] = fp
-        c["version"] = version
-        new_state[c["id"]] = {"version": version, "fingerprint": fp}
+        c["fingerprint"] = fps[c["id"]]
+        c["version"] = new_state[c["id"]]["version"]
     catalog_fp = "%016x" % fnv1a([f"{c['id']}@{c['version']}:{c['fingerprint']}" for c in cases])
     checksum = catalog_checksum(cases)
 
@@ -210,8 +293,13 @@ def main():
         + ", ".join(f"{SERVER_DIFFICULTY[t]} {min(x['score'] for x in cases if x['tier'] == t)}-{max(x['score'] for x in cases if x['tier'] == t)}" for t in DIFFICULTY_ORDER),
         "-- Paste into the Supabase SQL editor AFTER supabase/schema.sql. Idempotent:",
         "-- re-running upserts every case; edited cases arrive with a bumped",
-        "-- case_version. Solutions are readable ONLY by the service role (the",
-        "-- submit-ranked-result Edge Function) — anon/authenticated have no access.",
+        "-- case_version (the version-history trigger rejects a changed fingerprint",
+        "-- without a bump and any version regression). Solutions are readable ONLY",
+        "-- by the service role — anon/authenticated have no access. They are NOT",
+        "-- secret: the same cases ship inside the app binary.",
+        "-- solutions: { variant: [ {player_key, slot_key, profile}, ... ] } for",
+        "-- variants rookie, pro_early, pro, all_pro, hall_of_famer — the exact",
+        "-- output of the client's CaseDifficultyAdapter (case_adapter_port.py).",
         "-- The whole file runs as ONE transaction: the final checksum check rolls",
         "-- everything back if the stored catalog differs from this export.",
         "begin;",
@@ -233,16 +321,19 @@ def main():
         "    solutions            = excluded.solutions,",
         "    updated_at           = now();",
         "",
-        "-- Cases removed from the library are retired, never deleted (history keeps",
-        "-- its references).",
+        "-- Client-bundled cases removed from the library are retired, never deleted",
+        "-- (history keeps its references). Scoped to distribution = 'client_bundled':",
+        "-- server_assigned rows (future Versus/Faction) are never touched here.",
         "update public.competitive_cases set active = false, updated_at = now()",
-        "where case_id not in (" + ", ".join(sql_str(i) for i in ids) + ");",
+        "where distribution = 'client_bundled'",
+        "  and case_id not in (" + ", ".join(sql_str(i) for i in ids) + ");",
         "",
         "-- Drift detection: the expected checksum is recorded, then recomputed",
         "-- from the stored rows. Any mismatch aborts (and rolls back) the paste.",
-        "insert into public.competitive_catalog_meta (id, case_count, catalog_fingerprint, expected_checksum)",
-        f"values (1, {len(cases)}, {sql_str(catalog_fp)}, {sql_str(checksum)})",
-        "on conflict (id) do update set",
+        "-- One meta row per distribution; this file owns only 'client_bundled'.",
+        "insert into public.competitive_catalog_meta (distribution, case_count, catalog_fingerprint, expected_checksum)",
+        f"values ({sql_str(DISTRIBUTION)}, {len(cases)}, {sql_str(catalog_fp)}, {sql_str(checksum)})",
+        "on conflict (distribution) do update set",
         "    case_count          = excluded.case_count,",
         "    catalog_fingerprint = excluded.catalog_fingerprint,",
         "    expected_checksum   = excluded.expected_checksum,",
@@ -250,7 +341,7 @@ def main():
         "",
         "do $$",
         "declare",
-        "    v_actual text := public.competitive_catalog_checksum();",
+        f"    v_actual text := public.competitive_catalog_checksum({sql_str(DISTRIBUTION)});",
         "begin",
         f"    if v_actual is distinct from {sql_str(checksum)} then",
         f"        raise exception 'COMPETITIVE_CATALOG_DRIFT: expected {checksum}, stored %', v_actual;",
@@ -301,10 +392,11 @@ def main():
         "",
         "// GENERATED by scripts/export_competitive_catalog.py — DO NOT EDIT BY HAND.",
         "//",
-        "// The server catalog's per-difficulty solutions, exactly as exported into",
-        "// supabase/competitive_catalog.sql (the test runner only receives the app",
-        "// folder). One line per case × difficulty:",
-        "//   case_id|difficulty|player:slot:profile,player:slot:profile,...",
+        "// The server catalog's per-VARIANT adapted solutions, exactly as exported",
+        "// into supabase/competitive_catalog.sql (the test runner only receives the",
+        "// app folder). One line per case × variant, authored order:",
+        "//   case_id|variant|player:slot:profile,player:slot:profile,...",
+        "// variants: rookie, pro_early, pro, all_pro, hall_of_famer",
         "enum CompetitiveCatalogFixture {",
         f"    static let catalogFingerprint = \"{catalog_fp}\"",
         "    /// Canonical active-row lines hashed by public.competitive_catalog_checksum():",

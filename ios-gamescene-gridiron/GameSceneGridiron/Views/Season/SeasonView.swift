@@ -170,7 +170,12 @@ private struct SeasonHubView: View {
                 resumeRecord: resumedRecord
             )
         }
-        .onAppear { resumeActiveInvestigationIfNeeded() }
+        .onAppear {
+            resumeActiveInvestigationIfNeeded()
+            // Phase 14B: hold server assignments for the next games so they
+            // can be played ranked even offline.
+            Task { await RankedAssignmentService.shared.refresh() }
+        }
         .onChange(of: destination) { _, _ in resumeActiveInvestigationIfNeeded() }
         .fullScreenCover(isPresented: $showChampionshipIntro) {
             if let matchup = seasonManager.pendingPlayoffMatchup,
