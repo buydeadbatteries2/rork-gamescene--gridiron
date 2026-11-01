@@ -8,12 +8,28 @@ struct DifficultySelectView: View {
 
     /// The confirm button's copy — onboarding continues to the training case
     /// instead of starting a season directly.
-    var confirmTitle: String = "START SEASON"
+    var confirmTitle: String
 
-    @State private var selection: DifficultyLevel = DifficultyManager.shared.selected
+    /// When true the confirm starts disabled: no card is preselected, so the
+    /// persisted solo default (e.g. Hall of Famer) can never start a season
+    /// silently. The Ranked entry requires this.
+    var requireExplicitSelection: Bool
+
+    @State private var selection: DifficultyLevel?
     @State private var hasAppeared: Bool = false
     /// A rapid double-tap on the confirm must never start two seasons.
     @State private var confirmThrottle = TapThrottle()
+
+    init(onConfirm: @escaping (DifficultyLevel) -> Void,
+         confirmTitle: String = "START SEASON",
+         requireExplicitSelection: Bool = false) {
+        self.onConfirm = onConfirm
+        self.confirmTitle = confirmTitle
+        self.requireExplicitSelection = requireExplicitSelection
+        // Solo flows keep the persisted selection preselected; Ranked must
+        // always start from an explicit tap on a card.
+        _selection = State(initialValue: requireExplicitSelection ? nil : DifficultyManager.shared.selected)
+    }
 
     var body: some View {
         ZStack {
@@ -61,7 +77,7 @@ struct DifficultySelectView: View {
 
     private var confirmButton: some View {
         Button {
-            guard confirmThrottle.accept() else { return }
+            guard confirmThrottle.accept(), let selection else { return }
             Haptics.pickUp()
             AudioManager.shared.play(.profileSelect)
             onConfirm(selection)
@@ -76,7 +92,9 @@ struct DifficultySelectView: View {
             .padding(.horizontal, 26)
         }
         .buttonStyle(GoldCapsuleButtonStyle())
-        .accessibilityHint("Starts the season with \(selection.title) difficulty")
+        .disabled(requireExplicitSelection && selection == nil)
+        .opacity(requireExplicitSelection && selection == nil ? 0.45 : 1)
+        .accessibilityHint("Starts the season with \(selection?.title ?? "the selected") difficulty")
     }
 }
 

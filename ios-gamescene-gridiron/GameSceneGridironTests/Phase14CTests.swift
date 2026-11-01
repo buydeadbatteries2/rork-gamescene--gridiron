@@ -34,4 +34,17 @@ struct Phase14CTests {
         #expect(RankedEntryState.resolve(state: .authenticated(Self.profile), hasTeam: true, nextGameNumber: nil, difficulty: .pro) == .readyToStart)
         #expect(RankedEntryState.resolve(state: .authenticated(Self.profile), hasTeam: true, nextGameNumber: nil, difficulty: nil) == .readyToStart)
     }
+
+    @Test func progressCountsOnlyPlayedGames() {
+        // "Game X" is the NEXT playable game: the first game without a
+        // result. A prefetched (unplayed) assignment never advances it.
+        #expect(RankedEntryState.progressLabel(1) == "GAME 1 OF 12")
+        #expect(RankedEntryState.completedGames(1) == 0)
+        #expect(RankedEntryState.progressLabel(10) == "GAME 10 OF 12")
+        #expect(RankedEntryState.completedGames(10) == 9)
+        #expect(RankedEntryState.progressLabel(11) == "SEMIFINAL · GAME 11 OF 12")
+        #expect(RankedEntryState.completedGames(11) == 10)
+        #expect(RankedEntryState.progressLabel(12) == "CHAMPIONSHIP · GAME 12 OF 12")
+        #expect(RankedEntryState.completedGames(12) == 11)
+    }
 }

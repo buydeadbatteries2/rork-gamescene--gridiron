@@ -20,6 +20,22 @@ nonisolated enum RankedEntryState: Equatable {
         }
         return .readyToStart
     }
+
+    /// "GAME x OF 12" — x is the NEXT playable game (first game without a
+    /// result). Prefetched assignments are held cases, never played games, so
+    /// they never advance this number.
+    static func progressLabel(_ gameNumber: Int) -> String {
+        switch gameNumber {
+        case 11: "SEMIFINAL · GAME 11 OF 12"
+        case 12: "CHAMPIONSHIP · GAME 12 OF 12"
+        default: "GAME \(gameNumber) OF 12"
+        }
+    }
+
+    /// Games actually completed — the next playable game minus one.
+    static func completedGames(_ gameNumber: Int) -> Int {
+        max(0, min(12, gameNumber - 1))
+    }
 }
 
 /// RANKED desk screen: the server-owned competitive season (Phase 14B).
@@ -27,6 +43,7 @@ nonisolated enum RankedEntryState: Equatable {
 /// the normal season flow, where `start-ranked-match` issues the assignments
 /// and LeaderboardView shows the standings. No second ranked system.
 struct RankedView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var seasonManager = SeasonManager.shared
     @State private var teamStore = TeamStore.shared
     @State private var isShowingSeason: Bool = false
@@ -83,14 +100,14 @@ struct RankedView: View {
             SeasonView()
         }
         .fullScreenCover(isPresented: $isShowingDifficulty) {
-            DifficultySelectView(confirmTitle: "START RANKED SEASON") { level in
+            DifficultySelectView(onConfirm: { level in
                 guard let team = teamStore.userTeam else { return }
                 // The server season is created by start-ranked-match when the
                 // first game's assignment is fetched inside SeasonView.
                 SeasonManager.shared.startNewSeason(userTeam: team, difficulty: level)
                 isShowingDifficulty = false
                 isShowingSeason = true
-            }
+            }, confirmTitle: "START RANKED SEASON", requireExplicitSelection: true)
         }
         .fullScreenCover(isPresented: $isShowingLeaderboard) {
             LeaderboardView()
@@ -98,15 +115,34 @@ struct RankedView: View {
     }
 
     private var header: some View {
-        VStack(spacing: 6) {
-            Text("RANKED")
-                .font(.system(size: 26, weight: .black).width(.compressed))
-                .tracking(2)
-                .foregroundStyle(Theme.goldGradient)
-            Text("TWELVE SERVER-VERIFIED CASES. ONE SEASON.")
-                .font(Theme.typewriter(11, relativeTo: .caption))
-                .tracking(1.2)
-                .foregroundStyle(Theme.paperInkSoft)
+        HStack(spacing: 12) {
+            // Visible way out of Ranked — back to the main Home desk.
+            Button {
+                Haptics.tick()
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Theme.goldLight)
+                    .frame(width: 38, height: 38)
+                    .background(Color.black.opacity(0.45), in: .circle)
+                    .overlay { Circle().strokeBorder(Theme.gold.opacity(0.4), lineWidth: 1) }
+            }
+            .buttonStyle(PressableButtonStyle())
+            .accessibilityLabel("Back to Home")
+            .accessibilityIdentifier("ranked.back")
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("RANKED")
+                    .font(.system(size: 26, weight: .black).width(.compressed))
+                    .tracking(2)
+                    .foregroundStyle(Theme.goldGradient)
+                Text("TWELVE SERVER-VERIFIED CASES. ONE SEASON.")
+                    .font(Theme.typewriter(11, relativeTo: .caption))
+                    .tracking(1.2)
+                    .foregroundStyle(Theme.paperInkSoft)
+            }
+            Spacer(minLength: 0)
         }
     }
 
@@ -154,7 +190,7 @@ struct RankedView: View {
             case .active(let gameNumber, let difficulty):
                 statusLine(difficulty.title, detail: "Difficulty locked for this season")
                 progressBar(gameNumber: gameNumber)
-                Text(gameLabel(gameNumber))
+                Text(RankedEntryState.progressLabel(gameNumber))
                     .font(.system(size: 13, weight: .heavy).width(.condensed))
                     .tracking(1.2)
                     .foregroundStyle(Theme.paperInk)
@@ -204,17 +240,8 @@ struct RankedView: View {
         }
     }
 
-    /// GAME x OF 12: ten regular-season weeks plus the semifinal and final.
-    private func gameLabel(_ gameNumber: Int) -> String {
-        switch gameNumber {
-        case 11: "SEMIFINAL · GAME 11 OF 12"
-        case 12: "CHAMPIONSHIP · GAME 12 OF 12"
-        default: "GAME \(gameNumber) OF 12"
-        }
-    }
-
     private func progressBar(gameNumber: Int) -> some View {
-        let completed = max(0, min(12, gameNumber - 1))
+        let completed = RankedEntryState.completedGames(gameNumber)
         return GeometryReader { proxy in
             ZStack(alignment: .leading) {
                 Capsule().fill(Theme.paperInk.opacity(0.12))
