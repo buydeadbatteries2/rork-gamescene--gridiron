@@ -57,6 +57,55 @@ final class MatchViewModel {
     /// The ranked outcome built when the game completed (eligible payload or
     /// the reason it can't count). Local results never depend on it.
     private(set) var competitiveOutcome: CompetitivePayloadBuilder.Outcome?
+    /// Phase 15B: the server-assigned Versus match being played (nil for
+    /// every solo/season game). Versus games pay no rewards, show no ad
+    /// gates, never touch Ranked and collect raw per-case facts only.
+    private(set) var versus: VersusPlayContext?
+    /// Raw per-case facts for submit-versus-result, in quarter order.
+    private(set) var versusCaseResults: [CompetitiveCaseResult] = []
+    var isVersus: Bool { versus != nil }
+
+    /// Phase 15B — plays EXACTLY the server's five cases (quarters 1–4 then
+    /// overtime) at the server's variant: `ranked_solution_variant(difficulty,
+    /// 12)` ⇔ the championship stage. No local selection, reroll or
+    /// substitution — callers verify `VersusPlayability` first.
+    /// - Parameter resume: saved progress for this match (quarters decided).
+    init(versus context: VersusPlayContext, resume: VersusProgress? = nil) {
+        isPlayoff = false
+        isChampionship = false
+        seasonNumber = 0
+        week = 12
+        activeDifficulty = context.difficulty
+        matchID = context.matchID
+        versus = context
+        competitive = nil
+        let target = DifficultyResolver.target(selected: context.difficulty, stage: VersusRules.adaptationStage)
+        var maps: [[String: RosterIdentity]] = []
+        var statMaps: [[String: PlayerStat]] = []
+        var regulation: [QuarterPuzzle] = []
+        for index in 0..<GameMatch.regulationQuarters {
+            let id = context.caseIDs[index]
+            let (puzzle, map) = Self.resolveWithRoster(id, quarterIndex: index, target: target)
+            maps.append(map)
+            statMaps.append(CaseLibrary.statEvents(forCaseID: id))
+            regulation.append(puzzle)
+        }
+        regulationPuzzles = regulation
+        let overtimeID = context.caseIDs[GameMatch.regulationQuarters]
+        let (overtime, overtimeMap) = Self.resolveWithRoster(overtimeID, quarterIndex: 4, target: target)
+        maps.append(overtimeMap)
+        statMaps.append(CaseLibrary.statEvents(forCaseID: overtimeID))
+        overtimePuzzle = overtime
+        identityMaps = maps
+        statEventMaps = statMaps
+        if let resume, resume.matchID == context.matchID {
+            match = resume.match
+            versusCaseResults = resume.caseResults
+        }
+    }
+
+    /// The case IDs this game will actually play, in quarter order (tests).
+    var plannedCaseIDs: [String] { regulationPuzzles.map(\.id) + [overtimePuzzle.id] }
 
     /// Draws the game's case files from the local puzzle library via the
     /// deterministic scheduler: no case repeats within a game, and across a
@@ -224,7 +273,8 @@ final class MatchViewModel {
     var shouldShowGameResult: Bool { match.isComplete }
 
     var nextButtonTitle: String {
-        match.isComplete ? "VIEW GAME RESULT" : "NEXT QUARTER"
+        if match.isComplete { return isVersus ? "SUBMIT CASE FILE" : "VIEW GAME RESULT" }
+        return "NEXT QUARTER"
     }
 
     /// Last Chance (rewarded life) ledger key for the quarter about to be
@@ -324,6 +374,15 @@ final class MatchViewModel {
             statEvents: events,
             appearedFranchiseIDs: Set(map.values.map(\.franchisePlayerID))
         )
+        if isVersus {
+            // Versus: raw facts only — no Game Balls, no achievements, no
+            // Ranked, no ad gates. The server scores the submission.
+            recordVersusCase(viewModel, outcome: outcome)
+            withAnimation(.easeInOut(duration: 0.3)) {
+                phase = match.isComplete ? .gameResult : .quarterResult
+            }
+            return
+        }
         if outcome == .solved {
             awardQuarterReward(quarterIndex: viewModel.puzzleIndex)
         }
@@ -357,6 +416,34 @@ final class MatchViewModel {
         // The quarter snapshot is cleared by the finished GameViewModel; the
         // match record advances (or clears on completion) for a clean resume.
         persistActiveInvestigation(afterAdvance: true)
+    }
+
+    // MARK: Versus facts (Phase 15B)
+
+    private func recordVersusCase(_ viewModel: GameViewModel, outcome: QuarterOutcome) {
+        guard let versus else { return }
+        let index = viewModel.puzzleIndex
+        guard index < versus.caseIDs.count, index < versus.caseVersions.count else { return }
+        versusCaseResults.removeAll { $0.quarterIndex == index }
+        versusCaseResults.append(CompetitiveCaseResult(
+            // The SERVER's case id + version for this quarter, never a local pick.
+            caseID: versus.caseIDs[index],
+            caseVersion: versus.caseVersions[index],
+            quarterIndex: index,
+            outcome: outcome,
+            // Hints are disabled in Versus; any consumed lead would be a bug
+            // and is reported honestly (the server then rejects it).
+            hintsUsed: viewModel.consumedHintCount,
+            wrongPlacements: viewModel.rejectionCount,
+            placements: viewModel.competitivePlacements
+        ))
+        versusCaseResults.sort { $0.quarterIndex < $1.quarterIndex }
+    }
+
+    /// Snapshot for local resume after each quarter (Versus only).
+    var versusProgress: VersusProgress? {
+        guard let versus else { return nil }
+        return VersusProgress(matchID: versus.matchID, startedAt: versus.startedAt, match: match, caseResults: versusCaseResults)
     }
 
     // MARK: Competitive facts (Phase 14)
@@ -448,6 +535,8 @@ final class MatchViewModel {
     /// finished (regulation or into overtime). Pure policy, fed from the
     /// wallet's per-game forced-ad ledger.
     func adGateDecision() -> AdGateDecision {
+        // Versus never gates quarters behind ads.
+        if isVersus { return .none }
         let lastOutcome = match.overtimeRecord?.outcome ?? match.quarterRecords.last?.outcome
         return AdGatePolicy.decision(
             quarterWon: lastOutcome == .solved,

@@ -19,6 +19,9 @@ struct HomeView: View {
     @State private var isShowingLeaderboardGate: Bool = false
     @State private var isShowingRanked: Bool = false
     @State private var isShowingRankedGate: Bool = false
+    @State private var isShowingVersus: Bool = false
+    @State private var isShowingVersusGate: Bool = false
+    @State private var versus = VersusStore.shared
     @State private var lockedMessage: String?
     @State private var hasAppeared: Bool = false
     @State private var glow: Bool = false
@@ -61,6 +64,10 @@ struct HomeView: View {
                     .buttonStyle(GoldCapsuleButtonStyle())
                     .shadow(color: Theme.gold.opacity(glow ? 0.35 : 0.1), radius: glow ? 22 : 10)
                     .accessibilityHint(teamStore.hasTeam ? "Opens your season" : "Opens the investigation")
+
+                    versusTile
+                        .opacity(hasAppeared ? 1 : 0)
+                        .offset(y: hasAppeared ? 0 : 14)
 
                     walletStrip
                         .opacity(hasAppeared ? 1 : 0)
@@ -226,6 +233,18 @@ struct HomeView: View {
             NavigationStack { AccountGateView(featureName: "Ranked") }
                 .preferredColorScheme(.dark)
         }
+        .fullScreenCover(isPresented: $isShowingVersus) {
+            VersusHubView()
+        }
+        .sheet(isPresented: $isShowingVersusGate) {
+            NavigationStack { AccountGateView(featureName: "Versus") }
+                .preferredColorScheme(.dark)
+        }
+        .task(id: AccountGatePolicy.requiresAccount(auth.state)) {
+            // Home badge: a quiet, throttled recovery read for signed-in players.
+            guard !AccountGatePolicy.requiresAccount(auth.state) else { return }
+            await versus.refresh()
+        }
         .sheet(isPresented: $isShowingSettings) {
             SettingsView()
         }
@@ -259,6 +278,78 @@ struct HomeView: View {
 
     /// Persistent wallet strip: Game Balls and hints both survive restarts,
     /// games and seasons.
+    /// Phase 15B — prominent VERSUS entry. Guests get the account gate;
+    /// signed-in players open the Versus Hub. No franchise required.
+    private var versusTile: some View {
+        let attention = AccountGatePolicy.requiresAccount(auth.state) ? 0 : versus.attentionCount
+        return Button {
+            Haptics.pickUp()
+            if AccountGatePolicy.requiresAccount(auth.state) {
+                isShowingVersusGate = true
+            } else {
+                isShowingVersus = true
+            }
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(Theme.danger)
+                    Text("VS")
+                        .font(.system(size: 17, weight: .black).width(.compressed))
+                        .foregroundStyle(Theme.paper)
+                }
+                .frame(width: 42, height: 42)
+                .overlay { Circle().strokeBorder(Theme.paper.opacity(0.5), lineWidth: 1.5) }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("VERSUS")
+                        .font(.system(size: 24, weight: .black).width(.compressed))
+                        .tracking(2)
+                        .foregroundStyle(Theme.paperInk)
+                    Text(versusTagline(attention: attention))
+                        .font(Theme.typewriter(11, relativeTo: .caption))
+                        .foregroundStyle(Theme.paperInkSoft)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 6)
+                if attention > 0 {
+                    Text("\(attention)")
+                        .font(.system(size: 13, weight: .black))
+                        .foregroundStyle(.white)
+                        .frame(minWidth: 24, minHeight: 24)
+                        .background(Theme.danger, in: .circle)
+                        .accessibilityLabel("\(attention) Versus files need you")
+                } else if AccountGatePolicy.requiresAccount(auth.state) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Theme.paperInkSoft)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Theme.paperInk.opacity(0.45))
+            }
+            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .paperCard(cornerRadius: 6)
+            .overlay(alignment: .bottom) {
+                CautionTape(stripeWidth: 7)
+                    .frame(height: 6)
+                    .clipShape(.rect(bottomLeadingRadius: 6, bottomTrailingRadius: 6))
+            }
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.98))
+        .accessibilityIdentifier("home.versus")
+        .accessibilityHint("Head-to-head case files against another detective")
+    }
+
+    private func versusTagline(attention: Int) -> String {
+        if AccountGatePolicy.requiresAccount(auth.state) { return "Sign in to challenge another detective" }
+        if !versus.isAvailable { return "Versus offline" }
+        if attention > 0 { return attention == 1 ? "A case file needs you" : "\(attention) case files need you" }
+        if !versus.openMatches.isEmpty { return "Waiting on your opponent" }
+        return "Same five cases. One opponent. No hints."
+    }
+
     private var walletStrip: some View {
         HStack(spacing: 12) {
             WalletPill(amount: PlayerWallet.shared.gameBalls)

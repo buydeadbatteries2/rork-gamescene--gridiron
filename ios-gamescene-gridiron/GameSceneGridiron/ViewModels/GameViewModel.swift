@@ -31,6 +31,14 @@ final class GameViewModel {
     /// Setting it is the moment the quarter's timing snapshot (if any) is
     /// restored — a resumed quarter never gets consumed timeouts, lost lives
     /// or a reset clock back.
+    /// Phase 15B — competitive Versus case: no hints of any kind (owned,
+    /// purchased or rewarded) and no Last Chance rescue (rewarded life or
+    /// hint). Pay-to-win is impossible; the server rejects hints too.
+    var hintsDisabled: Bool = false
+    /// Where this quarter's investigation snapshot is persisted. Versus uses
+    /// its own per-match key so a paused season quarter is never overwritten.
+    /// Set BEFORE `lastChanceKey` (whose didSet restores the snapshot).
+    var snapshotKey: String = GameViewModel.clockSnapshotKey
     var lastChanceKey: String = "standalone-quarter" {
         didSet { restoreClockSnapshotIfMatching() }
     }
@@ -528,11 +536,11 @@ final class GameViewModel {
             usedHintIDs: Array(usedHintIDs),
             rejectionCount: rejectionCount
         )
-        SaveStore.save(snapshot, key: Self.clockSnapshotKey, defaults: defaults)
+        SaveStore.save(snapshot, key: snapshotKey, defaults: defaults)
     }
 
     private func clearClockSnapshot() {
-        defaults.removeObject(forKey: Self.clockSnapshotKey)
+        defaults.removeObject(forKey: snapshotKey)
     }
 
     /// Restores lost lives, solved placements, consumed hint leads, consumed
@@ -541,7 +549,7 @@ final class GameViewModel {
     private func restoreClockSnapshotIfMatching() {
         guard let snapshot = SaveStore.load(
                   InvestigationSnapshot.self,
-                  key: Self.clockSnapshotKey,
+                  key: snapshotKey,
                   defaults: defaults
               ),
               snapshot.matchKey == lastChanceKey,
@@ -577,7 +585,7 @@ final class GameViewModel {
     // MARK: Hints (persistent economy)
 
     var canUseHint: Bool {
-        wallet.canConsumeHint && result == .inProgress && nextHint != nil
+        !hintsDisabled && wallet.canConsumeHint && result == .inProgress && nextHint != nil
     }
 
     /// True when the wallet can pay for a hint (inventory first, then Game
@@ -598,6 +606,10 @@ final class GameViewModel {
     /// never hard-coded in views), watches a rewarded video, or opens the
     /// Shop when the balance can't cover it.
     func useHint() {
+        if hintsDisabled {
+            show(FeedbackMessage(title: "HINTS DISABLED", detail: "Competitive case — no hints in Versus.", tone: .info))
+            return
+        }
         guard hintsRemaining > 0 else {
             Haptics.warning()
             withAnimation(.easeOut(duration: 0.2)) { isHintOfferPresented = true }
@@ -613,6 +625,7 @@ final class GameViewModel {
     }
 
     private func revealNextHint() {
+        guard !hintsDisabled else { return }
         guard let hint = nextHint, result == .inProgress else { return }
         BalanceTelemetry.shared.recordHintUsed(caseID: puzzle.id)
         usedHintIDs.insert(hint.id)
@@ -646,6 +659,7 @@ final class GameViewModel {
     /// Grants exactly one rewarded-ad hint and immediately reveals the lead —
     /// only ever called after the ad's reward callback fired.
     func grantRewardedHint() {
+        guard !hintsDisabled else { return }
         guard wallet.addHints(1) else { return }
         hintsRemaining = wallet.hints
         revealNextHint()
@@ -653,6 +667,7 @@ final class GameViewModel {
 
     /// Called after a Game Ball hint purchase in the offer sheet.
     func hintPurchased() {
+        guard !hintsDisabled else { isHintOfferPresented = false; return }
         hintsRemaining = wallet.hints
         withAnimation(.easeOut(duration: 0.2)) { isHintOfferPresented = false }
         revealNextHint()
@@ -673,6 +688,11 @@ final class GameViewModel {
     /// (the video rescue, or a payable hint rescue); otherwise the verdict
     /// lands immediately.
     private func offerLastChanceOrFinish() {
+        // Versus: no rewarded life, no hint rescue — the verdict lands.
+        if hintsDisabled {
+            finish(with: .lost)
+            return
+        }
         // A used hint rescue is always terminal — it was the final attempt;
         // neither another ad nor another hint may follow it.
         if wallet.usedHintRescue(for: lastChanceKey) {
@@ -694,7 +714,7 @@ final class GameViewModel {
     /// Grants exactly one extra attempt — never three lives, never the
     /// answer, never Hall of Famer timeouts.
     func grantLastChanceLife() {
-        guard isLastChancePending else { return }
+        guard isLastChancePending, !hintsDisabled else { return }
         guard wallet.markVideoRescueUsed(for: lastChanceKey) else {
             acceptLastChanceLoss()
             return
@@ -715,7 +735,7 @@ final class GameViewModel {
     /// exactly one additional attempt. If that attempt also fails, the
     /// quarter ends — no second ad, no second rescue hint.
     func grantRescueHintLife() {
-        guard isLastChancePending, nextHint != nil else { return }
+        guard isLastChancePending, !hintsDisabled, nextHint != nil else { return }
         guard wallet.consumeHintOrCharge() else { return }
         guard wallet.markHintRescueUsed(for: lastChanceKey) else {
             acceptLastChanceLoss()

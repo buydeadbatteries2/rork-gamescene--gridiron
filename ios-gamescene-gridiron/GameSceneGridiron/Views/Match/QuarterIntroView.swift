@@ -6,6 +6,9 @@ struct QuarterIntroView: View {
     let puzzle: QuarterPuzzle
     let isOvertime: Bool
     let onBegin: () -> Void
+    /// The game's actual difficulty when it differs from the season selection
+    /// (Versus plays the server's difficulty). nil = the persisted selection.
+    var difficulty: DifficultyLevel? = nil
 
     @State private var hasAppeared: Bool = false
 
@@ -88,7 +91,7 @@ struct QuarterIntroView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
 
-                DifficultyBadge(level: DifficultyManager.shared.selected)
+                DifficultyBadge(level: difficulty ?? DifficultyManager.shared.selected)
             }
 
             if isOvertime {

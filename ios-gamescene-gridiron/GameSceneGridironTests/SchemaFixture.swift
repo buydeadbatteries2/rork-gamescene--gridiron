@@ -2796,6 +2796,60 @@ $$;
 revoke all on function public.my_versus_history(int, int) from public, anon;
 grant execute on function public.my_versus_history(int, int) to authenticated;
 
+-- Phase 15B: one match of the caller, ANY status (waiting / active /
+-- completed / expired / cancelled). Lets the client recover a tracked
+-- match after relaunch and render expired-no-result and the full
+-- resolved summary (cases solved). Same column contract as
+-- my_versus_matches; zero rows when the match is not the caller's.
+create or replace function public.my_versus_match(p_match_id uuid)
+returns table (
+    match_id               uuid,
+    status                 text,
+    player_state           text,
+    role                   text,
+    difficulty             text,
+    case_ids               text[],
+    case_versions          int[],
+    catalog_fingerprint    text,
+    content_source         text,
+    created_at             timestamptz,
+    matched_at             timestamptz,
+    expires_at             timestamptz,
+    completed_at           timestamptz,
+    opponent_user_id       uuid,
+    opponent_username      text,
+    opponent_display_name  text,
+    my_submitted           boolean,
+    my_final_score         int,
+    my_cases_solved        int,
+    opponent_submitted     boolean,
+    opponent_final_score   int,
+    opponent_cases_solved  int,
+    outcome                text,
+    is_forfeit             boolean,
+    resolution             text
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+#variable_conflict use_column
+declare
+    v_uid uuid := auth.uid();
+begin
+    if v_uid is null then
+        raise exception 'AUTH_REQUIRED';
+    end if;
+    perform public.versus_expire_due(v_uid);
+    return query
+        select v.* from public.versus_player_rows(v_uid) v
+        where v.match_id = p_match_id;
+end;
+$$;
+
+revoke all on function public.my_versus_match(uuid) from public, anon;
+grant execute on function public.my_versus_match(uuid) to authenticated;
+
 -- Public Versus record of any player: public profile columns + the six
 -- counters. Never real names, email or match internals.
 create or replace function public.versus_public_record(p_user_id uuid)

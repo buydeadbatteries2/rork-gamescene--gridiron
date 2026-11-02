@@ -97,6 +97,7 @@ final class MockVersusBackend: VersusBackend, @unchecked Sendable {
     func myOpenMatches() async throws -> [VersusMatch] { [] }
     func myHistory(limit: Int, offset: Int) async throws -> [VersusHistoryEntry] { [] }
     func publicRecord(userID: UUID) async throws -> VersusCareerRecord? { nil }
+    func myMatch(matchID: UUID) async throws -> VersusMatch? { nil }
 }
 
 // MARK: Schema
@@ -124,7 +125,8 @@ struct Phase15ASchemaTests {
     @Test func everySecurityDefinerPinsSearchPath() {
         let definers = P15A.versusNormalized.components(separatedBy: "security definer").count - 1
         let pinned = P15A.versusNormalized.components(separatedBy: "security definer set search_path = ''").count - 1
-        #expect(definers == 10)
+        // 10 from Phase 15A + my_versus_match (Phase 15B).
+        #expect(definers == 11)
         #expect(definers == pinned)
         // Whole-file invariant shared with Phase 14B.
         #expect(P15A.normalized.components(separatedBy: "security definer").count

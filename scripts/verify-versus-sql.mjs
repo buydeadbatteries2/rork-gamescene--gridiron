@@ -186,6 +186,8 @@ for (const fn of [
 }
 await asRoleError("anon cannot read my_versus_matches", "anon", null, `select * from public.my_versus_matches()`, "permission denied");
 await asRoleError("anon cannot read versus history", "anon", null, `select * from public.my_versus_history(10, 0)`, "permission denied");
+await asRoleError("anon cannot read my_versus_match", "anon", null, `select * from public.my_versus_match('00000000-0000-0000-0000-000000000000')`, "permission denied");
+await asRoleError("authenticated without uid → my_versus_match AUTH_REQUIRED", "authenticated", null, `select * from public.my_versus_match('00000000-0000-0000-0000-000000000000')`, "AUTH_REQUIRED");
 await asRoleError("anon cannot read public record", "anon", null, `select * from public.versus_public_record('${users.ava}')`, "permission denied");
 await asRoleError("authenticated without uid → AUTH_REQUIRED", "authenticated", null, `select * from public.my_versus_matches()`, "AUTH_REQUIRED");
 const definers = await rows(`
@@ -387,6 +389,10 @@ const jonOpen = await asUser(users.jon, `select * from public.my_versus_matches(
 check("lazy expiry on read: no open match left", !jonOpen.some((m) => m.match_id === z.match.match_id));
 const zRow = await matchRow(z.match.match_id);
 check("zero finishers → expired_unplayed", zRow.status === "expired" && zRow.resolution === "expired_unplayed" && zRow.winner_user_id === null);
+const jonExpired = await asUser(users.jon, `select * from public.my_versus_match($1)`, [z.match.match_id]);
+check("my_versus_match: expired-no-result visible to its player", jonExpired.length === 1 && jonExpired[0].status === "expired"
+  && jonExpired[0].resolution === "expired_unplayed" && jonExpired[0].outcome === null, JSON.stringify(jonExpired));
+check("my_versus_match: other users see nothing", (await asUser(users.cam, `select * from public.my_versus_match($1)`, [z.match.match_id])).length === 0);
 check("zero-player expiry: no record impact",
   JSON.stringify(await stats(users.jon)) === JSON.stringify(jonBefore) && JSON.stringify(await stats(users.lou)) === JSON.stringify(louBefore));
 
@@ -421,6 +427,11 @@ const hide = await pair(users.xan, users.yul, "pro");
 await play(users.xan, hide.match, W4);
 const piaOpen = (await asUser(users.yul, `select * from public.my_versus_matches()`)).find((m) => m.match_id === hide.match.match_id);
 check("opponent's score hidden before completion", piaOpen && piaOpen.opponent_submitted === true && piaOpen.opponent_final_score === null && piaOpen.opponent_cases_solved === null, JSON.stringify(piaOpen));
+const piaOne = (await asUser(users.yul, `select * from public.my_versus_match($1)`, [hide.match.match_id]))[0];
+check("my_versus_match hides opponent score before completion", piaOne && piaOne.opponent_final_score === null && piaOne.opponent_cases_solved === null, JSON.stringify(piaOne));
+const benOne = (await asUser(users.ben, `select * from public.my_versus_match($1)`, [mm.match_id]))[0];
+check("my_versus_match: completed summary with cases solved", benOne?.status === "completed" && benOne.outcome === "win"
+  && Number.isInteger(benOne.my_cases_solved) && Number.isInteger(benOne.opponent_cases_solved) && !JSON.stringify(benOne).includes("player_key"), JSON.stringify(benOne));
 const pub = (await asUser(users.cam, `select * from public.versus_public_record($1)`, [users.ben]))[0];
 check("public record: counters + public identity", pub.username === "ben_qb" && pub.versus_wins === 1 && pub.versus_games_played === 1, JSON.stringify(pub));
 check("public record: no real names", !leaks(pub));

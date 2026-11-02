@@ -18,6 +18,20 @@ protocol VersusBackend: Sendable {
     func myOpenMatches() async throws -> [VersusMatch]
     func myHistory(limit: Int, offset: Int) async throws -> [VersusHistoryEntry]
     func publicRecord(userID: UUID) async throws -> VersusCareerRecord?
+    /// Phase 15B: one of MY matches in any status (my_versus_match). nil =
+    /// not mine / unknown. Throws when the read fails (offline, or the RPC
+    /// is not deployed yet — callers then fall back to the list reads).
+    func myMatch(matchID: UUID) async throws -> VersusMatch?
+}
+
+extension VersusBackend {
+    func myMatch(matchID: UUID) async throws -> VersusMatch? {
+        throw VersusBackendError.unsupported
+    }
+}
+
+nonisolated enum VersusBackendError: Error, Sendable {
+    case unsupported
 }
 
 enum VersusWire {
@@ -79,6 +93,15 @@ struct SupabaseVersusBackend: VersusBackend {
 
     private struct RecordParams: Encodable, Sendable {
         let p_user_id: UUID
+    }
+
+    private struct MatchParams: Encodable, Sendable {
+        let p_match_id: UUID
+    }
+
+    func myMatch(matchID: UUID) async throws -> VersusMatch? {
+        let response = try await client.rpc("my_versus_match", params: MatchParams(p_match_id: matchID)).execute()
+        return try JSONDecoder().decode([VersusMatch].self, from: response.data).first
     }
 
     func findMatch(difficulty: String) async -> VersusFindResult {
@@ -176,4 +199,5 @@ final class VersusService {
         try await backend.myHistory(limit: limit, offset: offset)
     }
     func record(for userID: UUID) async throws -> VersusCareerRecord? { try await backend.publicRecord(userID: userID) }
+    func match(id: UUID) async throws -> VersusMatch? { try await backend.myMatch(matchID: id) }
 }
