@@ -576,6 +576,30 @@ struct Phase14BSchemaTests {
         }
     }
 
+    @Test func closedSeasonsAlwaysAnswerSeasonClosedBeforeAnythingElse() {
+        // Ranked Season State Repair: a CLOSED historical season must never
+        // silently return a playable assignment (production showed HTTP 200s
+        // resurrecting a closed season), and it always reports season_closed
+        // — even when the difficulty also mismatches — so the client clears
+        // the stale pointer and goes through the fresh-season flow.
+        let issuer = P14B.section(P14B.sql, from: "create or replace function public.issue_ranked_match_assignment(", to: "end; $$;")
+        // New-season creation: null id + game 1 inserts a brand-new
+        // ranked_seasons row (a closed historical season cannot block it).
+        #expect(issuer.contains("if p_season_id is null then"))
+        #expect(issuer.contains("insert into public.ranked_seasons (user_id, difficulty, schedule_seed)"))
+        // Other active seasons close when the new one is created.
+        #expect(issuer.contains("set status = 'closed', closed_at = now()"))
+        // With a season id: ownership, then STATUS, then difficulty —
+        // season_closed wins over season_difficulty_mismatch.
+        #expect(issuer.contains("if v_season.user_id <> p_user_id then"))
+        let closed = P14B.offset(of: "raise exception 'SEASON_CLOSED'", in: issuer)
+        let mismatch = P14B.offset(of: "raise exception 'SEASON_DIFFICULTY_MISMATCH'", in: issuer)
+        #expect(closed < mismatch, "status check must precede the difficulty check")
+        // A closed season can never reach the reuse/replace path.
+        let reuse = P14B.offset(of: "Reuse a live assignment when possible", in: issuer)
+        #expect(mismatch < reuse && closed < reuse)
+    }
+
     @Test func namesAreBoundedByChecks() {
         let sql = P14B.sql
         #expect(sql.contains("add constraint profiles_first_name_length check (char_length(first_name) <= 50);"))

@@ -58,25 +58,44 @@ struct SupabaseRankedAssignmentFetcher: RankedAssignmentFetching {
         guard let body = try? JSONEncoder().encode(Body(seasonID: seasonID, gameNumber: gameNumber, difficulty: difficulty)) else {
             return .rejected(reason: "encoding_failed")
         }
+        Self.debugLog("request season_id=\(seasonID?.uuidString ?? "null (NEW SEASON)") game_number=\(gameNumber) difficulty=\(difficulty)")
         do {
             let response: Response = try await client.functions.invoke(
                 Self.functionName,
                 options: FunctionInvokeOptions(headers: ["Content-Type": "application/json"], body: body)
             )
             guard response.status == "assigned", let assignment = response.assignment else {
+                Self.debugLog("http 200 with unexpected body status=\(response.status) — not treated as season creation")
                 return .retryable(category: "unexpected_response")
             }
+            Self.debugLog("assigned season=\(assignment.seasonID.uuidString) game=\(assignment.gameNumber) difficulty=\(assignment.difficulty) reused=\(assignment.reused ?? false)")
             return .assigned(assignment)
         } catch let FunctionsError.httpError(code, data) {
             let reason = (try? JSONDecoder().decode(RejectedBody.self, from: data))?.reason
+            Self.debugLog("http \(code) reason=\(reason ?? "nil")")
             switch SupabaseCompetitiveSubmitter.classify(statusCode: code, reason: reason) {
             case .rejected(let reason): return .rejected(reason: reason)
             case .retryable(let category): return .retryable(category: category)
             case .verified: return .retryable(category: "unexpected_response")
             }
         } catch {
+            Self.debugLog("transport failure (offline?)")
             return .retryable(category: "network")
         }
+    }
+
+    /// DEBUG-only diagnostics (never JWTs, keys, secrets or solutions) so
+    /// ranked synchronization failures are diagnosable from the console.
+    private static func debugLog(_ message: String) {
+        #if DEBUG
+        print("⟦start-ranked-match⟧ \(message)")
+        #endif
+    }
+
+    /// Create-path log hook (service side): the selected UI difficulty and
+    /// the fact that the request is a fresh null-season/game-1 request.
+    static func debugLogCreate(_ message: String) {
+        debugLog("create: \(message) → fresh request (season_id=null, game_number=1)")
     }
 }
 
@@ -275,9 +294,14 @@ final class RankedAssignmentService {
                     recordedServerGame = max(recordedServerGame, game)
                     continue
                 }
-                // The server says this ranked season is closed or unknown:
-                // stale local state must not pose as an active season.
-                if reason == "season_closed" || reason == "season_not_found" {
+                // The server says this ranked season is closed, unknown, or
+                // the difficulty no longer matches what we asked with: the
+                // local season pointer/difficulty is stale — wipe it so the
+                // player goes through the fresh START flow (the server can
+                // then create a brand-new season). Stale local state must
+                // never pose as an active season.
+                if reason == "season_closed" || reason == "season_not_found"
+                    || reason == "season_difficulty_mismatch" {
                     store.clearSeason()
                     clearSeasonID()
                     sessionState = .noSeason
@@ -315,6 +339,9 @@ final class RankedAssignmentService {
             lastErrorCategory = "ranked_start_unavailable"
             return false
         }
+        // FRESH request, built from the player's explicit choice only: no
+        // season id, no stored game number, no local/solo difficulty.
+        SupabaseRankedAssignmentFetcher.debugLogCreate("selected=\(difficulty.serverValue)")
         let result = await fetcher.start(seasonID: nil, gameNumber: 1, difficulty: difficulty.serverValue)
         switch result {
         case .assigned(let wire):

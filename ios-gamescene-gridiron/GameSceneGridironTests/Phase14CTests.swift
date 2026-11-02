@@ -184,6 +184,50 @@ struct Phase14CTests {
     }
 
     @MainActor
+    @Test func staleProSeasonCannotLeakIntoAFreshHallOfFamerSeason() async {
+        // Production regression, end to end:
+        // 1–2. an old PRO ranked season exists (closed server-side)…
+        let oldSeason = P14BServer.season
+        // …the local pointer still names it while the local season says HALL
+        // OF FAMER (the corrupted production shape), and its games 2–4
+        // assignments were retired.
+        let fetcher = MockAssignmentFetcher()
+        // 3–4. Canonical refresh asks the old season → the server answers
+        // season_difficulty_mismatch (or season_closed after the schema
+        // reorder) → the stale pointer is cleared, state is .noSeason.
+        fetcher.script(2, .rejected(reason: "season_difficulty_mismatch"))
+        let h = AssignmentHarness(context: RankedSeasonContext(seasonNumber: 2, rankedSeasonID: oldSeason, nextGameNumber: 2, difficulty: .hallOfFamer), fetcher: fetcher)
+        await h.service.refresh()
+        #expect(h.service.sessionState == .noSeason)
+        #expect(h.service.store.snapshot == nil)
+        #expect(h.service.store.assignments.isEmpty)
+        #expect(h.cleared == 1)
+        // 5. The player explicitly selects HALL OF FAMER…
+        let newSeason = UUID(uuidString: "9f9f9f9f-2222-3333-4444-555555555555")!
+        fetcher.script(1, .assigned(P14BServer.wire(season: newSeason, game: 1, difficulty: "hall_of_famer")))
+        // 6. …the create request carries a NULL season id, game 1 and
+        // hall_of_famer — never the old closed Pro season id, never a stale
+        // game number, never the solo difficulty.
+        let started = await h.service.createRankedSeason(difficulty: .hallOfFamer)
+        #expect(started)
+        let createCall = fetcher.calls.last
+        #expect(createCall?.seasonID == nil)
+        #expect(createCall?.gameNumber == 1)
+        #expect(createCall?.difficulty == "hall_of_famer")
+        // 7–9. The server created a NEW season; after adoption it is active
+        // at HALL OF FAMER, game 1.
+        h.service.adoptCreatedSeason(seasonNumber: 3)
+        #expect(h.service.sessionState == .active(seasonID: newSeason, difficulty: .hallOfFamer, nextGameNumber: 1))
+        // 10. Game 1's assignment belongs to the NEW season.
+        #expect(h.service.store.assignments.map(\.seasonID) == [newSeason])
+        #expect(h.service.store.snapshot?.seasonID == newSeason)
+        #expect(h.service.store.snapshot?.difficulty == "hall_of_famer")
+        // 11. The old Pro season is never resurrected: no request after the
+        // clear ever carries its id again.
+        #expect(fetcher.calls.dropFirst(2).allSatisfy { $0.seasonID != oldSeason })
+    }
+
+    @MainActor
     @Test func createRankedSeasonNeverSubstitutesADifficulty() async {
         // The server refuses ALL-PRO by answering ROOKIE — creation must
         // fail, never silently adopt another difficulty or create the local

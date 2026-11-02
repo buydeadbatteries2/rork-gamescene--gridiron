@@ -1023,11 +1023,15 @@ begin
         if v_season.user_id <> p_user_id then
             raise exception 'SEASON_CONFLICT';
         end if;
-        if v_season.difficulty <> p_difficulty then
-            raise exception 'SEASON_DIFFICULTY_MISMATCH';
-        end if;
+        -- Status BEFORE difficulty: a CLOSED historical season always answers
+        -- season_closed (never a difficulty mismatch), so the client clears
+        -- the stale pointer and goes through the fresh-season flow instead of
+        -- retrying forever. A closed season is never resurrected here.
         if v_season.status <> 'active' then
             raise exception 'SEASON_CLOSED';
+        end if;
+        if v_season.difficulty <> p_difficulty then
+            raise exception 'SEASON_DIFFICULTY_MISMATCH';
         end if;
     end if;
 
