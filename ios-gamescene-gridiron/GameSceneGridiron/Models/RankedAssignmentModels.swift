@@ -79,6 +79,26 @@ nonisolated struct RankedAssignmentStore: Codable, Hashable, Sendable {
 
     private(set) var assignments: [RankedAssignment] = []
     private(set) var snapshot: Snapshot?
+    /// Games that FINISHED locally but are not yet server-verified:
+    /// matchID → (season, game). Progress only advances when the server
+    /// confirms verification (or reports the game already recorded).
+    nonisolated struct SpentGame: Codable, Hashable, Sendable {
+        let seasonID: UUID
+        let gameNumber: Int
+    }
+    private(set) var spent: [UUID: SpentGame] = [:]
+
+    /// Lenient decode: stores written before `spent` existed (or with a
+    /// partial shape) must still load — never wipe a player's season cache
+    /// over a missing optional key.
+    private enum CodingKeys: String, CodingKey { case assignments, snapshot, spent }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        assignments = try container.decodeIfPresent([RankedAssignment].self, forKey: .assignments) ?? []
+        snapshot = try container.decodeIfPresent(Snapshot.self, forKey: .snapshot)
+        spent = try container.decodeIfPresent([UUID: SpentGame].self, forKey: .spent) ?? [:]
+    }
 
     /// Mirrors ranked_scoring_config.assignment_prefetch_games.
     static let maxPrefetched = 3
@@ -99,6 +119,14 @@ nonisolated struct RankedAssignmentStore: Codable, Hashable, Sendable {
         guard assignment.isWellFormed else { return }
         if snapshot?.seasonID != assignment.seasonID {
             snapshot = Snapshot(seasonID: assignment.seasonID, difficulty: assignment.difficulty)
+        } else if snapshot?.difficulty != assignment.difficulty {
+            // The SERVER's difficulty is the truth — a correction within the
+            // same season is adopted, never kept from a stale cache.
+            snapshot = Snapshot(
+                seasonID: assignment.seasonID,
+                difficulty: assignment.difficulty,
+                consumedGameNumber: snapshot?.consumedGameNumber ?? 0
+            )
         }
         assignments.removeAll {
             $0.matchID == assignment.matchID
@@ -108,16 +136,42 @@ nonisolated struct RankedAssignmentStore: Codable, Hashable, Sendable {
         assignments.append(assignment)
     }
 
-    /// The game finished — record its consumption (progress truth) and drop
-    /// the spent assignment. Prefetching never calls this.
+    /// The game finished locally (queued or unranked) — the assignment is
+    /// spent inventory, but progress does NOT move until the server verifies
+    /// the result (markVerified) or reports the game already recorded.
     mutating func consume(matchID: UUID) {
-        guard let spent = assignments.first(where: { $0.matchID == matchID }) else { return }
-        let gameNumber = spent.gameNumber
-        let seasonID = spent.seasonID
+        guard let finished = assignments.first(where: { $0.matchID == matchID }) else { return }
+        spent[matchID] = SpentGame(seasonID: finished.seasonID, gameNumber: finished.gameNumber)
         assignments.removeAll { $0.matchID == matchID }
-        guard var current = snapshot, current.seasonID == seasonID else { return }
-        current.consumedGameNumber = max(current.consumedGameNumber, gameNumber)
+    }
+
+    /// The server VERIFIED this match — now (and only now) progress advances.
+    mutating func markVerified(matchID: UUID) {
+        guard let game = spent[matchID], var current = snapshot, current.seasonID == game.seasonID,
+              game.gameNumber > current.consumedGameNumber else {
+            spent.removeValue(forKey: matchID)
+            return
+        }
+        current.consumedGameNumber = game.gameNumber
         snapshot = current
+        spent = spent.filter { $0.value.gameNumber > game.gameNumber || $0.value.seasonID != game.seasonID }
+    }
+
+    /// The server reported this game as already recorded — server consumption
+    /// truth that must override the displayed progress.
+    mutating func recordServerConsumption(gameNumber: Int) {
+        guard var current = snapshot, gameNumber > current.consumedGameNumber else { return }
+        current.consumedGameNumber = gameNumber
+        snapshot = current
+        spent = spent.filter { $0.value.gameNumber > gameNumber }
+    }
+
+    /// Server authority: the season is closed/unknown — nothing ranked stays
+    /// active. Unrelated solo/franchise state is untouched.
+    mutating func clearSeason() {
+        snapshot = nil
+        assignments.removeAll()
+        spent.removeAll()
     }
 
     /// Drops an assignment once its game is finished (queued or unranked).
@@ -164,14 +218,6 @@ nonisolated struct RankedAssignmentStore: Codable, Hashable, Sendable {
             difficulty: first.difficulty,
             consumedGameNumber: max(0, (assignments.map(\.gameNumber).min() ?? 1) - 1)
         )
-    }
-
-    /// The server reported this game as already recorded — server consumption
-    /// truth that must override the displayed progress.
-    mutating func recordServerConsumption(gameNumber: Int) {
-        guard var current = snapshot, gameNumber > current.consumedGameNumber else { return }
-        current.consumedGameNumber = gameNumber
-        snapshot = current
     }
 
     static func save(_ store: RankedAssignmentStore, defaults: UserDefaults = .standard) {

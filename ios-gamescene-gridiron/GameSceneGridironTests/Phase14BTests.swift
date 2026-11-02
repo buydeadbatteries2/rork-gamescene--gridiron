@@ -237,6 +237,7 @@ final class AssignmentHarness {
     var context: RankedSeasonContext?
     var user: UUID? = P14BHarnessIDs.owner
     var adopted: [(UUID, Int)] = []
+    var cleared = 0
     var flushes = 0
     let fetcher: MockAssignmentFetcher
     let defaults: UserDefaults
@@ -252,6 +253,7 @@ final class AssignmentHarness {
                                                    nextGameNumber: c.nextGameNumber, difficulty: c.difficulty)
             }
         },
+        clearSeasonID: { [unowned self] in self.cleared += 1 },
         flushSubmissions: { [unowned self] in self.flushes += 1 },
         now: { Date(timeIntervalSince1970: 1_790_000_000) }
     )
@@ -315,13 +317,19 @@ struct Phase14BServiceTests {
     }
 
     @Test func otherRejectionsAndRetryablesStop() async {
+        // The SERVER says the season is closed → stale local ranked state is
+        // cleared wholesale (snapshot + assignments + season id) and the
+        // session state becomes .noSeason — never an active card from cache.
         let rejecting = MockAssignmentFetcher()
         rejecting.script(3, .rejected(reason: "season_closed"))
         let h = AssignmentHarness(context: RankedSeasonContext(seasonNumber: 1, rankedSeasonID: P14BServer.season, nextGameNumber: 2, difficulty: .pro), fetcher: rejecting)
         await h.service.refresh()
         #expect(rejecting.calls.map(\.gameNumber) == [2, 3])
-        #expect(h.service.store.assignments.map(\.gameNumber) == [2])
+        #expect(h.service.store.assignments.isEmpty)
+        #expect(h.service.store.snapshot == nil)
         #expect(h.service.lastErrorCategory == "season_closed")
+        #expect(h.service.sessionState == .noSeason)
+        #expect(h.cleared == 1)
 
         let offline = MockAssignmentFetcher()
         offline.script(2, .retryable(category: "network"))
@@ -329,6 +337,8 @@ struct Phase14BServiceTests {
         await h2.service.refresh()
         #expect(offline.calls.map(\.gameNumber) == [2])
         #expect(h2.service.store.assignments.isEmpty)
+        // Server unreachable → cached state must not pose as truth.
+        #expect(h2.service.sessionState == .unavailable)
     }
 
     @Test func heldAssignmentsAreNotRefetched() async {

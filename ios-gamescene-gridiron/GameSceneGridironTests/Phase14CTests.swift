@@ -5,7 +5,9 @@ import Testing
 
 /// Phase 14C — the RANKED entry is UI only: it reuses the 14B services and
 /// never changes ranked logic. These tests pin the entry-state resolution the
-/// Home tile and the Ranked screen both share.
+/// Home tile and the Ranked screen both share, plus the "Ranked Season State
+/// Repair": the SERVER is the single source of truth for ranked client state
+/// (season existence, difficulty, game number, consumed progress).
 @Suite("Phase 14C — ranked entry")
 struct Phase14CTests {
 
@@ -19,14 +21,20 @@ struct Phase14CTests {
         return defaults
     }
 
+    // MARK: Entry-state resolution (Home tile + Ranked screen gate)
+
     @Test func guestsSeeTheAccountGate() {
         #expect(RankedEntryState.resolve(state: .guest, hasTeam: true, nextGameNumber: 3, difficulty: .pro) == .needsAccount)
         #expect(RankedEntryState.resolve(state: .restoring, hasTeam: true, nextGameNumber: 3, difficulty: .pro) == .needsAccount)
         #expect(RankedEntryState.resolve(state: .needsProfileRecovery(Self.profile), hasTeam: true, nextGameNumber: 3, difficulty: .pro) == .needsAccount)
+        // The gate-only resolver agrees.
+        #expect(RankedEntryState.gate(state: .guest, hasTeam: true) == .needsAccount)
     }
 
     @Test func signedInWithoutFranchiseIsSentToCreateTheTeam() {
         #expect(RankedEntryState.resolve(state: .authenticated(Self.profile), hasTeam: false, nextGameNumber: nil, difficulty: nil) == .needsFranchise)
+        #expect(RankedEntryState.gate(state: .authenticated(Self.profile), hasTeam: false) == .needsFranchise)
+        #expect(RankedEntryState.gate(state: .authenticated(Self.profile), hasTeam: true) == nil)
     }
 
     @Test func activeSeasonShowsContinueWithGameAndDifficulty() {
@@ -56,6 +64,165 @@ struct Phase14CTests {
         #expect(RankedEntryState.completedGames(12) == 11)
     }
 
+    // MARK: Server authority — refresh replaces whatever the cache said
+
+    @MainActor
+    @Test func prefetchAloneNeverAdvancesProgress() async {
+        // 1 consumed + 3 prefetched shows GAME 2; prefetching alone never
+        // moves the number.
+        let h = AssignmentHarness(context: RankedSeasonContext(seasonNumber: 1, rankedSeasonID: nil, nextGameNumber: 1, difficulty: .pro))
+        await h.service.refresh()
+        #expect(h.service.store.assignments.count == 3)
+        #expect(h.service.sessionState == .active(seasonID: P14BServer.season, difficulty: .pro, nextGameNumber: 1))
+        #expect(h.service.rankedDisplayState?.nextGameNumber == 1)
+    }
+
+    @MainActor
+    @Test func consumeWithoutVerificationKeepsGameOne() async {
+        // Finishing a game spends the assignment but does NOT advance
+        // progress — only server verification does.
+        let h = AssignmentHarness(context: RankedSeasonContext(seasonNumber: 1, rankedSeasonID: nil, nextGameNumber: 1, difficulty: .pro))
+        await h.service.refresh()
+        let gameOne = h.service.store.assignments.first { $0.gameNumber == 1 }!
+        h.service.consume(matchID: gameOne.matchID)
+        #expect(h.service.sessionState == .active(seasonID: P14BServer.season, difficulty: .pro, nextGameNumber: 1))
+    }
+
+    @MainActor
+    @Test func consumePlusVerificationAdvancesToGameTwo() async {
+        let h = AssignmentHarness(context: RankedSeasonContext(seasonNumber: 1, rankedSeasonID: nil, nextGameNumber: 1, difficulty: .pro))
+        await h.service.refresh()
+        let gameOne = h.service.store.assignments.first { $0.gameNumber == 1 }!
+        h.service.consume(matchID: gameOne.matchID)
+        h.service.markVerified(matchID: gameOne.matchID)
+        // 1 consumed + 2 still prefetched → GAME 2 OF 12 at the server's PRO.
+        #expect(h.service.sessionState == .active(seasonID: P14BServer.season, difficulty: .pro, nextGameNumber: 2))
+        #expect(h.service.rankedDisplayState?.nextGameNumber == 2)
+        #expect(h.service.rankedDisplayState?.difficulty == .pro)
+    }
+
+    @MainActor
+    @Test func doubleVerificationAdvancesExactlyOnce() async {
+        let h = AssignmentHarness(context: RankedSeasonContext(seasonNumber: 1, rankedSeasonID: nil, nextGameNumber: 1, difficulty: .pro))
+        await h.service.refresh()
+        let gameOne = h.service.store.assignments.first { $0.gameNumber == 1 }!
+        h.service.consume(matchID: gameOne.matchID)
+        h.service.markVerified(matchID: gameOne.matchID)
+        h.service.markVerified(matchID: gameOne.matchID)
+        #expect(h.service.rankedDisplayState?.nextGameNumber == 2)
+    }
+
+    @MainActor
+    @Test func serverProReplacesLocalHallOfFamer() async {
+        // The local season was started at HALL OF FAMER but the server issues
+        // PRO assignments — the server wins, the display shows PRO.
+        let fetcher = MockAssignmentFetcher()
+        for game in 1...3 {
+            fetcher.script(game, .assigned(P14BServer.wire(season: P14BServer.season, game: game, difficulty: "pro")))
+        }
+        let h = AssignmentHarness(context: RankedSeasonContext(seasonNumber: 1, rankedSeasonID: nil, nextGameNumber: 1, difficulty: .hallOfFamer), fetcher: fetcher)
+        await h.service.refresh()
+        #expect(h.service.store.snapshot?.difficulty == "pro")
+        #expect(h.service.sessionState == .active(seasonID: P14BServer.season, difficulty: .pro, nextGameNumber: 1))
+    }
+
+    @MainActor
+    @Test func serverDifficultyCorrectionWithinASeasonIsAdopted() async {
+        // A stale cache says HALL OF FAMER; the fresh server answer says PRO
+        // for the SAME season — the cache never wins.
+        let owner = P14BHarnessIDs.owner
+        var stale = RankedAssignmentStore()
+        stale.upsert(P14BServer.wire(season: P14BServer.season, game: 1, difficulty: "hall_of_famer").assignment(owner: owner)!)
+        let h = AssignmentHarness(context: RankedSeasonContext(seasonNumber: 1, rankedSeasonID: P14BServer.season, nextGameNumber: 1, difficulty: .pro))
+        RankedAssignmentStore.save(stale, defaults: h.defaults)
+        _ = h.service // loads (and adopts server truth over) the stale cache
+        #expect(h.service.sessionState == .active(seasonID: P14BServer.season, difficulty: .hallOfFamer, nextGameNumber: 1))
+        await h.service.refresh()
+        #expect(h.service.sessionState == .active(seasonID: P14BServer.season, difficulty: .pro, nextGameNumber: 1))
+    }
+
+    @MainActor
+    @Test func noActiveSeasonClearsStaleRankedState() async {
+        // The server says season_closed → every cached ranked artifact is
+        // dropped and the card shows START (never a stale CONTINUE).
+        let fetcher = MockAssignmentFetcher()
+        let h = AssignmentHarness(context: RankedSeasonContext(seasonNumber: 1, rankedSeasonID: P14BServer.season, nextGameNumber: 2, difficulty: .pro), fetcher: fetcher)
+        await h.service.refresh()               // games 2–4 prefetched, snapshot set
+        #expect(h.service.sessionState != .noSeason)
+        // The next server ask (game 5, past the held window) is rejected:
+        fetcher.script(5, .rejected(reason: "season_closed"))
+        h.context = RankedSeasonContext(seasonNumber: 1, rankedSeasonID: P14BServer.season, nextGameNumber: 5, difficulty: .pro)
+        await h.service.refresh()
+        #expect(h.service.store.assignments.isEmpty)
+        #expect(h.service.store.snapshot == nil)
+        #expect(h.service.sessionState == .noSeason)
+        #expect(h.cleared == 1)                 // SeasonManager id pointer cleared
+    }
+
+    @MainActor
+    @Test func seasonNotFoundIsAlsoNotActive() async {
+        let fetcher = MockAssignmentFetcher()
+        fetcher.script(1, .rejected(reason: "season_not_found"))
+        let h = AssignmentHarness(context: RankedSeasonContext(seasonNumber: 1, rankedSeasonID: P14BServer.season, nextGameNumber: 1, difficulty: .pro), fetcher: fetcher)
+        await h.service.refresh()
+        #expect(h.service.store.snapshot == nil)
+        #expect(h.service.sessionState == .noSeason)
+        #expect(h.cleared == 1)
+    }
+
+    // MARK: Server-confirmed season creation (explicit difficulty only)
+
+    @MainActor
+    @Test func createRankedSeasonUsesOnlyTheSelectedDifficulty() async {
+        let fetcher = MockAssignmentFetcher()
+        let h = AssignmentHarness(context: nil, fetcher: fetcher)
+        let started = await h.service.createRankedSeason(difficulty: .allPro)
+        #expect(started)
+        // Exactly one server call: new season, game 1, ALL-PRO — nothing
+        // injected from the local solo difficulty.
+        #expect(fetcher.calls == [MockAssignmentFetcher.Call(seasonID: nil, gameNumber: 1, difficulty: "all_pro")])
+    }
+
+    @MainActor
+    @Test func createRankedSeasonNeverSubstitutesADifficulty() async {
+        // The server refuses ALL-PRO by answering ROOKIE — creation must
+        // fail, never silently adopt another difficulty or create the local
+        // season.
+        let fetcher = MockAssignmentFetcher()
+        fetcher.script(1, .assigned(P14BServer.wire(season: P14BServer.season, game: 1, difficulty: "rookie")))
+        let h = AssignmentHarness(context: nil, fetcher: fetcher)
+        let started = await h.service.createRankedSeason(difficulty: .allPro)
+        #expect(!started)
+        h.service.adoptCreatedSeason(seasonNumber: 1)
+        #expect(h.adopted.isEmpty)
+        #expect(h.service.store.snapshot == nil)
+        #expect(h.service.sessionState != .active(seasonID: P14BServer.season, difficulty: .rookie, nextGameNumber: 1))
+    }
+
+    @MainActor
+    @Test func adoptCreatedSeasonActivatesTheServerAssignment() async {
+        let h = AssignmentHarness(context: nil)
+        let started = await h.service.createRankedSeason(difficulty: .pro)
+        #expect(started)
+        h.service.adoptCreatedSeason(seasonNumber: 4)
+        #expect(h.adopted.count == 1)
+        #expect(h.adopted.first?.0 == P14BServer.season && h.adopted.first?.1 == 4)
+        #expect(h.service.store.assignments.map(\.gameNumber) == [1])
+        #expect(h.service.sessionState == .active(seasonID: P14BServer.season, difficulty: .pro, nextGameNumber: 1))
+    }
+
+    // MARK: Leaderboard filter
+
+    @MainActor
+    @Test func leaderboardFilterDefaultsToAll() {
+        // The leaderboard never inherits the local (or ranked) difficulty —
+        // ALL until a pill is tapped.
+        let vm = LeaderboardViewModel(repository: nil, currentUserID: nil)
+        #expect(vm.difficulty == .all)
+    }
+
+    // MARK: Legacy cache migration
+
     @MainActor
     @Test func snapshotTracksConsumedGamesOnly() {
         // Production evidence shape: server season at pro, games 1–4 issued,
@@ -69,28 +236,16 @@ struct Phase14CTests {
         // Prefetching alone never advances progress…
         #expect(store.snapshot?.difficulty == "pro")
         #expect(store.snapshot?.consumedGameNumber == 0)
-        // …only consuming game 1 does.
-        store.consume(matchID: store.assignments.first { $0.gameNumber == 1 }!.matchID)
+        // …and finishing game 1 locally doesn't either…
+        let gameOne = store.assignments.first { $0.gameNumber == 1 }!.matchID
+        store.consume(matchID: gameOne)
+        #expect(store.snapshot?.consumedGameNumber == 0)
+        // …until the server verifies it.
+        store.markVerified(matchID: gameOne)
         #expect(store.snapshot?.consumedGameNumber == 1)
         // A new server season replaces the snapshot wholesale.
         store.upsert(P14BServer.wire(season: UUID(), game: 1, difficulty: "hall_of_famer").assignment(owner: owner)!)
         #expect(store.snapshot?.consumedGameNumber == 0)
-    }
-
-    @MainActor
-    @Test func rankedScreenReadsServerStateNotTheLocalSeason() async {
-        let h = AssignmentHarness(context: RankedSeasonContext(seasonNumber: 1, rankedSeasonID: nil, nextGameNumber: 1, difficulty: .pro))
-        await h.service.refresh()
-        // Three games prefetched, none consumed → next playable is game 1.
-        #expect(h.service.store.assignments.count == 3)
-        #expect(h.service.rankedDisplayState?.difficulty == .pro)
-        #expect(h.service.rankedDisplayState?.nextGameNumber == 1)
-        // Only game 1 consumed → the screen shows GAME 2 OF 12 at PRO,
-        // even though games 2–3 stay prefetched.
-        let gameOne = h.service.store.assignments.first { $0.gameNumber == 1 }!
-        h.service.consume(matchID: gameOne.matchID)
-        #expect(h.service.rankedDisplayState?.nextGameNumber == 2)
-        #expect(h.service.rankedDisplayState?.difficulty == .pro)
     }
 
     @MainActor
@@ -122,6 +277,9 @@ struct Phase14CTests {
         )
         #expect(service.rankedDisplayState?.difficulty == .pro)
         #expect(service.rankedDisplayState?.nextGameNumber == 2)
+        // The migrated snapshot alone backs the card — even before any
+        // refresh can run.
+        #expect(service.sessionState == .active(seasonID: season, difficulty: .pro, nextGameNumber: 2))
     }
 
     @MainActor
@@ -146,7 +304,9 @@ struct Phase14CTests {
         for game in 2...4 {
             store.upsert(P14BServer.wire(season: P14BServer.season, game: game, difficulty: "pro").assignment(owner: owner)!)
         }
-        store.consume(matchID: store.assignments.first { $0.gameNumber == 2 }!.matchID)
+        let gameTwo = store.assignments.first { $0.gameNumber == 2 }!.matchID
+        store.consume(matchID: gameTwo)
+        store.markVerified(matchID: gameTwo)
         // prune at the local (stale) game number would keep nothing.
         store.prune(owner: owner, seasonID: P14BServer.season, minGameNumber: 1, now: Self.now)
         #expect(store.assignments.map(\.gameNumber) == [3, 4])

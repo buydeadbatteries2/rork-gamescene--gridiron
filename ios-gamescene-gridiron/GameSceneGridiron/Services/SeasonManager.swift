@@ -249,6 +249,16 @@ final class SeasonManager {
         persist()
     }
 
+    /// The server reported the ranked season closed/unknown — drop the stale
+    /// pointer so the local season can't pose as ranked truth. Solo season
+    /// state (schedule, difficulty, progress) is untouched.
+    func clearRankedSeasonID() {
+        guard var current = season, current.rankedSeasonID != nil else { return }
+        current.rankedSeasonID = nil
+        season = current
+        persist()
+    }
+
     /// Starts a new season (or advances to the next one) at `difficulty` —
     /// the choice made on the SELECT DIFFICULTY screen. The choice is stored
     /// on the season (locking it until the season completes) and persisted as

@@ -21,6 +21,15 @@ nonisolated enum RankedEntryState: Equatable {
         return .readyToStart
     }
 
+    /// The account/franchise gate only — nil when ranked play is runnable and
+    /// the caller must consult the SERVER session state (never local season
+    /// data) to decide what the card shows.
+    static func gate(state: AuthSessionState, hasTeam: Bool) -> RankedEntryState? {
+        guard !AccountGatePolicy.requiresAccount(state) else { return .needsAccount }
+        guard hasTeam else { return .needsFranchise }
+        return nil
+    }
+
     /// "GAME x OF 12" — x is the NEXT playable game (first game without a
     /// result). Prefetched assignments are held cases, never played games, so
     /// they never advance this number.
@@ -46,9 +55,12 @@ struct RankedView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var seasonManager = SeasonManager.shared
     @State private var teamStore = TeamStore.shared
+    @State private var ranked = RankedAssignmentService.shared
     @State private var isShowingSeason: Bool = false
     @State private var isShowingDifficulty: Bool = false
     @State private var isShowingLeaderboard: Bool = false
+    @State private var isStartingSeason: Bool = false
+    @State private var startFailed: Bool = false
     @State private var hasAppeared: Bool = false
 
     var body: some View {
@@ -94,6 +106,11 @@ struct RankedView: View {
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.05)) { hasAppeared = true }
         }
+        .task {
+            // The server is the single source of truth for ranked state:
+            // every entry re-asks it before the card renders a CONTINUE.
+            await ranked.refresh()
+        }
         .fullScreenCover(isPresented: $isShowingSeason) {
             // The existing season flow — ranked cases are adopted automatically
             // from the server assignments the prefetcher already holds.
@@ -102,11 +119,21 @@ struct RankedView: View {
         .fullScreenCover(isPresented: $isShowingDifficulty) {
             DifficultySelectView(onConfirm: { level in
                 guard let team = teamStore.userTeam else { return }
-                // The server season is created by start-ranked-match when the
-                // first game's assignment is fetched inside SeasonView.
-                SeasonManager.shared.startNewSeason(userTeam: team, difficulty: level)
-                isShowingDifficulty = false
-                isShowingSeason = true
+                isStartingSeason = true
+                Task {
+                    defer { isStartingSeason = false }
+                    // SERVER FIRST: the server creates the ranked season at
+                    // game 1 with ONLY the explicitly picked difficulty; the
+                    // local season exists only after the server confirms.
+                    guard await ranked.createRankedSeason(difficulty: level) else {
+                        startFailed = true
+                        return
+                    }
+                    SeasonManager.shared.startNewSeason(userTeam: team, difficulty: level)
+                    ranked.adoptCreatedSeason(seasonNumber: seasonManager.season?.seasonNumber ?? 0)
+                    isShowingDifficulty = false
+                    isShowingSeason = true
+                }
             }, confirmTitle: "START RANKED SEASON", requireExplicitSelection: true)
         }
         .fullScreenCover(isPresented: $isShowingLeaderboard) {
@@ -148,19 +175,17 @@ struct RankedView: View {
 
     @ViewBuilder
     private var entryCard: some View {
-        // Difficulty and progress come from the SERVER season state (the
-        // assignment store's snapshot) when one is known on this device; the
-        // local solo season is only a fallback before the first assignment.
-        let ranked = RankedAssignmentService.shared.rankedDisplayState
-        let state = RankedEntryState.resolve(
+        // Gate first (account/franchise), then THE canonical ranked state —
+        // server-backed `sessionState`. Local season data never renders as
+        // ranked truth, and a failed refresh says so instead of trusting a
+        // stale cache.
+        let gate = RankedEntryState.gate(
             state: AuthService.shared.state,
-            hasTeam: teamStore.userTeam != nil,
-            nextGameNumber: ranked?.nextGameNumber ?? seasonManager.nextRankedGameNumber,
-            difficulty: ranked?.difficulty ?? seasonManager.activeSeasonDifficulty
+            hasTeam: teamStore.userTeam != nil
         )
         VStack(spacing: 14) {
-            switch state {
-            case .needsFranchise:
+            switch gate {
+            case .some(.needsFranchise):
                 Image(systemName: "person.3")
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(Theme.paperInkSoft)
@@ -173,48 +198,62 @@ struct RankedView: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Theme.paperInkSoft)
 
-            case .readyToStart:
-                statusLine("NO ACTIVE RANKED SEASON", detail: "Start one and every game is played from server-issued cases.")
-                Button {
-                    Haptics.pickUp()
-                    isShowingDifficulty = true
-                } label: {
-                    HStack {
-                        Spacer()
-                        Text("START RANKED SEASON")
-                        Spacer()
-                        Image(systemName: "flame.fill")
-                            .font(.system(size: 15, weight: .bold))
-                    }
-                    .padding(.horizontal, 26)
-                }
-                .buttonStyle(GoldCapsuleButtonStyle())
-                .accessibilityIdentifier("ranked.start")
+            case .none:
+                switch ranked.sessionState {
+                case .checking:
+                    statusLine("CHECKING RANKED STATUS", detail: "Asking the server for your season…")
 
-            case .active(let gameNumber, let difficulty):
-                statusLine(difficulty.title, detail: "Difficulty locked for this season")
-                progressBar(gameNumber: gameNumber)
-                Text(RankedEntryState.progressLabel(gameNumber))
-                    .font(.system(size: 13, weight: .heavy).width(.condensed))
-                    .tracking(1.2)
-                    .foregroundStyle(Theme.paperInk)
-                Button {
-                    Haptics.pickUp()
-                    isShowingSeason = true
-                } label: {
-                    HStack {
-                        Spacer()
-                        Text("CONTINUE RANKED SEASON")
-                        Spacer()
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 15, weight: .bold))
+                case .unavailable:
+                    statusLine("UNABLE TO REFRESH RANKED STATUS", detail: "Check your connection and try again — your season is safe.")
+                    Button {
+                        Haptics.pickUp()
+                        Task { await ranked.refresh() }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text("RETRY")
+                            Spacer()
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 15, weight: .bold))
+                        }
+                        .padding(.horizontal, 26)
                     }
-                    .padding(.horizontal, 26)
-                }
-                .buttonStyle(GoldCapsuleButtonStyle())
-                .accessibilityIdentifier("ranked.continue")
+                    .buttonStyle(GoldCapsuleButtonStyle())
+                    .accessibilityIdentifier("ranked.retry")
 
-            case .needsAccount:
+                case .noSeason:
+                    startCard
+
+                case .active(_, let difficulty, let nextGameNumber):
+                    statusLine(difficulty.title, detail: "Difficulty locked for this season")
+                    progressBar(gameNumber: nextGameNumber)
+                    Text(RankedEntryState.progressLabel(nextGameNumber))
+                        .font(.system(size: 13, weight: .heavy).width(.condensed))
+                        .tracking(1.2)
+                        .foregroundStyle(Theme.paperInk)
+                    Button {
+                        Haptics.pickUp()
+                        isShowingSeason = true
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text("CONTINUE RANKED SEASON")
+                            Spacer()
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 15, weight: .bold))
+                        }
+                        .padding(.horizontal, 26)
+                    }
+                    .buttonStyle(GoldCapsuleButtonStyle())
+                    .accessibilityIdentifier("ranked.continue")
+                }
+
+            case .some(.readyToStart), .some(.active):
+                // Unreachable through the gate (signed-in + team resolves to
+                // nil so the SERVER state decides) — but stay exhaustive.
+                startCard
+
+            case .some(.needsAccount):
                 // The Home tile never reaches this state (it shows the gate
                 // first), but the screen stays honest if the session changes.
                 Image(systemName: "lock")
@@ -229,6 +268,32 @@ struct RankedView: View {
         .padding(16)
         .paperCard(cornerRadius: 6)
         .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var startCard: some View {
+        if startFailed {
+            statusLine("COULD NOT START RANKED SEASON", detail: "Try again.")
+        }
+        statusLine("NO ACTIVE RANKED SEASON", detail: "Start one and every game is played from server-issued cases.")
+        Button {
+            Haptics.pickUp()
+            startFailed = false
+            isShowingDifficulty = true
+        } label: {
+            HStack {
+                Spacer()
+                Text("START RANKED SEASON")
+                Spacer()
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 15, weight: .bold))
+            }
+            .padding(.horizontal, 26)
+        }
+        .buttonStyle(GoldCapsuleButtonStyle())
+        .disabled(isStartingSeason)
+        .opacity(isStartingSeason ? 0.6 : 1)
+        .accessibilityIdentifier("ranked.start")
     }
 
     private func statusLine(_ title: String, detail: String) -> some View {

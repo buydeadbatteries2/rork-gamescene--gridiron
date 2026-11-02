@@ -90,6 +90,20 @@ nonisolated struct RankedSeasonContext: Equatable, Sendable {
     let difficulty: DifficultyLevel
 }
 
+/// THE canonical ranked state the UI renders. Backed by the server: every
+/// refresh replaces it from server answers, and local caches never win.
+nonisolated enum RankedSessionState: Equatable, Sendable {
+    /// Entry — no server answer yet this session.
+    case checking
+    /// The server confirmed there is no active ranked season.
+    case noSeason
+    /// Server-backed active season: difficulty and next playable game are
+    /// exactly what the server issued/verified.
+    case active(seasonID: UUID, difficulty: DifficultyLevel, nextGameNumber: Int)
+    /// The server could not be reached — cached state must not pose as truth.
+    case unavailable
+}
+
 @MainActor
 @Observable
 final class RankedAssignmentService {
@@ -99,12 +113,15 @@ final class RankedAssignmentService {
     private(set) var isRefreshing = false
     /// DEBUG-safe category of the last failed request.
     private(set) var lastErrorCategory: String?
+    /// The one ranked state the UI observes (server-authoritative).
+    private(set) var sessionState: RankedSessionState = .checking
 
     private let defaults: UserDefaults
     private let fetcher: (any RankedAssignmentFetching)?
     private let currentUserID: @MainActor () -> UUID?
     private let seasonContext: @MainActor () -> RankedSeasonContext?
     private let adoptSeasonID: @MainActor (UUID, Int) -> Void
+    private let clearSeasonID: @MainActor () -> Void
     private let flushSubmissions: @MainActor () async -> Void
     private let now: () -> Date
 
@@ -122,6 +139,7 @@ final class RankedAssignmentService {
             },
             seasonContext: { SeasonManager.shared.rankedSeasonContext },
             adoptSeasonID: { id, number in SeasonManager.shared.adoptRankedSeasonID(id, seasonNumber: number) },
+            clearSeasonID: { SeasonManager.shared.clearRankedSeasonID() },
             flushSubmissions: { await CompetitiveSubmissionService.shared.flush() }
         )
     }
@@ -132,6 +150,7 @@ final class RankedAssignmentService {
         currentUserID: @escaping @MainActor () -> UUID?,
         seasonContext: @escaping @MainActor () -> RankedSeasonContext?,
         adoptSeasonID: @escaping @MainActor (UUID, Int) -> Void,
+        clearSeasonID: @escaping @MainActor () -> Void = {},
         flushSubmissions: @escaping @MainActor () async -> Void = {},
         now: @escaping () -> Date = Date.init
     ) {
@@ -140,9 +159,11 @@ final class RankedAssignmentService {
         self.currentUserID = currentUserID
         self.seasonContext = seasonContext
         self.adoptSeasonID = adoptSeasonID
+        self.clearSeasonID = clearSeasonID
         self.flushSubmissions = flushSubmissions
         self.now = now
         store = RankedAssignmentStore.load(defaults: defaults)
+        sessionState = Self.state(from: store.snapshot, fallback: .checking)
     }
 
     /// The assignment to play for this exact game, if one was prefetched and
@@ -154,10 +175,18 @@ final class RankedAssignmentService {
         return assignment
     }
 
-    /// The game finished (queued or unranked) — its consumption is recorded
-    /// (Ranked-screen progress truth) and the assignment is spent.
+    /// The game finished locally (queued or unranked) — the assignment is
+    /// spent inventory only; progress advances when the server verifies.
     func consume(matchID: UUID) {
         store.consume(matchID: matchID)
+        persist()
+    }
+
+    /// The server VERIFIED this match — the only path (besides the server
+    /// reporting a game already recorded) that advances ranked progress.
+    func markVerified(matchID: UUID) {
+        store.markVerified(matchID: matchID)
+        sessionState = Self.state(from: store.snapshot, fallback: .noSeason)
         persist()
     }
 
@@ -171,11 +200,34 @@ final class RankedAssignmentService {
         return (snapshot.seasonID, level, min(12, max(1, snapshot.consumedGameNumber + 1)))
     }
 
+    private static func state(from snapshot: RankedAssignmentStore.Snapshot?, fallback: RankedSessionState) -> RankedSessionState {
+        guard let snapshot, let level = DifficultyLevel(serverValue: snapshot.difficulty) else { return fallback }
+        return .active(
+            seasonID: snapshot.seasonID,
+            difficulty: level,
+            nextGameNumber: min(12, max(1, snapshot.consumedGameNumber + 1))
+        )
+    }
+
     /// Flushes queued results, then tops the store up to at most
-    /// `maxPrefetched` assignments starting at the next game.
+    /// `maxPrefetched` assignments starting at the next game. Every exit
+    /// publishes the server-backed `sessionState`.
     func refresh() async {
-        guard !isRefreshing, let fetcher, let owner = currentUserID(), let context = seasonContext(),
-              (1...12).contains(context.nextGameNumber) else { return }
+        guard !isRefreshing else { return }
+        guard let fetcher else {
+            sessionState = .unavailable
+            return
+        }
+        guard let owner = currentUserID() else {
+            // Guests have no ranked season server-side.
+            sessionState = .noSeason
+            return
+        }
+        let context = seasonContext()
+        guard let context, (1...12).contains(context.nextGameNumber) else {
+            sessionState = Self.state(from: store.snapshot, fallback: .noSeason)
+            return
+        }
         isRefreshing = true
         defer { isRefreshing = false }
         await flushSubmissions()
@@ -198,11 +250,13 @@ final class RankedAssignmentService {
             let result = await fetcher.start(seasonID: seasonID, gameNumber: game, difficulty: context.difficulty.serverValue)
             switch result {
             case .assigned(let wire):
+                // The SERVER's difficulty is the ranked truth — a mismatch
+                // with the local season is adopted, never rejected.
                 guard let assignment = wire.assignment(owner: owner),
                       assignment.gameNumber == game,
-                      assignment.difficulty == context.difficulty.serverValue,
                       seasonID == nil || assignment.seasonID == seasonID else {
                     lastErrorCategory = "unexpected_response"
+                    sessionState = Self.state(from: store.snapshot, fallback: .unavailable)
                     persist()
                     return
                 }
@@ -221,18 +275,76 @@ final class RankedAssignmentService {
                     recordedServerGame = max(recordedServerGame, game)
                     continue
                 }
+                // The server says this ranked season is closed or unknown:
+                // stale local state must not pose as an active season.
+                if reason == "season_closed" || reason == "season_not_found" {
+                    store.clearSeason()
+                    clearSeasonID()
+                    sessionState = .noSeason
+                    persist()
+                    return
+                }
                 store.prune(owner: owner, seasonID: seasonID, minGameNumber: pruneFloor, now: now())
+                sessionState = Self.state(from: store.snapshot, fallback: .noSeason)
                 persist()
                 return
             case .retryable(let category):
                 lastErrorCategory = CompetitiveSubmissionQueue.safeCategory(category)
                 store.prune(owner: owner, seasonID: seasonID, minGameNumber: pruneFloor, now: now())
+                // Server unreachable: cached state must not pose as truth.
+                sessionState = Self.state(from: store.snapshot, fallback: .unavailable)
                 persist()
                 return
             }
         }
         if recordedServerGame > 0 { store.recordServerConsumption(gameNumber: recordedServerGame) }
         store.prune(owner: owner, seasonID: seasonID, minGameNumber: pruneFloor, now: now())
+        sessionState = Self.state(from: store.snapshot, fallback: .noSeason)
+        persist()
+    }
+
+    /// Assignment the server issued for a NOT-YET-created ranked season
+    /// (game 1, explicit difficulty), awaiting local season creation.
+    private var pendingCreation: RankedAssignment?
+
+    /// Server confirms a NEW ranked season at game 1 with ONLY the difficulty
+    /// the player explicitly picked. Returns true when the server issued the
+    /// game-1 assignment; the local season is created only after this.
+    func createRankedSeason(difficulty: DifficultyLevel) async -> Bool {
+        guard let fetcher, let owner = currentUserID() else {
+            lastErrorCategory = "ranked_start_unavailable"
+            return false
+        }
+        let result = await fetcher.start(seasonID: nil, gameNumber: 1, difficulty: difficulty.serverValue)
+        switch result {
+        case .assigned(let wire):
+            guard let assignment = wire.assignment(owner: owner),
+                  assignment.gameNumber == 1,
+                  assignment.difficulty == difficulty.serverValue else {
+                // Server refuses the requested difficulty — never substitute
+                // another one; the player chooses again.
+                lastErrorCategory = "ranked_start_difficulty_mismatch"
+                return false
+            }
+            pendingCreation = assignment
+            return true
+        case .rejected(let reason):
+            lastErrorCategory = CompetitiveSubmissionQueue.safeCategory(reason)
+            return false
+        case .retryable(let category):
+            lastErrorCategory = CompetitiveSubmissionQueue.safeCategory(category)
+            return false
+        }
+    }
+
+    /// After the local season exists (server already confirmed creation),
+    /// adopt the stashed game-1 assignment as ranked truth.
+    func adoptCreatedSeason(seasonNumber: Int) {
+        guard let assignment = pendingCreation else { return }
+        pendingCreation = nil
+        adoptSeasonID(assignment.seasonID, seasonNumber)
+        store.upsert(assignment)
+        sessionState = Self.state(from: store.snapshot, fallback: .noSeason)
         persist()
     }
 

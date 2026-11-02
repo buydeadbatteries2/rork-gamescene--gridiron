@@ -84,6 +84,9 @@ final class CompetitiveSubmissionService {
     private let submitter: (any CompetitiveResultSubmitting)?
     private let currentUserID: @MainActor () -> UUID?
     private let now: () -> Date
+    /// Server verified a match — ranked progress may advance (phase 14C:
+    /// wires the submission flush to the ranked assignment store).
+    private let onVerified: @MainActor (UUID) -> Void
 
     var isRepositoryConnected: Bool { submitter != nil }
 
@@ -99,7 +102,8 @@ final class CompetitiveSubmissionService {
             currentUserID: {
                 if case .authenticated(let profile) = AuthService.shared.state { return profile.authUserID }
                 return nil
-            }
+            },
+            onVerified: { RankedAssignmentService.shared.markVerified(matchID: $0) }
         )
     }
 
@@ -108,12 +112,14 @@ final class CompetitiveSubmissionService {
         defaults: UserDefaults,
         submitter: (any CompetitiveResultSubmitting)?,
         currentUserID: @escaping @MainActor () -> UUID?,
-        now: @escaping () -> Date = Date.init
+        now: @escaping () -> Date = Date.init,
+        onVerified: @escaping @MainActor (UUID) -> Void = { _ in }
     ) {
         self.defaults = defaults
         self.submitter = submitter
         self.currentUserID = currentUserID
         self.now = now
+        self.onVerified = onVerified
         var loaded = CompetitiveSubmissionStore.load(defaults: defaults)
         loaded.recoverInterruptedAttempts()
         queue = loaded
@@ -158,6 +164,7 @@ final class CompetitiveSubmissionService {
             persist()
             if case .verified = response {
                 LeaderboardCache.shared.invalidate()
+                onVerified(item.payload.matchID)
             }
             // Offline / throttled: stop this pass; backoff schedules the next.
             if case .retryable = response { break }
