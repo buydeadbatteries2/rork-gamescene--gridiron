@@ -51,3 +51,27 @@ HEAD
 } > "$EDGE_FIXTURE"
 
 echo "Regenerated $EDGE_FIXTURE from $EDGE and $START"
+
+# Phase 15A: the Versus Edge Functions are pinned the same way so the Swift
+# tests can assert their JWT-only / difficulty-only / no-score rules.
+FIND="supabase/functions/find-versus-match/index.ts"
+SUBMIT="supabase/functions/submit-versus-result/index.ts"
+VERSUS_FIXTURE="ios-gamescene-gridiron/GameSceneGridironTests/VersusEdgeFunctionFixture.swift"
+{
+  cat <<'HEAD'
+import Foundation
+
+/// Byte-identical snapshots of the Phase 15A Versus Edge Functions
+/// (`supabase/functions/find-versus-match/index.ts` and
+/// `supabase/functions/submit-versus-result/index.ts`).
+/// Regenerate with scripts/regenerate-schema-fixture.sh after editing them.
+enum VersusEdgeFunctionFixture {
+    static let findVersusMatch = #"""
+HEAD
+  cat "$FIND"
+  printf '"""#\n\n    static let submitVersusResult = #"""\n'
+  cat "$SUBMIT"
+  printf '"""#\n}\n'
+} > "$VERSUS_FIXTURE"
+
+echo "Regenerated $VERSUS_FIXTURE from $FIND and $SUBMIT"

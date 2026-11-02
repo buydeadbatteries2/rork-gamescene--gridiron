@@ -1708,6 +1708,1136 @@ revoke all on function public.search_public_profiles(text, int) from public, ano
 grant execute on function public.search_public_profiles(text, int) to authenticated;
 
 -- ===========================================================================
+-- 8. PHASE 15A — ASYNCHRONOUS 1-v-1 VERSUS (server-authoritative foundation)
+--
+--    Purely ADDITIVE: nothing in section 7 (Ranked) is written or changed.
+--    Versus has its own config row, tables, rate limits, career stats and
+--    functions. It only READS the shared competitive catalog and calls the
+--    immutable helpers ranked_solution_variant / ranked_tier_rank /
+--    ranked_json_int.
+--
+--    Trust model:
+--      * `find-versus-match` (Edge Function, user from the JWT, body =
+--        difficulty ONLY) calls versus_find_match. The SERVER pairs players:
+--        a client can never name an opponent, a match id or a case.
+--      * Matchmaking is serialized by two transaction advisory locks taken in
+--        a fixed order (per user, then per difficulty queue) plus a row lock
+--        (FOR UPDATE SKIP LOCKED) on the waiting match being claimed, and a
+--        partial unique index allows ONE waiting match per user. So two
+--        simultaneous searches of different users at the same difficulty
+--        pair with each other, a double tap / retry of the same user returns
+--        the same match (reused = true), and a waiting match is claimed by
+--        exactly one opponent.
+--      * The five cases, their versions and the EXACT expected solutions are
+--        SNAPSHOTTED when the match is created (private table
+--        versus_match_solutions). Both players get the same snapshot; later
+--        catalog edits never touch a live match.
+--      * `submit-versus-result` sends raw per-case facts only (no score, no
+--        user id, no summary). versus_record_result verifies membership,
+--        status, expiry, case ids/versions/order and every placement against
+--        the snapshot, computes the score from versus_config, records the
+--        result once per (match, user) and — under the match row lock —
+--        resolves the winner exactly once when both results exist.
+--      * Expiry is LAZY (no cron): every find / submit / read first resolves
+--        the relevant overdue matches deterministically under row locks.
+--      * No pay-to-win: purchasable hints are disabled in Versus
+--        (versus_config CHECK) and a result reporting hints is rejected.
+--        Self-reported hint / wrong-placement counts are never scored.
+--      * Clients never read Versus tables directly. They read their own
+--        matches / history and anyone's public record through SECURITY
+--        DEFINER RPCs that expose public profile columns only.
+--
+--    Case content (15A): the server_assigned pool is used when every band
+--    has eligible server-only cases. Until that content exists the server
+--    falls back to the bundled pool — TEMPORARY DEV FALLBACK, gated by
+--    versus_config.allow_bundled_fallback and recorded per match as
+--    content_source = 'bundled_dev_fallback'. Assignment stays
+--    server-owned either way; bundled solutions are not secret.
+-- ===========================================================================
+
+-- 8a. Versus configuration. Point values and multipliers start equal to
+--     Ranked but live in their own row so a Ranked rebalance never silently
+--     changes Versus (and vice versa).
+create table if not exists public.versus_config (
+    id                          int          primary key default 1 check (id = 1),
+    quarter_solved_points       int          not null default 10,
+    game_win_points             int          not null default 10,
+    overtime_win_points         int          not null default 5,
+    perfect_regulation_points   int          not null default 5,
+    rookie_multiplier           numeric(4,2) not null default 1.00,
+    pro_multiplier              numeric(4,2) not null default 1.25,
+    all_pro_multiplier          numeric(4,2) not null default 1.50,
+    hall_of_famer_multiplier    numeric(4,2) not null default 2.00,
+    match_ttl_hours             int          not null default 24,
+    -- TEMPORARY: bundled cases may back Versus until server-only content ships.
+    allow_bundled_fallback      boolean      not null default true,
+    purchasable_hints_allowed   boolean      not null default false,
+    min_versus_protocol         int          not null default 1,
+    finds_per_hour              int          not null default 30,
+    submissions_per_hour        int          not null default 30,
+    case_window_size            int          not null default 12,
+    updated_at                  timestamptz  not null default now()
+);
+
+insert into public.versus_config (id) values (1) on conflict (id) do nothing;
+
+alter table public.versus_config drop constraint if exists versus_config_bounds;
+alter table public.versus_config add constraint versus_config_bounds check (
+    quarter_solved_points >= 0 and game_win_points >= 0 and overtime_win_points >= 0
+    and perfect_regulation_points >= 0
+    and rookie_multiplier > 0 and pro_multiplier > 0 and all_pro_multiplier > 0 and hall_of_famer_multiplier > 0
+    and match_ttl_hours between 1 and 720
+    and min_versus_protocol >= 1 and finds_per_hour >= 1 and submissions_per_hour >= 1
+    and case_window_size between 1 and 200
+);
+alter table public.versus_config drop constraint if exists versus_config_no_purchased_advantage;
+alter table public.versus_config add constraint versus_config_no_purchased_advantage
+    check (purchasable_hints_allowed = false);
+
+alter table public.versus_config enable row level security;
+revoke all on public.versus_config from public;
+revoke all on public.versus_config from anon, authenticated;
+
+-- 8b. Matches. player_a created the match (waiting_for_opponent); player_b
+--     is assigned by the server when it claims the match (active).
+create table if not exists public.versus_matches (
+    match_id             uuid        primary key default gen_random_uuid(),
+    player_a_id          uuid        not null references public.profiles (id) on delete cascade,
+    player_b_id          uuid        references public.profiles (id) on delete cascade,
+    status               text        not null default 'waiting_for_opponent'
+                                     check (status in ('waiting_for_opponent', 'active', 'completed', 'expired', 'cancelled')),
+    difficulty           text        not null check (difficulty in ('rookie', 'pro', 'all_pro', 'hall_of_famer')),
+    solution_variant     text        not null check (solution_variant in ('rookie', 'pro_early', 'pro', 'all_pro', 'hall_of_famer')),
+    content_source       text        not null check (content_source in ('server_assigned', 'bundled_dev_fallback')),
+    case_ids             text[]      not null check (cardinality(case_ids) = 5),
+    case_versions        int[]       not null check (cardinality(case_versions) = 5),
+    catalog_fingerprint  text        not null,
+    created_at           timestamptz not null default now(),
+    matched_at           timestamptz,
+    expires_at           timestamptz not null,
+    completed_at         timestamptz,
+    winner_user_id       uuid        references public.profiles (id) on delete set null,
+    is_tie               boolean     not null default false,
+    is_forfeit           boolean     not null default false,
+    resolution           text        check (resolution in ('score', 'cases_solved', 'regulation_quarters', 'tie',
+                                                           'forfeit', 'expired_unplayed', 'expired_no_opponent', 'cancelled')),
+    constraint versus_matches_no_self_match check (player_b_id is null or player_b_id <> player_a_id),
+    constraint versus_matches_opponent_state check (
+        (status = 'waiting_for_opponent' and player_b_id is null)
+        or (status in ('active', 'completed') and player_b_id is not null)
+        or status in ('expired', 'cancelled')
+    ),
+    constraint versus_matches_closed_state check ((status in ('waiting_for_opponent', 'active')) = (completed_at is null)),
+    constraint versus_matches_winner_state check (
+        (winner_user_id is null or (status = 'completed' and winner_user_id in (player_a_id, player_b_id)))
+        and not (is_tie and winner_user_id is not null)
+        and (status <> 'completed' or is_tie <> (winner_user_id is not null))
+        and (not is_forfeit or (status = 'completed' and winner_user_id is not null))
+    ),
+    constraint versus_matches_expiry_check check (expires_at > created_at)
+);
+-- ONE waiting match per user (double tap / retry cannot open a second one).
+create unique index if not exists versus_matches_one_waiting_per_user
+    on public.versus_matches (player_a_id) where status = 'waiting_for_opponent';
+create index if not exists versus_matches_queue_idx
+    on public.versus_matches (difficulty, created_at) where status = 'waiting_for_opponent';
+create index if not exists versus_matches_player_a_idx on public.versus_matches (player_a_id, status);
+create index if not exists versus_matches_player_b_idx on public.versus_matches (player_b_id, status);
+create index if not exists versus_matches_due_idx
+    on public.versus_matches (expires_at) where status in ('waiting_for_opponent', 'active');
+
+alter table public.versus_matches enable row level security;
+alter table public.versus_matches force row level security;
+revoke all on public.versus_matches from public;
+revoke all on public.versus_matches from anon, authenticated;
+
+-- 8c. PRIVATE solution snapshot (service role only; never returned).
+create table if not exists public.versus_match_solutions (
+    match_id            uuid  primary key references public.versus_matches (match_id) on delete cascade,
+    expected_solutions  jsonb not null check (jsonb_typeof(expected_solutions) = 'array'
+                                              and jsonb_array_length(expected_solutions) = 5)
+);
+
+alter table public.versus_match_solutions enable row level security;
+alter table public.versus_match_solutions force row level security;
+revoke all on public.versus_match_solutions from public;
+revoke all on public.versus_match_solutions from anon, authenticated;
+
+-- 8d. Verified results — server-derived facts only, one per (match, user).
+--     client_started_at / client_completed_at are self-reported claims kept
+--     for diagnostics; they never decide anything.
+create table if not exists public.versus_match_results (
+    result_id                   uuid         primary key default gen_random_uuid(),
+    match_id                    uuid         not null references public.versus_matches (match_id) on delete cascade,
+    user_id                     uuid         not null references public.profiles (id) on delete cascade,
+    regulation_quarters_solved  int          not null check (regulation_quarters_solved between 0 and 4),
+    overtime_played             boolean      not null,
+    overtime_won                boolean      not null,
+    cases_solved                int          not null check (cases_solved between 0 and 5),
+    game_won                    boolean      not null,
+    base_score                  int          not null check (base_score >= 0),
+    difficulty_multiplier       numeric(4,2) not null check (difficulty_multiplier > 0),
+    final_score                 int          not null check (final_score >= 0),
+    case_results                jsonb        not null,
+    server_elapsed_seconds      int          not null check (server_elapsed_seconds >= 0),
+    client_started_at           timestamptz,
+    client_completed_at         timestamptz,
+    game_version                text         not null,
+    versus_protocol             int          not null,
+    received_at                 timestamptz  not null default now(),
+    constraint versus_match_results_once unique (match_id, user_id),
+    constraint versus_match_results_overtime_check check (overtime_played or not overtime_won)
+);
+
+alter table public.versus_match_results enable row level security;
+alter table public.versus_match_results force row level security;
+revoke all on public.versus_match_results from public;
+revoke all on public.versus_match_results from anon, authenticated;
+
+-- 8e. Versus career stats (server-only writer; public via versus_public_record).
+create table if not exists public.versus_career_stats (
+    user_id                 uuid        primary key references public.profiles (id) on delete cascade,
+    versus_games_played     int         not null default 0 check (versus_games_played >= 0),
+    versus_wins             int         not null default 0 check (versus_wins >= 0),
+    versus_losses           int         not null default 0 check (versus_losses >= 0),
+    versus_ties             int         not null default 0 check (versus_ties >= 0),
+    versus_forfeit_wins     int         not null default 0 check (versus_forfeit_wins >= 0),
+    versus_forfeit_losses   int         not null default 0 check (versus_forfeit_losses >= 0),
+    updated_at              timestamptz not null default now(),
+    constraint versus_career_stats_sum check (versus_wins + versus_losses + versus_ties = versus_games_played)
+);
+
+alter table public.versus_career_stats enable row level security;
+alter table public.versus_career_stats force row level security;
+revoke all on public.versus_career_stats from public;
+revoke all on public.versus_career_stats from anon, authenticated;
+
+-- 8f. Atomic Versus rate limits (own table; Ranked buckets untouched).
+create table if not exists public.versus_rate_limits (
+    user_id       uuid        not null,
+    bucket        text        not null check (bucket in ('find', 'submit')),
+    window_start  timestamptz not null,
+    count         int         not null check (count >= 0),
+    primary key (user_id, bucket, window_start)
+);
+
+alter table public.versus_rate_limits enable row level security;
+revoke all on public.versus_rate_limits from public;
+revoke all on public.versus_rate_limits from anon, authenticated;
+
+create or replace function public.consume_versus_rate_limit(p_user_id uuid, p_bucket text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    v_limit   int;
+    v_window  timestamptz := date_trunc('hour', now());
+    v_count   int;
+begin
+    if p_user_id is null then
+        raise exception 'INVALID_ARGUMENTS';
+    end if;
+    select case p_bucket when 'find' then c.finds_per_hour
+                         when 'submit' then c.submissions_per_hour end
+      into v_limit
+      from public.versus_config c where c.id = 1;
+    if v_limit is null then
+        raise exception 'INVALID_RATE_LIMIT_BUCKET';
+    end if;
+    delete from public.versus_rate_limits l
+    where l.user_id = p_user_id and l.window_start < now() - interval '2 days';
+    insert into public.versus_rate_limits as l (user_id, bucket, window_start, count)
+    values (p_user_id, p_bucket, v_window, 1)
+    on conflict (user_id, bucket, window_start)
+        do update set count = l.count + 1 where l.count < v_limit
+    returning l.count into v_count;
+    return v_count is not null;
+end;
+$$;
+
+revoke all on function public.consume_versus_rate_limit(uuid, text) from public, anon, authenticated;
+grant execute on function public.consume_versus_rate_limit(uuid, text) to service_role;
+
+-- 8g. Internal: career stats bump (one row per user, created on first game).
+create or replace function public.versus_bump_stats(
+    p_user_id uuid, p_win int, p_loss int, p_tie int, p_forfeit_win int, p_forfeit_loss int
+)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+    insert into public.versus_career_stats as s (
+        user_id, versus_games_played, versus_wins, versus_losses, versus_ties,
+        versus_forfeit_wins, versus_forfeit_losses
+    ) values (p_user_id, 1, p_win, p_loss, p_tie, p_forfeit_win, p_forfeit_loss)
+    on conflict (user_id) do update set
+        versus_games_played   = s.versus_games_played + 1,
+        versus_wins           = s.versus_wins + p_win,
+        versus_losses         = s.versus_losses + p_loss,
+        versus_ties           = s.versus_ties + p_tie,
+        versus_forfeit_wins   = s.versus_forfeit_wins + p_forfeit_win,
+        versus_forfeit_losses = s.versus_forfeit_losses + p_forfeit_loss,
+        updated_at            = now();
+$$;
+
+revoke all on function public.versus_bump_stats(uuid, int, int, int, int, int) from public, anon, authenticated;
+
+-- 8h. Internal: RESOLUTION. The caller MUST hold the match row lock
+--     (SELECT … FOR UPDATE). Idempotent: a closed match is left untouched,
+--     so a match is resolved — and career stats move — exactly once.
+--
+--     Both results present (active) → winner by, in order:
+--       1. higher server final_score                 (resolution 'score')
+--       2. more cases solved (regulation + overtime) ('cases_solved')
+--       3. more regulation quarters solved           ('regulation_quarters')
+--       4. otherwise a TIE                           ('tie')
+--     Elapsed time is NOT a tiebreaker in 15A: the only play-time numbers
+--     are client-reported (untrusted), and the server-measured interval
+--     (assignment → receipt) includes idle/queue time, so it is stored as
+--     server_elapsed_seconds for diagnostics only.
+--
+--     Overdue (expires_at <= now()):
+--       * waiting, no opponent ever joined → 'expired' (no record impact,
+--         even if the creator submitted),
+--       * active, exactly one result → 'completed' FORFEIT win for the
+--         finisher (wins + forfeit_wins / losses + forfeit_losses),
+--       * active, no result → 'expired' (no record impact).
+create or replace function public.versus_resolve_locked(p_match_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    v_m       public.versus_matches%rowtype;
+    v_ra      public.versus_match_results%rowtype;
+    v_rb      public.versus_match_results%rowtype;
+    v_has_a   boolean;
+    v_has_b   boolean;
+    v_winner  uuid;
+    v_loser   uuid;
+    v_res     text;
+begin
+    select * into v_m from public.versus_matches m where m.match_id = p_match_id;
+    if not found or v_m.status not in ('waiting_for_opponent', 'active') then
+        return;
+    end if;
+    select * into v_ra from public.versus_match_results r where r.match_id = p_match_id and r.user_id = v_m.player_a_id;
+    v_has_a := found;
+    if v_m.player_b_id is not null then
+        select * into v_rb from public.versus_match_results r where r.match_id = p_match_id and r.user_id = v_m.player_b_id;
+        v_has_b := found;
+    else
+        v_has_b := false;
+    end if;
+
+    if v_m.status = 'active' and v_has_a and v_has_b then
+        if v_ra.final_score <> v_rb.final_score then
+            v_res := 'score';
+            v_winner := case when v_ra.final_score > v_rb.final_score then v_m.player_a_id else v_m.player_b_id end;
+        elsif v_ra.cases_solved <> v_rb.cases_solved then
+            v_res := 'cases_solved';
+            v_winner := case when v_ra.cases_solved > v_rb.cases_solved then v_m.player_a_id else v_m.player_b_id end;
+        elsif v_ra.regulation_quarters_solved <> v_rb.regulation_quarters_solved then
+            v_res := 'regulation_quarters';
+            v_winner := case when v_ra.regulation_quarters_solved > v_rb.regulation_quarters_solved
+                             then v_m.player_a_id else v_m.player_b_id end;
+        else
+            v_res := 'tie';
+            v_winner := null;
+        end if;
+        update public.versus_matches m set
+            status = 'completed', completed_at = now(), winner_user_id = v_winner,
+            is_tie = (v_winner is null), is_forfeit = false, resolution = v_res
+        where m.match_id = p_match_id;
+        if v_winner is null then
+            perform public.versus_bump_stats(v_m.player_a_id, 0, 0, 1, 0, 0);
+            perform public.versus_bump_stats(v_m.player_b_id, 0, 0, 1, 0, 0);
+        else
+            v_loser := case when v_winner = v_m.player_a_id then v_m.player_b_id else v_m.player_a_id end;
+            perform public.versus_bump_stats(v_winner, 1, 0, 0, 0, 0);
+            perform public.versus_bump_stats(v_loser, 0, 1, 0, 0, 0);
+        end if;
+        return;
+    end if;
+
+    if v_m.expires_at > now() then
+        return;
+    end if;
+
+    if v_m.status = 'waiting_for_opponent' then
+        update public.versus_matches m set status = 'expired', completed_at = now(), resolution = 'expired_no_opponent'
+        where m.match_id = p_match_id;
+    elsif v_has_a <> v_has_b then
+        v_winner := case when v_has_a then v_m.player_a_id else v_m.player_b_id end;
+        v_loser := case when v_has_a then v_m.player_b_id else v_m.player_a_id end;
+        update public.versus_matches m set
+            status = 'completed', completed_at = now(), winner_user_id = v_winner,
+            is_tie = false, is_forfeit = true, resolution = 'forfeit'
+        where m.match_id = p_match_id;
+        perform public.versus_bump_stats(v_winner, 1, 0, 0, 1, 0);
+        perform public.versus_bump_stats(v_loser, 0, 1, 0, 0, 1);
+    else
+        update public.versus_matches m set status = 'expired', completed_at = now(), resolution = 'expired_unplayed'
+        where m.match_id = p_match_id;
+    end if;
+end;
+$$;
+
+revoke all on function public.versus_resolve_locked(uuid) from public, anon, authenticated;
+
+-- 8i. Internal: LAZY expiry. Resolves every overdue open match of one user
+--     (or of everyone when p_user_id is null — for an operator). Rows
+--     locked by a concurrent resolver are skipped: that transaction is
+--     already resolving them.
+create or replace function public.versus_expire_due(p_user_id uuid)
+returns int
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    v_id  uuid;
+    v_n   int := 0;
+begin
+    for v_id in
+        select m.match_id from public.versus_matches m
+        where m.status in ('waiting_for_opponent', 'active')
+          and m.expires_at <= now()
+          and (p_user_id is null or m.player_a_id = p_user_id or m.player_b_id = p_user_id)
+        order by m.match_id
+        for update skip locked
+    loop
+        perform public.versus_resolve_locked(v_id);
+        v_n := v_n + 1;
+    end loop;
+    return v_n;
+end;
+$$;
+
+revoke all on function public.versus_expire_due(uuid) from public, anon, authenticated;
+grant execute on function public.versus_expire_due(uuid) to service_role;
+
+-- 8j. Internal: the per-player view of matches. Opponent identity comes from
+--     public_profiles (username + football display name — never real names
+--     or email). The opponent's score / cases are revealed ONLY once the
+--     match is completed; before that the caller learns only whether the
+--     opponent has submitted. player_state:
+--       waiting_for_opponent — no opponent yet, caller has not submitted
+--       submitted            — no opponent yet, caller already submitted
+--       active               — opponent joined, caller has not submitted
+--       opponent_pending     — caller submitted, opponent has not
+--       completed / expired / cancelled — closed.
+create or replace function public.versus_player_rows(p_user_id uuid)
+returns table (
+    match_id               uuid,
+    status                 text,
+    player_state           text,
+    role                   text,
+    difficulty             text,
+    case_ids               text[],
+    case_versions          int[],
+    catalog_fingerprint    text,
+    content_source         text,
+    created_at             timestamptz,
+    matched_at             timestamptz,
+    expires_at             timestamptz,
+    completed_at           timestamptz,
+    opponent_user_id       uuid,
+    opponent_username      text,
+    opponent_display_name  text,
+    my_submitted           boolean,
+    my_final_score         int,
+    my_cases_solved        int,
+    opponent_submitted     boolean,
+    opponent_final_score   int,
+    opponent_cases_solved  int,
+    outcome                text,
+    is_forfeit             boolean,
+    resolution             text
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select
+        m.match_id,
+        m.status,
+        case
+            when m.status in ('completed', 'expired', 'cancelled') then m.status
+            when m.player_b_id is null and mine.result_id is null then 'waiting_for_opponent'
+            when m.player_b_id is null then 'submitted'
+            when mine.result_id is null then 'active'
+            else 'opponent_pending'
+        end,
+        case when m.player_a_id = p_user_id then 'player_a' else 'player_b' end,
+        m.difficulty, m.case_ids, m.case_versions, m.catalog_fingerprint, m.content_source,
+        m.created_at, m.matched_at, m.expires_at, m.completed_at,
+        opp.id, opp.username, opp.football_display_name,
+        mine.result_id is not null, mine.final_score, mine.cases_solved,
+        theirs.result_id is not null,
+        case when m.status = 'completed' then theirs.final_score end,
+        case when m.status = 'completed' then theirs.cases_solved end,
+        case
+            when m.status <> 'completed' then null
+            when m.is_tie then 'tie'
+            when m.winner_user_id = p_user_id then 'win'
+            else 'loss'
+        end,
+        m.is_forfeit,
+        m.resolution
+    from public.versus_matches m
+    left join public.versus_match_results mine
+        on mine.match_id = m.match_id and mine.user_id = p_user_id
+    left join public.versus_match_results theirs
+        on theirs.match_id = m.match_id and theirs.user_id <> p_user_id
+    left join public.public_profiles opp
+        on opp.id = (case when m.player_a_id = p_user_id then m.player_b_id else m.player_a_id end)
+    where p_user_id is not null
+      and (m.player_a_id = p_user_id or m.player_b_id = p_user_id);
+$$;
+
+revoke all on function public.versus_player_rows(uuid) from public, anon, authenticated;
+grant execute on function public.versus_player_rows(uuid) to service_role;
+
+-- 8k. MATCHMAKING — called by find-versus-match (service_role) with the JWT
+--     user and a difficulty. Steps (one transaction):
+--       1. per-user advisory lock; lazily resolve the user's overdue matches,
+--       2. an open match the user has NOT submitted yet: same difficulty →
+--          returned again (reused = true; retry-after-timeout safe); a
+--          waiting one at another difficulty → cancelled (no opponent, no
+--          record impact); an active one at another difficulty →
+--          VERSUS_MATCH_IN_PROGRESS,
+--       3. per-difficulty queue advisory lock; claim the OLDEST waiting match
+--          of that difficulty created by SOMEONE ELSE (never self) whose
+--          creator has no other active match against this user (no
+--          duplicate pairing), FOR UPDATE SKIP LOCKED; the claim resets the
+--          expiry so the joiner gets the full window,
+--       4. otherwise create a waiting match with a fresh case snapshot (one
+--          waiting match per user; a user whose waiting match is already
+--          submitted gets VERSUS_ALREADY_WAITING).
+--
+--     Case snapshot: bands 1–4 = regulation quarters, band 5 = overtime.
+--     Pool = active, competitive cases of the chosen distribution; All-Pro /
+--     Hall of Famer exclude rookie-TIER cases. Ordered by calibrated
+--     difficulty_score, the mode takes a window of case_window_size cases at
+--     floor(mode_index * (n - w) / 3) (rookie easiest … HoF hardest) and a
+--     server-random case inside it. Variant = the mode's full adaptation
+--     (ranked_solution_variant(mode, 12): Pro → 'pro', never 'pro_early').
+create or replace function public.versus_find_match(p_user_id uuid, p_difficulty text)
+returns table (
+    match_id               uuid,
+    status                 text,
+    player_state           text,
+    role                   text,
+    difficulty             text,
+    case_ids               text[],
+    case_versions          int[],
+    catalog_fingerprint    text,
+    content_source         text,
+    created_at             timestamptz,
+    matched_at             timestamptz,
+    expires_at             timestamptz,
+    completed_at           timestamptz,
+    opponent_user_id       uuid,
+    opponent_username      text,
+    opponent_display_name  text,
+    my_submitted           boolean,
+    my_final_score         int,
+    my_cases_solved        int,
+    opponent_submitted     boolean,
+    opponent_final_score   int,
+    opponent_cases_solved  int,
+    outcome                text,
+    is_forfeit             boolean,
+    resolution             text,
+    reused                 boolean
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+#variable_conflict use_column
+declare
+    cfg          public.versus_config%rowtype;
+    v_m          public.versus_matches%rowtype;
+    v_found      boolean;
+    v_dist       text;
+    v_source     text;
+    v_fp         text;
+    v_variant    text;
+    v_mode       int;
+    v_floor      int;
+    v_band       int;
+    v_n          int;
+    v_w          int;
+    v_pick       int;
+    v_ok         boolean;
+    v_cid        text;
+    v_ver        int;
+    v_sol        jsonb;
+    v_ids        text[] := '{}';
+    v_versions   int[] := '{}';
+    v_solutions  jsonb := '[]'::jsonb;
+    v_id         uuid;
+begin
+    if p_user_id is null or p_difficulty is null then
+        raise exception 'INVALID_ARGUMENTS';
+    end if;
+    if p_difficulty not in ('rookie', 'pro', 'all_pro', 'hall_of_famer') then
+        raise exception 'INVALID_DIFFICULTY';
+    end if;
+    select * into cfg from public.versus_config c where c.id = 1;
+    if not found then
+        raise exception 'VERSUS_CONFIG_MISSING';
+    end if;
+    if not exists (select 1 from public.profiles p where p.id = p_user_id) then
+        raise exception 'PROFILE_REQUIRED';
+    end if;
+
+    -- 1. Serialize this user's matchmaking; resolve overdue matches first.
+    perform pg_advisory_xact_lock(hashtextextended('versus:user:' || p_user_id::text, 0));
+    perform public.versus_expire_due(p_user_id);
+
+    -- 2. An open match the user still has to play.
+    select m.* into v_m from public.versus_matches m
+    where (m.player_a_id = p_user_id or m.player_b_id = p_user_id)
+      and m.status in ('waiting_for_opponent', 'active')
+      and not exists (
+          select 1 from public.versus_match_results r
+          where r.match_id = m.match_id and r.user_id = p_user_id)
+    order by m.created_at desc
+    limit 1
+    for update;
+    if found then
+        if v_m.difficulty = p_difficulty then
+            return query select v.*, true from public.versus_player_rows(p_user_id) v where v.match_id = v_m.match_id;
+            return;
+        end if;
+        if v_m.status = 'waiting_for_opponent' then
+            update public.versus_matches m
+            set status = 'cancelled', completed_at = now(), resolution = 'cancelled'
+            where m.match_id = v_m.match_id;
+        else
+            raise exception 'VERSUS_MATCH_IN_PROGRESS';
+        end if;
+    end if;
+
+    -- 3. Claim the oldest compatible waiting match of this difficulty.
+    perform pg_advisory_xact_lock(hashtextextended('versus:queue:' || p_difficulty, 0));
+    select m.* into v_m from public.versus_matches m
+    where m.status = 'waiting_for_opponent'
+      and m.difficulty = p_difficulty
+      and m.player_a_id <> p_user_id
+      and m.expires_at > now()
+      and not exists (
+          select 1 from public.versus_matches x
+          where x.status = 'active'
+            and ((x.player_a_id = m.player_a_id and x.player_b_id = p_user_id)
+              or (x.player_a_id = p_user_id and x.player_b_id = m.player_a_id)))
+    order by m.created_at asc, m.match_id asc
+    limit 1
+    for update skip locked;
+    v_found := found;
+    if v_found then
+        update public.versus_matches m set
+            player_b_id = p_user_id,
+            status = 'active',
+            matched_at = now(),
+            expires_at = now() + make_interval(hours => cfg.match_ttl_hours)
+        where m.match_id = v_m.match_id;
+        return query select v.*, false from public.versus_player_rows(p_user_id) v where v.match_id = v_m.match_id;
+        return;
+    end if;
+
+    -- 4. Nothing to join: open a waiting match with a fresh snapshot.
+    if exists (
+        select 1 from public.versus_matches m
+        where m.player_a_id = p_user_id and m.status = 'waiting_for_opponent'
+    ) then
+        raise exception 'VERSUS_ALREADY_WAITING';
+    end if;
+
+    v_variant := public.ranked_solution_variant(p_difficulty, 12);
+    v_mode := public.ranked_tier_rank(p_difficulty);
+    v_floor := case when p_difficulty in ('all_pro', 'hall_of_famer') then 1 else 0 end;
+
+    -- Prefer server-only content; bundled is the TEMPORARY dev fallback.
+    foreach v_dist in array array['server_assigned', 'client_bundled'] loop
+        if v_dist = 'client_bundled' and not cfg.allow_bundled_fallback then
+            exit;
+        end if;
+        select m.catalog_fingerprint into v_fp
+        from public.competitive_catalog_meta m where m.distribution = v_dist;
+        v_ok := v_fp is not null;
+        if v_ok then
+            for v_band in 1 .. 5 loop
+                if not exists (
+                    select 1 from public.competitive_cases c
+                    where c.band = v_band and c.active and c.competitive_eligible
+                      and c.distribution = v_dist
+                      and public.ranked_tier_rank(c.difficulty) >= v_floor
+                      and jsonb_typeof(c.solutions -> v_variant) = 'array'
+                      and jsonb_array_length(c.solutions -> v_variant) > 0
+                ) then
+                    v_ok := false;
+                end if;
+            end loop;
+        end if;
+        if v_ok then
+            v_source := v_dist;
+            exit;
+        end if;
+        v_fp := null;
+    end loop;
+    if v_source is null then
+        raise exception 'VERSUS_CATALOG_UNAVAILABLE';
+    end if;
+
+    for v_band in 1 .. 5 loop
+        select count(*) into v_n
+        from public.competitive_cases c
+        where c.band = v_band and c.active and c.competitive_eligible
+          and c.distribution = v_source
+          and public.ranked_tier_rank(c.difficulty) >= v_floor
+          and jsonb_typeof(c.solutions -> v_variant) = 'array'
+          and jsonb_array_length(c.solutions -> v_variant) > 0;
+        v_w := least(cfg.case_window_size, v_n);
+        -- Pick the index ONCE (random() inside WHERE is re-evaluated per row).
+        v_pick := floor(v_mode * (v_n - v_w) / 3.0)::int + floor(random() * v_w)::int;
+        select o.case_id, o.case_version, o.solutions -> v_variant
+          into v_cid, v_ver, v_sol
+        from (
+            select c.case_id, c.case_version, c.solutions,
+                   row_number() over (order by c.difficulty_score, c.case_id collate "C") - 1 as idx
+            from public.competitive_cases c
+            where c.band = v_band and c.active and c.competitive_eligible
+              and c.distribution = v_source
+              and public.ranked_tier_rank(c.difficulty) >= v_floor
+              and jsonb_typeof(c.solutions -> v_variant) = 'array'
+              and jsonb_array_length(c.solutions -> v_variant) > 0
+        ) o
+        where o.idx = v_pick;
+        if v_cid is null or v_sol is null then
+            raise exception 'VERSUS_CATALOG_UNAVAILABLE';
+        end if;
+        v_ids := v_ids || v_cid;
+        v_versions := v_versions || v_ver;
+        v_solutions := v_solutions || jsonb_build_array(v_sol);
+        v_cid := null;
+        v_sol := null;
+    end loop;
+
+    insert into public.versus_matches (
+        player_a_id, difficulty, solution_variant, content_source,
+        case_ids, case_versions, catalog_fingerprint, expires_at
+    ) values (
+        p_user_id, p_difficulty, v_variant,
+        case when v_source = 'server_assigned' then 'server_assigned' else 'bundled_dev_fallback' end,
+        v_ids, v_versions, v_fp, now() + make_interval(hours => cfg.match_ttl_hours)
+    )
+    returning match_id into v_id;
+    insert into public.versus_match_solutions (match_id, expected_solutions) values (v_id, v_solutions);
+
+    return query select v.*, false from public.versus_player_rows(p_user_id) v where v.match_id = v_id;
+end;
+$$;
+
+revoke all on function public.versus_find_match(uuid, text) from public, anon, authenticated;
+grant execute on function public.versus_find_match(uuid, text) to service_role;
+
+-- 8l. THE ONLY WRITER of Versus results (service_role, via
+--     submit-versus-result). Steps:
+--       1. existing (match, user) result → returned again (duplicate),
+--       2. lock the match row; the caller must be player A or B,
+--       3. overdue → resolved NOW under the lock (forfeit / expiry) and
+--          outcome 'expired' is returned (a late result never counts, and
+--          the expiry commits deterministically),
+--       4. closed match → VERSUS_MATCH_CLOSED; protocol / version checks,
+--       5. every case result against the SNAPSHOT: ids, versions, quarter
+--          order, placements ⊂ exact solution, distinct players / slots,
+--          solved = complete, failed = incomplete, overtime iff 2–2,
+--          hints_used must be 0 (no purchased advantage),
+--       6. score from versus_config (server-derived facts only),
+--       7. insert, then versus_resolve_locked — a winner is decided exactly
+--          once, by whichever submission completes the pair.
+create or replace function public.versus_record_result(
+    p_user_id          uuid,
+    p_match_id         uuid,
+    p_case_results     jsonb,
+    p_started_at       timestamptz,
+    p_completed_at     timestamptz,
+    p_game_version     text,
+    p_versus_protocol  int
+)
+returns table (
+    outcome                text,
+    result_id              uuid,
+    final_score            int,
+    cases_solved           int,
+    match_status           text,
+    player_state           text,
+    match_outcome          text,
+    opponent_final_score   int
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+#variable_conflict use_column
+declare
+    cfg            public.versus_config%rowtype;
+    v_m            public.versus_matches%rowtype;
+    v_existing     public.versus_match_results%rowtype;
+    v_expected_all jsonb;
+    v_version      text := btrim(coalesce(p_game_version, ''));
+    v_n            int;
+    v_i            int;
+    v_cr           jsonb;
+    v_pl           jsonb;
+    v_expected     jsonb;
+    v_players      text[];
+    v_slots        text[];
+    v_outcome      text;
+    v_solved       int := 0;
+    v_ot_played    boolean;
+    v_ot_won       boolean := false;
+    v_won          boolean;
+    v_hints        int := 0;
+    v_base         int;
+    v_mult         numeric(4,2);
+    v_final        int;
+    v_id           uuid;
+    v_issued       timestamptz;
+begin
+    if p_user_id is null or p_match_id is null then
+        raise exception 'INVALID_ARGUMENTS';
+    end if;
+    select * into cfg from public.versus_config c where c.id = 1;
+    if not found then
+        raise exception 'VERSUS_CONFIG_MISSING';
+    end if;
+
+    -- 1. Idempotent retry (fast path).
+    select * into v_existing from public.versus_match_results r
+    where r.match_id = p_match_id and r.user_id = p_user_id;
+    if found then
+        return query select 'duplicate'::text, v_existing.result_id, v_existing.final_score, v_existing.cases_solved,
+                            v.status, v.player_state, v.outcome, v.opponent_final_score
+                     from public.versus_player_rows(p_user_id) v where v.match_id = p_match_id;
+        return;
+    end if;
+
+    -- 2. Lock + membership.
+    select * into v_m from public.versus_matches m where m.match_id = p_match_id for update;
+    if not found then
+        raise exception 'VERSUS_MATCH_NOT_FOUND';
+    end if;
+    if v_m.player_a_id <> p_user_id and v_m.player_b_id is distinct from p_user_id then
+        raise exception 'VERSUS_NOT_A_MEMBER';
+    end if;
+    select * into v_existing from public.versus_match_results r
+    where r.match_id = p_match_id and r.user_id = p_user_id;
+    if found then
+        return query select 'duplicate'::text, v_existing.result_id, v_existing.final_score, v_existing.cases_solved,
+                            v.status, v.player_state, v.outcome, v.opponent_final_score
+                     from public.versus_player_rows(p_user_id) v where v.match_id = p_match_id;
+        return;
+    end if;
+
+    -- 3. Lazy expiry under the lock: the late result never counts.
+    if v_m.status in ('waiting_for_opponent', 'active') and v_m.expires_at <= now() then
+        perform public.versus_resolve_locked(p_match_id);
+        return query select 'expired'::text, null::uuid, null::int, null::int,
+                            v.status, v.player_state, v.outcome, v.opponent_final_score
+                     from public.versus_player_rows(p_user_id) v where v.match_id = p_match_id;
+        return;
+    end if;
+
+    -- 4. Status, protocol, version.
+    if v_m.status not in ('waiting_for_opponent', 'active') then
+        raise exception 'VERSUS_MATCH_CLOSED';
+    end if;
+    if p_versus_protocol is null or p_versus_protocol < cfg.min_versus_protocol then
+        raise exception 'CLIENT_OUTDATED';
+    end if;
+    if char_length(v_version) < 1 or char_length(v_version) > 40 then
+        raise exception 'INVALID_GAME_VERSION';
+    end if;
+    select s.expected_solutions into v_expected_all
+    from public.versus_match_solutions s where s.match_id = p_match_id;
+    if v_expected_all is null then
+        raise exception 'VERSUS_SNAPSHOT_MISSING';
+    end if;
+
+    -- 5. Case results against the snapshot.
+    if p_case_results is null or jsonb_typeof(p_case_results) <> 'array' then
+        raise exception 'INVALID_CASE_RESULTS';
+    end if;
+    v_n := jsonb_array_length(p_case_results);
+    if v_n not in (4, 5) then
+        raise exception 'INVALID_CASE_RESULTS';
+    end if;
+    for v_i in 0 .. v_n - 1 loop
+        v_cr := p_case_results -> v_i;
+        if jsonb_typeof(v_cr) <> 'object' then
+            raise exception 'INVALID_CASE_RESULTS';
+        end if;
+        if (v_cr ->> 'case_id') is distinct from v_m.case_ids[v_i + 1] then
+            raise exception 'CASE_MISMATCH';
+        end if;
+        if (v_cr -> 'case_version') is distinct from to_jsonb(v_m.case_versions[v_i + 1]) then
+            raise exception 'CASE_VERSION_MISMATCH';
+        end if;
+        if (v_cr -> 'quarter_index') is distinct from to_jsonb(v_i) then
+            raise exception 'INVALID_CASE_RESULTS';
+        end if;
+        v_outcome := v_cr ->> 'outcome';
+        if v_outcome is null or v_outcome not in ('solved', 'failed') then
+            raise exception 'INVALID_CASE_RESULTS';
+        end if;
+        v_hints := v_hints + public.ranked_json_int(v_cr -> 'hints_used', 0, 100);
+        perform public.ranked_json_int(v_cr -> 'wrong_placements', 0, 100);
+        if jsonb_typeof(v_cr -> 'placements') is distinct from 'array'
+           or jsonb_array_length(v_cr -> 'placements') > 8 then
+            raise exception 'INVALID_CASE_RESULTS';
+        end if;
+        v_expected := v_expected_all -> v_i;
+        v_players := '{}';
+        v_slots := '{}';
+        for v_pl in select e.value from jsonb_array_elements(v_cr -> 'placements') e loop
+            if jsonb_typeof(v_pl) <> 'object'
+               or jsonb_typeof(v_pl -> 'player_key') is distinct from 'string'
+               or jsonb_typeof(v_pl -> 'slot_key') is distinct from 'string'
+               or jsonb_typeof(v_pl -> 'profile') is distinct from 'string' then
+                raise exception 'INVALID_CASE_RESULTS';
+            end if;
+            if not (v_expected @> jsonb_build_array(jsonb_build_object(
+                    'player_key', v_pl ->> 'player_key',
+                    'slot_key', v_pl ->> 'slot_key',
+                    'profile', v_pl ->> 'profile'))) then
+                raise exception 'PLACEMENT_MISMATCH';
+            end if;
+            if (v_pl ->> 'player_key') = any(v_players) or (v_pl ->> 'slot_key') = any(v_slots) then
+                raise exception 'PLACEMENT_MISMATCH';
+            end if;
+            v_players := v_players || (v_pl ->> 'player_key');
+            v_slots := v_slots || (v_pl ->> 'slot_key');
+        end loop;
+        if v_outcome = 'solved' and cardinality(v_players) <> jsonb_array_length(v_expected) then
+            raise exception 'SOLVED_CASE_INCOMPLETE';
+        end if;
+        if v_outcome = 'failed' and cardinality(v_players) >= jsonb_array_length(v_expected) then
+            raise exception 'FAILED_CASE_COMPLETE';
+        end if;
+        if v_i < 4 and v_outcome = 'solved' then
+            v_solved := v_solved + 1;
+        end if;
+        if v_i = 4 then
+            v_ot_won := v_outcome = 'solved';
+        end if;
+    end loop;
+    v_ot_played := v_solved = 2;
+    if (v_n = 5) <> v_ot_played then
+        raise exception 'OVERTIME_MISMATCH';
+    end if;
+    if v_hints > 0 and not cfg.purchasable_hints_allowed then
+        raise exception 'VERSUS_HINTS_NOT_ALLOWED';
+    end if;
+    v_won := v_solved >= 3 or v_ot_won;
+
+    -- 6. Score (server-derived facts only).
+    v_base := v_solved * cfg.quarter_solved_points
+        + (case when v_won then cfg.game_win_points else 0 end)
+        + (case when v_ot_won then cfg.overtime_win_points else 0 end)
+        + (case when v_solved = 4 then cfg.perfect_regulation_points else 0 end);
+    v_mult := case v_m.difficulty
+        when 'rookie' then cfg.rookie_multiplier
+        when 'pro' then cfg.pro_multiplier
+        when 'all_pro' then cfg.all_pro_multiplier
+        when 'hall_of_famer' then cfg.hall_of_famer_multiplier
+    end;
+    v_final := round(v_base::numeric * v_mult)::int;
+    v_issued := case when v_m.player_a_id = p_user_id then v_m.created_at else v_m.matched_at end;
+
+    -- 7. Record once, then resolve under the same lock.
+    begin
+        insert into public.versus_match_results (
+            match_id, user_id, regulation_quarters_solved, overtime_played, overtime_won,
+            cases_solved, game_won, base_score, difficulty_multiplier, final_score,
+            case_results, server_elapsed_seconds, client_started_at, client_completed_at,
+            game_version, versus_protocol
+        ) values (
+            p_match_id, p_user_id, v_solved, v_ot_played, v_ot_won,
+            v_solved + (case when v_ot_won then 1 else 0 end), v_won, v_base, v_mult, v_final,
+            p_case_results, greatest(0, floor(extract(epoch from (now() - v_issued))))::int,
+            p_started_at, p_completed_at, v_version, p_versus_protocol
+        )
+        returning result_id into v_id;
+    exception
+        when unique_violation then
+            select * into v_existing from public.versus_match_results r
+            where r.match_id = p_match_id and r.user_id = p_user_id;
+            return query select 'duplicate'::text, v_existing.result_id, v_existing.final_score, v_existing.cases_solved,
+                                v.status, v.player_state, v.outcome, v.opponent_final_score
+                         from public.versus_player_rows(p_user_id) v where v.match_id = p_match_id;
+            return;
+    end;
+
+    perform public.versus_resolve_locked(p_match_id);
+
+    return query select 'recorded'::text, v_id, v_final, v_solved + (case when v_ot_won then 1 else 0 end),
+                        v.status, v.player_state, v.outcome, v.opponent_final_score
+                 from public.versus_player_rows(p_user_id) v where v.match_id = p_match_id;
+end;
+$$;
+
+revoke all on function public.versus_record_result(uuid, uuid, jsonb, timestamptz, timestamptz, text, int) from public, anon, authenticated;
+grant execute on function public.versus_record_result(uuid, uuid, jsonb, timestamptz, timestamptz, text, int) to service_role;
+
+-- 8m. CLIENT READS (authenticated only; user = auth.uid()). Each resolves
+--     the relevant overdue matches first, so what the client sees is
+--     always the server's settled truth.
+--     my_versus_matches: open matches (waiting / active / submitted /
+--     opponent pending). my_versus_history: completed matches, newest
+--     first, page size capped at 50.
+create or replace function public.my_versus_matches()
+returns table (
+    match_id               uuid,
+    status                 text,
+    player_state           text,
+    role                   text,
+    difficulty             text,
+    case_ids               text[],
+    case_versions          int[],
+    catalog_fingerprint    text,
+    content_source         text,
+    created_at             timestamptz,
+    matched_at             timestamptz,
+    expires_at             timestamptz,
+    completed_at           timestamptz,
+    opponent_user_id       uuid,
+    opponent_username      text,
+    opponent_display_name  text,
+    my_submitted           boolean,
+    my_final_score         int,
+    my_cases_solved        int,
+    opponent_submitted     boolean,
+    opponent_final_score   int,
+    opponent_cases_solved  int,
+    outcome                text,
+    is_forfeit             boolean,
+    resolution             text
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+#variable_conflict use_column
+declare
+    v_uid uuid := auth.uid();
+begin
+    if v_uid is null then
+        raise exception 'AUTH_REQUIRED';
+    end if;
+    perform public.versus_expire_due(v_uid);
+    return query
+        select v.* from public.versus_player_rows(v_uid) v
+        where v.status in ('waiting_for_opponent', 'active')
+        order by v.created_at desc;
+end;
+$$;
+
+revoke all on function public.my_versus_matches() from public, anon;
+grant execute on function public.my_versus_matches() to authenticated;
+
+create or replace function public.my_versus_history(p_limit int default 20, p_offset int default 0)
+returns table (
+    match_id               uuid,
+    difficulty             text,
+    completed_at           timestamptz,
+    opponent_user_id       uuid,
+    opponent_username      text,
+    opponent_display_name  text,
+    my_final_score         int,
+    opponent_final_score   int,
+    outcome                text,
+    is_forfeit             boolean,
+    resolution             text
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+#variable_conflict use_column
+declare
+    v_uid uuid := auth.uid();
+begin
+    if v_uid is null then
+        raise exception 'AUTH_REQUIRED';
+    end if;
+    perform public.versus_expire_due(v_uid);
+    return query
+        select v.match_id, v.difficulty, v.completed_at, v.opponent_user_id, v.opponent_username,
+               v.opponent_display_name, v.my_final_score, v.opponent_final_score, v.outcome,
+               v.is_forfeit, v.resolution
+        from public.versus_player_rows(v_uid) v
+        where v.status = 'completed'
+        order by v.completed_at desc, v.match_id
+        limit least(greatest(coalesce(p_limit, 20), 1), 50)
+        offset greatest(coalesce(p_offset, 0), 0);
+end;
+$$;
+
+revoke all on function public.my_versus_history(int, int) from public, anon;
+grant execute on function public.my_versus_history(int, int) to authenticated;
+
+-- Public Versus record of any player: public profile columns + the six
+-- counters. Never real names, email or match internals.
+create or replace function public.versus_public_record(p_user_id uuid)
+returns table (
+    user_id                uuid,
+    username               text,
+    football_display_name  text,
+    versus_games_played    int,
+    versus_wins            int,
+    versus_losses          int,
+    versus_ties            int,
+    versus_forfeit_wins    int,
+    versus_forfeit_losses  int
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+#variable_conflict use_column
+begin
+    if auth.uid() is null then
+        raise exception 'AUTH_REQUIRED';
+    end if;
+    if p_user_id is null then
+        return;
+    end if;
+    perform public.versus_expire_due(p_user_id);
+    return query
+        select pp.id, pp.username, pp.football_display_name,
+               coalesce(s.versus_games_played, 0), coalesce(s.versus_wins, 0),
+               coalesce(s.versus_losses, 0), coalesce(s.versus_ties, 0),
+               coalesce(s.versus_forfeit_wins, 0), coalesce(s.versus_forfeit_losses, 0)
+        from public.public_profiles pp
+        left join public.versus_career_stats s on s.user_id = pp.id
+        where pp.id = p_user_id;
+end;
+$$;
+
+revoke all on function public.versus_public_record(uuid) from public, anon;
+grant execute on function public.versus_public_record(uuid) to authenticated;
+
+-- ===========================================================================
 -- Future tables (Phase 13A defines the shape; features come later):
 --   factions, faction_members (max 11 per faction-season = starting lineup),
 --   faction_season_roster_slots (position per slot, footballDisplayName
