@@ -148,11 +148,15 @@ struct RankedView: View {
 
     @ViewBuilder
     private var entryCard: some View {
+        // Difficulty and progress come from the SERVER season state (the
+        // assignment store's snapshot) when one is known on this device; the
+        // local solo season is only a fallback before the first assignment.
+        let ranked = RankedAssignmentService.shared.rankedDisplayState
         let state = RankedEntryState.resolve(
             state: AuthService.shared.state,
             hasTeam: teamStore.userTeam != nil,
-            nextGameNumber: seasonManager.nextRankedGameNumber,
-            difficulty: seasonManager.activeSeasonDifficulty
+            nextGameNumber: ranked?.nextGameNumber ?? seasonManager.nextRankedGameNumber,
+            difficulty: ranked?.difficulty ?? seasonManager.activeSeasonDifficulty
         )
         VStack(spacing: 14) {
             switch state {

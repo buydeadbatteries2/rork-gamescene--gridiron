@@ -148,7 +148,7 @@ struct Phase14BAssignmentModelTests {
         #expect(store.playable(owner: P14B.owner, seasonID: P14B.season, gameNumber: 4, difficulty: .pro, now: P14B.now) == a)
         #expect(store.playable(owner: P14B.owner, seasonID: P14B.season, gameNumber: 4, difficulty: .rookie, now: P14B.now) == nil)
         #expect(store.has(owner: P14B.owner, seasonID: P14B.season, gameNumber: 4, now: P14B.now))
-        store.remove(matchID: a.matchID)
+        store.consume(matchID: a.matchID)
         #expect(!store.has(owner: P14B.owner, seasonID: P14B.season, gameNumber: 4, now: P14B.now))
     }
 

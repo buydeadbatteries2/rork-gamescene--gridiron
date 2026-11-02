@@ -64,9 +64,21 @@ nonisolated struct RankedAssignment: Codable, Hashable, Sendable, Identifiable {
 }
 
 /// Pure, persisted set of prefetched assignments (offline policy A: at most
-/// `maxPrefetched` ahead per owner).
+/// `maxPrefetched` ahead per owner) plus the server-truth season snapshot the
+/// Ranked screen displays: the server season's difficulty and the highest
+/// CONSUMED game — prefetched assignments never advance progress.
 nonisolated struct RankedAssignmentStore: Codable, Hashable, Sendable {
+    /// What the server has actually issued and the player has finished for the
+    /// current server season. Replaced when a new server season appears.
+    nonisolated struct Snapshot: Codable, Hashable, Sendable {
+        let seasonID: UUID
+        /// Server enum value (rookie / pro / all_pro / hall_of_famer).
+        let difficulty: String
+        var consumedGameNumber: Int = 0
+    }
+
     private(set) var assignments: [RankedAssignment] = []
+    private(set) var snapshot: Snapshot?
 
     /// Mirrors ranked_scoring_config.assignment_prefetch_games.
     static let maxPrefetched = 3
@@ -81,9 +93,13 @@ nonisolated struct RankedAssignmentStore: Codable, Hashable, Sendable {
         assignments.contains { $0.ownerUserID == owner && $0.seasonID == seasonID && $0.gameNumber == gameNumber && $0.expiresAt > now }
     }
 
-    /// Adds or replaces (same season + game + owner) a server assignment.
+    /// Adds or replaces (same season + game + owner) a server assignment and
+    /// adopts its season as the displayed server truth.
     mutating func upsert(_ assignment: RankedAssignment) {
         guard assignment.isWellFormed else { return }
+        if snapshot?.seasonID != assignment.seasonID {
+            snapshot = Snapshot(seasonID: assignment.seasonID, difficulty: assignment.difficulty)
+        }
         assignments.removeAll {
             $0.matchID == assignment.matchID
                 || ($0.ownerUserID == assignment.ownerUserID && $0.seasonID == assignment.seasonID
@@ -92,7 +108,20 @@ nonisolated struct RankedAssignmentStore: Codable, Hashable, Sendable {
         assignments.append(assignment)
     }
 
+    /// The game finished — record its consumption (progress truth) and drop
+    /// the spent assignment. Prefetching never calls this.
+    mutating func consume(matchID: UUID) {
+        guard let spent = assignments.first(where: { $0.matchID == matchID }) else { return }
+        let gameNumber = spent.gameNumber
+        let seasonID = spent.seasonID
+        assignments.removeAll { $0.matchID == matchID }
+        guard var current = snapshot, current.seasonID == seasonID else { return }
+        current.consumedGameNumber = max(current.consumedGameNumber, gameNumber)
+        snapshot = current
+    }
+
     /// Drops an assignment once its game is finished (queued or unranked).
+    @available(*, deprecated, message: "Use consume(matchID:) so progress is recorded")
     mutating func remove(matchID: UUID) {
         assignments.removeAll { $0.matchID == matchID }
     }

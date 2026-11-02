@@ -154,10 +154,21 @@ final class RankedAssignmentService {
         return assignment
     }
 
-    /// The game finished (queued or unranked) — its assignment is spent.
+    /// The game finished (queued or unranked) — its consumption is recorded
+    /// (Ranked-screen progress truth) and the assignment is spent.
     func consume(matchID: UUID) {
-        store.remove(matchID: matchID)
+        store.consume(matchID: matchID)
         persist()
+    }
+
+    /// Server-truth state for the Ranked screen, straight from the assignment
+    /// store — never the local solo season: the server season's difficulty and
+    /// the next playable game (highest consumed + 1). Prefetched assignments
+    /// are unplayed and never advance it. nil while no server season is known
+    /// on this device (the caller then falls back to the local season).
+    var rankedDisplayState: (seasonID: UUID, difficulty: DifficultyLevel, nextGameNumber: Int)? {
+        guard let snapshot = store.snapshot, let level = DifficultyLevel(serverValue: snapshot.difficulty) else { return nil }
+        return (snapshot.seasonID, level, min(12, max(1, snapshot.consumedGameNumber + 1)))
     }
 
     /// Flushes queued results, then tops the store up to at most
