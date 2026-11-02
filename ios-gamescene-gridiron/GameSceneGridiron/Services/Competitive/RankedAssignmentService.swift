@@ -181,8 +181,15 @@ final class RankedAssignmentService {
         await flushSubmissions()
 
         var seasonID = context.rankedSeasonID
-        store.prune(owner: owner, seasonID: seasonID, minGameNumber: context.nextGameNumber, now: now())
+        // Server truth wins: never prune below the SERVER season's next
+        // playable game, even when the local season pointer has run ahead
+        // (stale local ranked game-number cache).
+        let serverNextGame = store.snapshot.map { min(12, max(1, $0.consumedGameNumber + 1)) }
+        let pruneFloor = min(context.nextGameNumber, serverNextGame ?? context.nextGameNumber)
+        store.prune(owner: owner, seasonID: seasonID, minGameNumber: pruneFloor, now: now())
         let last = min(12, context.nextGameNumber + RankedAssignmentStore.maxPrefetched - 1)
+        /// Highest game the server called already-recorded during this pass.
+        var recordedServerGame = 0
         for game in context.nextGameNumber...last {
             if let seasonID, store.has(owner: owner, seasonID: seasonID, gameNumber: game, now: now()) { continue }
             // Only game 1 may create a server season. A season started on a
@@ -207,19 +214,25 @@ final class RankedAssignmentService {
                 lastErrorCategory = nil
             case .rejected(let reason):
                 lastErrorCategory = CompetitiveSubmissionQueue.safeCategory(reason)
-                // Already recorded server-side: the next game may still be open.
-                if reason == "game_already_recorded" { continue }
-                store.prune(owner: owner, seasonID: seasonID, minGameNumber: context.nextGameNumber, now: now())
+                // Already recorded server-side: the server's consumption
+                // truth advances the displayed progress, and the next game
+                // may still be open.
+                if reason == "game_already_recorded" {
+                    recordedServerGame = max(recordedServerGame, game)
+                    continue
+                }
+                store.prune(owner: owner, seasonID: seasonID, minGameNumber: pruneFloor, now: now())
                 persist()
                 return
             case .retryable(let category):
                 lastErrorCategory = CompetitiveSubmissionQueue.safeCategory(category)
-                store.prune(owner: owner, seasonID: seasonID, minGameNumber: context.nextGameNumber, now: now())
+                store.prune(owner: owner, seasonID: seasonID, minGameNumber: pruneFloor, now: now())
                 persist()
                 return
             }
         }
-        store.prune(owner: owner, seasonID: seasonID, minGameNumber: context.nextGameNumber, now: now())
+        if recordedServerGame > 0 { store.recordServerConsumption(gameNumber: recordedServerGame) }
+        store.prune(owner: owner, seasonID: seasonID, minGameNumber: pruneFloor, now: now())
         persist()
     }
 

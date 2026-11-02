@@ -144,10 +144,34 @@ nonisolated struct RankedAssignmentStore: Codable, Hashable, Sendable {
 
     static func load(defaults: UserDefaults = .standard) -> RankedAssignmentStore {
         guard let data = defaults.data(forKey: key),
-              let store = try? CompetitiveResultPayload.decoder().decode(RankedAssignmentStore.self, from: data) else {
+              var store = try? CompetitiveResultPayload.decoder().decode(RankedAssignmentStore.self, from: data) else {
             return RankedAssignmentStore()
         }
+        store.migrateSnapshotIfNeeded()
         return store
+    }
+
+    /// Stores saved before the snapshot existed hold server assignments but
+    /// no server-truth season state — migrate instead of letting the stale
+    /// LOCAL season difficulty/game number win. The assignments are server
+    /// truth; the lowest held game minus one is the highest game that can
+    /// already be consumed (the prefetcher never keeps consumed games).
+    mutating func migrateSnapshotIfNeeded() {
+        guard snapshot == nil, let first = assignments.first,
+              assignments.allSatisfy({ $0.seasonID == first.seasonID }) else { return }
+        snapshot = Snapshot(
+            seasonID: first.seasonID,
+            difficulty: first.difficulty,
+            consumedGameNumber: max(0, (assignments.map(\.gameNumber).min() ?? 1) - 1)
+        )
+    }
+
+    /// The server reported this game as already recorded — server consumption
+    /// truth that must override the displayed progress.
+    mutating func recordServerConsumption(gameNumber: Int) {
+        guard var current = snapshot, gameNumber > current.consumedGameNumber else { return }
+        current.consumedGameNumber = gameNumber
+        snapshot = current
     }
 
     static func save(_ store: RankedAssignmentStore, defaults: UserDefaults = .standard) {

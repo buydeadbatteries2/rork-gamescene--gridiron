@@ -10,6 +10,14 @@ import Testing
 struct Phase14CTests {
 
     private static let profile = UserProfile(authUserID: UUID(), username: "GridironKing", firstName: "Julius", lastName: "Hudson")
+    private static let now = Date(timeIntervalSince1970: 1_790_000_000)
+
+    private static func defaults() -> UserDefaults {
+        let name = "phase14c-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        return defaults
+    }
 
     @Test func guestsSeeTheAccountGate() {
         #expect(RankedEntryState.resolve(state: .guest, hasTeam: true, nextGameNumber: 3, difficulty: .pro) == .needsAccount)
@@ -83,5 +91,65 @@ struct Phase14CTests {
         h.service.consume(matchID: gameOne.matchID)
         #expect(h.service.rankedDisplayState?.nextGameNumber == 2)
         #expect(h.service.rankedDisplayState?.difficulty == .pro)
+    }
+
+    @MainActor
+    @Test func staleLegacyStoreMigratesToServerTruth() throws {
+        // Production shape: a pre-snapshot build persisted assignments 2–4
+        // (game 1 consumed and removed) with no season snapshot. On load it
+        // must migrate to PRO / GAME 2 — never fall back to the stale local
+        // season (HALL OF FAMER / GAME 7).
+        let owner = P14BHarnessIDs.owner
+        let season = P14BServer.season
+        var legacy = RankedAssignmentStore()
+        for game in 2...4 {
+            legacy.upsert(P14BServer.wire(season: season, game: game, difficulty: "pro").assignment(owner: owner)!)
+        }
+        // Strip the snapshot to reproduce the legacy on-disk shape.
+        var raw = try JSONSerialization.jsonObject(with: CompetitiveResultPayload.encoder().encode(legacy)) as! [String: Any]
+        raw.removeValue(forKey: "snapshot")
+        let defaults = Self.defaults()
+        defaults.set(try JSONSerialization.data(withJSONObject: raw), forKey: RankedAssignmentStore.key)
+
+        let migrated = RankedAssignmentStore.load(defaults: defaults)
+        #expect(migrated.snapshot?.seasonID == season)
+        #expect(migrated.snapshot?.difficulty == "pro")
+        #expect(migrated.snapshot?.consumedGameNumber == 1)   // game 1 consumed
+        let service = RankedAssignmentService(
+            defaults: defaults, fetcher: nil,
+            currentUserID: { owner },
+            seasonContext: { nil }, adoptSeasonID: { _, _ in }
+        )
+        #expect(service.rankedDisplayState?.difficulty == .pro)
+        #expect(service.rankedDisplayState?.nextGameNumber == 2)
+    }
+
+    @MainActor
+    @Test func serverAlreadyRecordedAnswerWins() async {
+        // The server says game 2 is already recorded — its consumption truth
+        // advances the displayed progress (server state beats local).
+        let fetcher = MockAssignmentFetcher()
+        fetcher.script(2, .rejected(reason: "game_already_recorded"))
+        let h = AssignmentHarness(context: RankedSeasonContext(seasonNumber: 1, rankedSeasonID: P14BServer.season, nextGameNumber: 2, difficulty: .pro), fetcher: fetcher)
+        await h.service.refresh()
+        #expect(h.service.rankedDisplayState?.difficulty == .pro)
+        #expect(h.service.rankedDisplayState?.nextGameNumber == 3)
+    }
+
+    @MainActor
+    @Test func refreshKeepsServerTruthAssignmentsWhenLocalRunsAhead() {
+        // Local season says next is 7 while the server season is only at
+        // game 2 — a refresh must NOT destroy the server's assignments 2–4
+        // (the stale-local prune floor never goes past the server's next).
+        let owner = P14BHarnessIDs.owner
+        var store = RankedAssignmentStore()
+        for game in 2...4 {
+            store.upsert(P14BServer.wire(season: P14BServer.season, game: game, difficulty: "pro").assignment(owner: owner)!)
+        }
+        store.consume(matchID: store.assignments.first { $0.gameNumber == 2 }!.matchID)
+        // prune at the local (stale) game number would keep nothing.
+        store.prune(owner: owner, seasonID: P14BServer.season, minGameNumber: 1, now: Self.now)
+        #expect(store.assignments.map(\.gameNumber) == [3, 4])
+        #expect(store.snapshot?.consumedGameNumber == 2)
     }
 }
