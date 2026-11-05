@@ -132,6 +132,9 @@ struct SupabaseVersusBackend: VersusBackend {
             return VersusWire.submitResult(from: receipt)
         } catch let FunctionsError.httpError(code, data) {
             let reason = (try? JSONDecoder().decode(VersusWire.RejectedBody.self, from: data))?.reason
+            #if DEBUG
+            print("⟦versus-submit SDK⟧ http_status=\(code) parsed_error_fields=\(VersusSubmissionDiagnostics.sanitizedBody(data)) reason_present=\(reason != nil) fallback_if_no_reason=rejected_\(code)")
+            #endif
             return VersusWire.submitResult(statusCode: code, reason: reason)
         } catch {
             return .retryable(category: "network")
