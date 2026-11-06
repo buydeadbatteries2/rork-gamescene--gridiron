@@ -17,6 +17,11 @@ struct VersusMatchView: View {
     @State private var playResume: VersusProgress?
     @State private var isLoading = false
     @State private var stampIn = false
+    #if DEBUG
+    @State private var showSubmissionDiagnostics = false
+    @State private var submissionDiagnostics = ""
+    @State private var diagnosticsCopied = false
+    #endif
 
     private var match: VersusMatch? { store.match(id: matchID) }
 
@@ -47,6 +52,33 @@ struct VersusMatchView: View {
             .scrollIndicators(.hidden)
             .refreshable { await reload(force: true) }
         }
+        #if DEBUG
+        .sheet(isPresented: $showSubmissionDiagnostics) {
+            NavigationStack {
+                ScrollView {
+                    Text(submissionDiagnostics)
+                        .font(.system(.footnote, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+                .navigationTitle("Latest submit failure")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") { showSubmissionDiagnostics = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(diagnosticsCopied ? "Copied" : "Copy") {
+                            UIPasteboard.general.setItems([[UIPasteboard.typeAutomatic: submissionDiagnostics]],
+                                options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(300)])
+                            diagnosticsCopied = true
+                        }
+                    }
+                }
+            }
+        }
+        #endif
         .task { await reload(force: false) }
         .onAppear { markViewedIfClosed() }
         .onChange(of: match.map { VersusPhase.of($0) }) { _, _ in
@@ -92,6 +124,14 @@ struct VersusMatchView: View {
             submittingCard(match: match, state: submitState)
         } else if phase.canPlay, case .rejected(let message) = submitState {
             noticeCard(icon: "xmark.octagon.fill", title: "FILE NOT ACCEPTED", detail: message, color: Theme.danger)
+            #if DEBUG
+            VersusPaperButton(title: "DEVELOPER: SUBMISSION DIAGNOSTICS", systemImage: "doc.text.magnifyingglass", id: "versus.submit.diagnostics") {
+                submissionDiagnostics = VersusSubmissionDiagnostics.capture.read()
+                    ?? "No captured HTTP failure in this app session. Reproduce the failed submission in this developer build first."
+                diagnosticsCopied = false
+                showSubmissionDiagnostics = true
+            }
+            #endif
         } else {
             switch phase {
             case .waitingCanPlay:

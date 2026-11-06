@@ -11,6 +11,7 @@ nonisolated final class VersusDiagnosticProtocol: URLProtocol, @unchecked Sendab
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         let id = UUID().uuidString
+        VersusSubmissionDiagnostics.capture.clear()
         print("⟦versus-submit \(id)⟧ configured_host=\(SupabaseClientProvider.publicConfigURL.flatMap(URL.init(string:))?.host ?? "unset") method=\(request.httpMethod ?? "unknown") url=\(VersusSubmissionDiagnostics.safeURL(request.url)) function_path=\(request.url?.path ?? "unknown")")
         // Shared session does not install this protocol: no recursion. Forward the
         // original request unchanged, including its body and authentication.
@@ -18,6 +19,13 @@ nonisolated final class VersusDiagnosticProtocol: URLProtocol, @unchecked Sendab
             guard let self else { return }
             if let response {
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if status >= 400 {
+                    let body = VersusSubmissionDiagnostics.sanitizedBody(data ?? Data())
+                    let fields = (try? JSONSerialization.jsonObject(with: Data(body.utf8))) as? [String: String]
+                    let code = fields?["reason"] ?? fields?["code"] ?? fields?["error"] ?? "not present"
+                    let host = SupabaseClientProvider.publicConfigURL.flatMap(URL.init(string:))?.host ?? "unset"
+                    VersusSubmissionDiagnostics.capture.set("Supabase host: \(host)\nFinal request URL: \(VersusSubmissionDiagnostics.safeURL(response.url))\nHTTP status: \(status)\nSanitized response body: \(body)\nParsed error code: \(code)")
+                }
                 print("⟦versus-submit \(id)⟧ final_url=\(VersusSubmissionDiagnostics.safeURL(response.url)) status=\(status) sanitized_body_and_parsed_codes=\(VersusSubmissionDiagnostics.sanitizedBody(data ?? Data()))")
                 self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             }
@@ -34,7 +42,17 @@ nonisolated final class VersusDiagnosticProtocol: URLProtocol, @unchecked Sendab
     override func stopLoading() { forwardingTask?.cancel() }
 }
 
+/// Memory-only, sanitized latest failure. Never persists credentials or raw data.
+nonisolated final class VersusDiagnosticCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: String?
+    func clear() { lock.lock(); defer { lock.unlock() }; value = nil }
+    func set(_ text: String) { lock.lock(); defer { lock.unlock() }; value = text }
+    func read() -> String? { lock.lock(); defer { lock.unlock() }; return value }
+}
+
 nonisolated enum VersusSubmissionDiagnostics {
+    static let capture = VersusDiagnosticCapture()
     static func safeURL(_ url: URL?) -> String {
         guard let url, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return "unknown" }
         parts.user = nil
