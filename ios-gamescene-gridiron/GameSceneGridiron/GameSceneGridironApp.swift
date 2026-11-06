@@ -19,7 +19,7 @@ struct GameSceneGridironApp: App {
         // Google Mobile Ads initializes exactly once, here — the UMP consent
         // flow runs after start; ads are only requested once consent allows.
         // DEBUG builds run Google's public test ad units; RELEASE uses the
-        // build-injected production identifiers (missing → ads disabled).
+        // processed production identifiers (a valid plist app ID is required).
         AdMobService.shared.configure()
         // Supabase session restoration starts at launch, before the first
         // frame — ContentView holds an explicit auth-loading board until the

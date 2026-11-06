@@ -5,9 +5,10 @@ import Foundation
 // Central selection of the AdMob identifiers for this build:
 // - DEBUG always runs Google's official PUBLIC test ad-unit IDs — never the
 //   production GameScene units (an account-safety rule, tested).
-// - RELEASE uses the build-injected Rork environment values exclusively. A
-//   missing production ID disables that ad format gracefully — the Google
-//   test units are NEVER a release fallback.
+// - RELEASE selects the processed bundle values exclusively. A missing unit
+//   ID disables that format; Google test IDs are NEVER a release fallback.
+//   A missing app ID suppresses our explicit start, but cannot prevent the
+//   linked SDK's own validation. Verify the app ID in the Release artifact.
 // AdMob IDs are build configuration, not secrets: they ship in every client.
 // The Rork secret surface stays untouched by this file.
 nonisolated enum AdMobConfig {
@@ -52,7 +53,7 @@ nonisolated enum AdMobConfig {
     /// The app-level AdMob identifier for this build. DEBUG may fall back to
     /// Google's public test app ID so development builds run test ads even
     /// before the injected value exists. RELEASE never substitutes anything —
-    /// nil disables ads entirely.
+    /// nil suppresses our explicit start; it does not make an invalid plist safe.
     static func appIdentifier(isDevelopmentBuild: Bool, injectedAppID: String) -> String? {
         let trimmed = injectedAppID.trimmingCharacters(in: .whitespacesAndNewlines)
         if isDevelopmentBuild {
