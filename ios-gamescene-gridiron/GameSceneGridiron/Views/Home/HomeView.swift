@@ -65,9 +65,11 @@ struct HomeView: View {
                     .shadow(color: Theme.gold.opacity(glow ? 0.35 : 0.1), radius: glow ? 22 : 10)
                     .accessibilityHint(teamStore.hasTeam ? "Opens your season" : "Opens the investigation")
 
-                    versusTile
-                        .opacity(hasAppeared ? 1 : 0)
-                        .offset(y: hasAppeared ? 0 : 14)
+                    if ReleaseAvailability.versus {
+                        versusTile
+                            .opacity(hasAppeared ? 1 : 0)
+                            .offset(y: hasAppeared ? 0 : 14)
+                    }
 
                     walletStrip
                         .opacity(hasAppeared ? 1 : 0)
@@ -234,15 +236,17 @@ struct HomeView: View {
                 .preferredColorScheme(.dark)
         }
         .fullScreenCover(isPresented: $isShowingVersus) {
-            VersusHubView()
+            if ReleaseAvailability.versus { VersusHubView() }
         }
         .sheet(isPresented: $isShowingVersusGate) {
-            NavigationStack { AccountGateView(featureName: "Versus") }
+            NavigationStack {
+                if ReleaseAvailability.versus { AccountGateView(featureName: "Versus") }
+            }
                 .preferredColorScheme(.dark)
         }
         .task(id: AccountGatePolicy.requiresAccount(auth.state)) {
             // Home badge: a quiet, throttled recovery read for signed-in players.
-            guard !AccountGatePolicy.requiresAccount(auth.state) else { return }
+            guard ReleaseAvailability.versus, !AccountGatePolicy.requiresAccount(auth.state) else { return }
             await versus.refresh()
         }
         .sheet(isPresented: $isShowingSettings) {

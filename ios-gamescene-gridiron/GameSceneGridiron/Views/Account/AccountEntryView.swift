@@ -2,7 +2,7 @@ import SwiftUI
 
 /// ACCOUNT ENTRY — the case-file styled front door for GameScene accounts.
 /// CREATE ACCOUNT / SIGN IN / CONTINUE AS GUEST. Guests keep full solo access;
-/// online competition features will require an account later.
+/// Ranked competition requires a saved player identity.
 struct AccountEntryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var auth = AuthService.shared
@@ -140,7 +140,7 @@ struct AccountEntryView: View {
                 .tracking(1.2)
                 .foregroundStyle(Theme.paperInkSoft.opacity(0.8))
                 .multilineTextAlignment(.center)
-            Text("ONLINE COMPETITION WILL REQUIRE AN ACCOUNT.")
+            Text("SIGN IN TO SAVE YOUR PLAYER IDENTITY, RANKED HISTORY, LEADERBOARD STATS AND CAREER RECORDS.")
                 .font(.system(size: 9, weight: .heavy).width(.condensed))
                 .tracking(1.2)
                 .foregroundStyle(Theme.paperInkSoft.opacity(0.55))
