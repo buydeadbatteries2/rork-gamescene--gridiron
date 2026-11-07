@@ -24,7 +24,7 @@ struct HomeView: View {
     @State private var versus = VersusStore.shared
     @State private var lockedMessage: String?
     @State private var hasAppeared: Bool = false
-    @State private var isScrolling = false
+    @State private var glow: Bool = false
 
     var body: some View {
         ZStack {
@@ -62,14 +62,12 @@ struct HomeView: View {
                         .padding(.horizontal, 26)
                     }
                     .buttonStyle(GoldCapsuleButtonStyle())
-                    .modifier(HomeCTAGlow(isScrolling: isScrolling))
+                    .shadow(color: Theme.gold.opacity(glow ? 0.35 : 0.1), radius: glow ? 22 : 10)
                     .accessibilityHint(teamStore.hasTeam ? "Opens your season" : "Opens the investigation")
 
-                    if ReleaseAvailability.versus {
-                        versusTile
-                            .opacity(hasAppeared ? 1 : 0)
-                            .offset(y: hasAppeared ? 0 : 14)
-                    }
+                    versusTile
+                        .opacity(hasAppeared ? 1 : 0)
+                        .offset(y: hasAppeared ? 0 : 14)
 
                     walletStrip
                         .opacity(hasAppeared ? 1 : 0)
@@ -174,9 +172,6 @@ struct HomeView: View {
                 .padding(.bottom, 40)
             }
             .scrollIndicators(.hidden)
-            .onScrollPhaseChange { _, phase in
-                isScrolling = phase != .idle
-            }
 
             if let lockedMessage {
                 VStack {
@@ -198,6 +193,12 @@ struct HomeView: View {
         }
         .onAppear {
             withAnimation(.spring(response: 0.8, dampingFraction: 0.8).delay(0.05)) { hasAppeared = true }
+            // Reduce Motion: the CTA glow rests at a gentle constant shine.
+            if !Motion.isReduced {
+                withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { glow = true }
+            } else {
+                glow = true
+            }
         }
         .fullScreenCover(isPresented: $isPlaying) {
             SeasonView()
@@ -233,17 +234,15 @@ struct HomeView: View {
                 .preferredColorScheme(.dark)
         }
         .fullScreenCover(isPresented: $isShowingVersus) {
-            if ReleaseAvailability.versus { VersusHubView() }
+            VersusHubView()
         }
         .sheet(isPresented: $isShowingVersusGate) {
-            NavigationStack {
-                if ReleaseAvailability.versus { AccountGateView(featureName: "Versus") }
-            }
+            NavigationStack { AccountGateView(featureName: "Versus") }
                 .preferredColorScheme(.dark)
         }
         .task(id: AccountGatePolicy.requiresAccount(auth.state)) {
             // Home badge: a quiet, throttled recovery read for signed-in players.
-            guard ReleaseAvailability.versus, !AccountGatePolicy.requiresAccount(auth.state) else { return }
+            guard !AccountGatePolicy.requiresAccount(auth.state) else { return }
             await versus.refresh()
         }
         .sheet(isPresented: $isShowingSettings) {

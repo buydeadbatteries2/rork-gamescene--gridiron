@@ -87,7 +87,7 @@ struct GameFieldView: View {
                     // Display-only de-overlap: markers may shift a few points
                     // so no two zones (or "?") ever stack. Snapping and solved
                     // placements always use the true field coordinates.
-                    let markerPoints = viewModel.markerPositions(
+                    let markerPoints = PlacementZoneLayout.displayPositions(
                         slots: dragSlots,
                         fieldSize: size,
                         visibleDiameter: zoneDiameter
@@ -109,7 +109,6 @@ struct GameFieldView: View {
                             .transition(.opacity.combined(with: .scale(scale: 0.6)))
                         }
                     }
-                    .animation(.easeInOut(duration: 0.2), value: viewModel.isDragging)
 
                     // Tutorial guidance: a soft chalk glow under the correct
                     // training target while the coach lesson is dragging.
@@ -138,6 +137,7 @@ struct GameFieldView: View {
                     }
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: viewModel.isDragging)
         }
         .clipShape(.rect(cornerRadius: 10, style: .continuous))
         .overlay {

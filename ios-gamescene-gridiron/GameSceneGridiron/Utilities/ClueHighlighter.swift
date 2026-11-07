@@ -8,21 +8,6 @@ import SwiftUI
 /// Priority order decides who wins overlapping words (e.g. "strong safety" is a
 /// position highlight, not a trait highlight). Colors live in `Theme`.
 enum ClueHighlighter {
-    private final class HighlightedText: NSObject {
-        let value: AttributedString
-        init(_ value: AttributedString) { self.value = value }
-    }
-    private static let textCache: NSCache<NSString, HighlightedText> = {
-        let cache = NSCache<NSString, HighlightedText>()
-        cache.countLimit = 256
-        return cache
-    }()
-    private static let regexCache: NSCache<NSString, NSRegularExpression> = {
-        let cache = NSCache<NSString, NSRegularExpression>()
-        cache.countLimit = 128
-        return cache
-    }()
-
     private struct Rule {
         let pattern: String
         let color: Color
@@ -61,8 +46,6 @@ enum ClueHighlighter {
     /// With `highContrast` the markers switch to saturated, strongly-contrasting
     /// colors against the manila paper (High Contrast Clue Highlights setting).
     static func highlighted(_ text: String, highContrast: Bool = false) -> AttributedString {
-        let key = "\(highContrast ? "hc" : "normal"):\(text)" as NSString
-        if let cached = textCache.object(forKey: key) { return cached.value }
         var result = AttributedString()
         var cursor = text.startIndex
 
@@ -78,7 +61,6 @@ enum ClueHighlighter {
         if cursor < text.endIndex {
             result.append(AttributedString(String(text[cursor...])))
         }
-        textCache.setObject(HighlightedText(result), forKey: key)
         return result
     }
 
@@ -96,15 +78,7 @@ enum ClueHighlighter {
     }
 
     private static func matches(in text: String, pattern: String) -> [Range<String.Index>] {
-        let key = pattern as NSString
-        let regex: NSRegularExpression
-        if let cached = regexCache.object(forKey: key) {
-            regex = cached
-        } else {
-            guard let compiled = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
-            regexCache.setObject(compiled, forKey: key)
-            regex = compiled
-        }
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
         let nsText = text as NSString
         return regex
             .matches(in: text, range: NSRange(location: 0, length: nsText.length))

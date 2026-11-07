@@ -133,7 +133,6 @@ final class PurchaseManager {
         #endif
         Purchases.configure(withAPIKey: apiKey)
         isConfigured = true
-        debugStore("SDK configured locally; development=\(Self.isDevelopmentBuild); product resolution not yet verified")
 
         updatesTask = Task { [weak self] in
             guard let self else { return }
@@ -149,27 +148,15 @@ final class PurchaseManager {
     /// Fetches the current (`default`) offering. Packages are resolved by
     /// identifier — never by array position.
     func loadOfferings() async {
-        guard isConfigured else {
-            debugStore("fetch skipped: SDK not initialized / selected public key missing or test host")
-            logAvailability()
-            return
-        }
-        debugStore("offering fetch started")
+        guard isConfigured else { return }
         isLoadingOfferings = true
         defer { isLoadingOfferings = false }
         do {
             let offerings = try await Purchases.shared.offerings()
             currentOffering = offerings.current ?? offerings.offering(identifier: Self.defaultOfferingID)
-            debugStore("fetch succeeded; offerings=\(offerings.all.keys.sorted()); selected=\(currentOffering?.identifier ?? "none")")
-            for package in currentOffering?.availablePackages ?? [] {
-                debugStore("package=\(package.identifier) product=\(package.storeProduct.productIdentifier)")
-            }
-            logAvailability()
         } catch {
             // Sanitized: no SDK internals, no keys.
             statusMessage = "The store could not be reached. Try again shortly."
-            debugStore("fetch failed; numeric_error_code=\((error as NSError).code); private details omitted")
-            logAvailability()
         }
     }
 
@@ -179,35 +166,12 @@ final class PurchaseManager {
     /// callers show an unavailable state, never a crash.
     func package(forProductID productID: String) -> Package? {
         guard let offering = currentOffering else { return nil }
-        let packages = offering.availablePackages
-        guard let index = Self.packageIndex(forProductID: productID,
-            metadata: packages.map { ($0.identifier, $0.storeProduct.productIdentifier) },
-            isDevelopmentBuild: Self.isDevelopmentBuild) else { return nil }
-        return packages[index]
-    }
-
-    /// Existing package-first / product-fallback lookup, isolated for contract tests.
-    nonisolated static func packageIndex(forProductID productID: String,
-        metadata: [(package: String, product: String)], isDevelopmentBuild: Bool) -> Int? {
-        let expected = packageID(forProductID: productID, isDevelopmentBuild: isDevelopmentBuild)
-        return metadata.firstIndex { $0.package == expected }
-            ?? metadata.firstIndex { $0.product == productID }
-    }
-
-    private func debugStore(_ message: @autoclosure () -> String) {
-        #if DEBUG
-        print("[Shop diagnostics] \(message())")
-        #endif
-    }
-
-    private func logAvailability() {
-        #if DEBUG
-        for id in Self.gameBallProductIDs + [Self.starterPackProductID, Self.removeAdsProductID] {
-            let expected = Self.packageID(forProductID: id, isDevelopmentBuild: Self.isDevelopmentBuild)
-            let resolved = package(forProductID: id)
-            debugStore("item=\(id) expected_package=\(expected) available=\(resolved != nil) missing_or_unmapped=\(resolved == nil)")
-        }
-        #endif
+        let expectedPackageID = Self.packageID(
+            forProductID: productID,
+            isDevelopmentBuild: Self.isDevelopmentBuild
+        )
+        return offering.availablePackages.first { $0.identifier == expectedPackageID }
+            ?? offering.availablePackages.first { $0.storeProduct.productIdentifier == productID }
     }
 
     /// Localized store price — never a hard-coded number.

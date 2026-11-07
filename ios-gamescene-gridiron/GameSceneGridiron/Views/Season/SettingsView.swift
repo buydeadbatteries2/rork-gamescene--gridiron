@@ -3,7 +3,7 @@ import SwiftUI
 /// SETTINGS — everything the player can tune, grouped in pinned cards:
 /// GAMEPLAY (difficulty + tutorial replay), AUDIO (toggles + volumes),
 /// ACCESSIBILITY (haptics, reduce motion, larger clue text, high contrast),
-/// PURCHASES (Ad-Free status + restore) and ABOUT (legal documents + support).
+/// PURCHASES (Ad-Free status + restore) and ABOUT (version + legal links).
 /// Difficulty is locked while a season is running (shown, never hidden);
 /// between seasons the choice is free until the next season starts.
 struct SettingsView: View {
@@ -19,8 +19,6 @@ struct SettingsView: View {
     @State private var hasAppeared: Bool = false
     @State private var isReplayingTutorial: Bool = false
     @State private var isShowingProfile: Bool = false
-    @State private var legalDocument: LegalDocument?
-    @State private var supportUnavailable = false
 
     /// Phase 11.6: while a season is running the difficulty is pinned to the
     /// level the season was started with. The current difficulty stays fully
@@ -56,17 +54,6 @@ struct SettingsView: View {
         }
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.05)) { hasAppeared = true }
-        }
-        .sheet(item: $legalDocument) { document in
-            LegalDocumentView(document: document)
-        }
-        .alert("Contact Support", isPresented: $supportUnavailable) {
-            Button("Copy Email Address") {
-                UIPasteboard.general.string = "support@ndstriistudios.com"
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Email support@ndstriistudios.com. No email app could be opened on this device.")
         }
         .sheet(isPresented: $isShowingProfile) {
             NavigationStack { ProfileView() }
@@ -487,44 +474,46 @@ struct SettingsView: View {
 
     // MARK: About
 
-    /// Offline legal documents and email support. Version is intentionally omitted.
+    /// ABOUT — bundle version (read live, never hard-coded) plus configurable
+    /// hooks for the Privacy Policy, Terms of Use and Support. A link that
+    /// isn't configured yet renders a neutral unavailable state, never a dead
+    /// end and never an invented URL.
     private var aboutCard: some View {
         card(rotation: -0.3) {
             sectionHeader("ABOUT", symbol: "info.circle")
 
-            aboutActionRow("PRIVACY POLICY", symbol: "hand.raised.fill") { legalDocument = .privacy }
-            aboutActionRow("TERMS OF USE", symbol: "doc.plaintext") { legalDocument = .terms }
-            aboutActionRow("SUPPORT", symbol: "envelope") {
-                guard let url = AppLinks.supportURL else { return }
-                UIApplication.shared.open(url, options: [:]) { opened in
-                    if !opened { supportUnavailable = true }
-                }
-            }
-            Text("support@ndstriistudios.com")
-                .font(.footnote)
-                .foregroundStyle(Theme.paperInkSoft)
-                .textSelection(.enabled)
+            Text(AppInfo.displayLine)
+                .font(.system(size: 14, weight: .heavy).width(.condensed))
+                .tracking(1)
+                .foregroundStyle(Theme.paperInk)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 6)
+                .accessibilityLabel("App version \(AppInfo.version), build \(AppInfo.build)")
+
+            aboutLinkRow("PRIVACY POLICY", symbol: "hand.raised.fill", url: AppLinks.privacyPolicyURL)
+            aboutLinkRow("TERMS OF USE", symbol: "doc.plaintext", url: AppLinks.termsOfUseURL)
+            aboutLinkRow("SUPPORT", symbol: "envelope", url: AppLinks.supportURL)
         }
     }
 
-    private func aboutActionRow(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+    private func aboutLinkRow(_ title: String, symbol: String, url: URL?) -> some View {
         Button {
             Haptics.tick()
+            guard let url else { return }
             AudioManager.shared.play(.buttonPress)
-            action()
+            UIApplication.shared.open(url)
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: symbol)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Theme.gold)
+                    .foregroundStyle(url != nil ? Theme.gold : Theme.paperInkSoft.opacity(0.5))
                     .frame(width: 24)
                 Text(title)
                     .font(.system(size: 13, weight: .heavy).width(.condensed))
                     .tracking(1.4)
-                    .foregroundStyle(Theme.paperInk)
+                    .foregroundStyle(url != nil ? Theme.paperInk : Theme.paperInkSoft.opacity(0.7))
                 Spacer()
-                Text("OPEN")
+                Text(url != nil ? "OPEN" : "COMING SOON")
                     .font(.system(size: 9, weight: .black).width(.condensed))
                     .tracking(1.2)
                     .foregroundStyle(Theme.paperInkSoft.opacity(0.7))
@@ -533,8 +522,9 @@ struct SettingsView: View {
             .contentShape(.rect)
         }
         .buttonStyle(PressableButtonStyle())
+        .disabled(url == nil)
         .accessibilityLabel(title)
-        .accessibilityHint("Opens \(title.lowercased())")
+        .accessibilityHint(url != nil ? "Opens the page" : "Not yet available")
     }
 
     // MARK: Shared pieces

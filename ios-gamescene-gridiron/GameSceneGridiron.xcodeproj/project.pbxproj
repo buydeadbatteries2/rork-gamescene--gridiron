@@ -453,7 +453,6 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AppInfo.plist;
-				ADMOB_IOS_APP_ID = "ca-app-pub-7959613098521189~9578660390";
 				ADMOB_APP_ID_VALUE = "$(ADMOB_IOS_APP_ID)";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

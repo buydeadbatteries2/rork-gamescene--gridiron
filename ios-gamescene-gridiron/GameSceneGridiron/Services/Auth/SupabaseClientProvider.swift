@@ -66,15 +66,7 @@ final class SupabaseClientProvider {
               let validURL = URL(string: cleanURL),
               validURL.scheme == "https",
               validURL.host != nil else { return nil }
-        #if DEBUG
-        let configuration = URLSessionConfiguration.default
-        configuration.protocolClasses = [VersusDiagnosticProtocol.self] + (configuration.protocolClasses ?? [])
-        let session = URLSession(configuration: configuration)
-        return SupabaseClient(supabaseURL: validURL, supabaseKey: cleanKey,
-                              options: SupabaseClientOptions(global: .init(session: session)))
-        #else
         return SupabaseClient(supabaseURL: validURL, supabaseKey: cleanKey)
-        #endif
     }
 
     // MARK: Password-reset deep link

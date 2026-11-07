@@ -54,9 +54,7 @@ final class GameViewModel {
     /// NEED SOME HELP? sheet (hint or loss — never a second video).
     private(set) var isPostVideoRescue = false
     private(set) var usedHints: [UsedHint] = []
-    private(set) var placements: [PlacedPlayer] = [] {
-        didSet { dragTargets = nil }
-    }
+    private(set) var placements: [PlacedPlayer] = []
     private(set) var selectedProfiles: [String: PlayerProfile] = [:]
     private(set) var result: PuzzleResult = .inProgress
     private(set) var feedback: FeedbackMessage?
@@ -102,22 +100,7 @@ final class GameViewModel {
     private(set) var lastPlacedPlayerID: String?
 
     /// Frame of the turf in the gameplay coordinate space; reported by the field view.
-    var fieldFrame: CGRect = .zero {
-        didSet { if oldValue != fieldFrame { dragTargets = nil } }
-    }
-
-    // Derived memoization is not UI state. Never publishes changes from rendering.
-    @ObservationIgnored private var dragTargets: (playerID: String?, points: [(PlacementSlot, CGPoint)])?
-    @ObservationIgnored private var markerCache: (slots: [PlacementSlot], size: CGSize, diameter: CGFloat, points: [String: CGPoint])?
-
-    func markerPositions(slots: [PlacementSlot], fieldSize: CGSize, visibleDiameter: CGFloat) -> [String: CGPoint] {
-        if let cache = markerCache, cache.slots == slots, cache.size == fieldSize, cache.diameter == visibleDiameter {
-            return cache.points
-        }
-        let points = PlacementZoneLayout.displayPositions(slots: slots, fieldSize: fieldSize, visibleDiameter: visibleDiameter)
-        markerCache = (slots, fieldSize, visibleDiameter, points)
-        return points
-    }
+    var fieldFrame: CGRect = .zero
 
     /// Profiles the player may choose from at this game difficulty.
     var availableProfiles: [PlayerProfile] { PlayerProfile.pool(for: difficulty) }
@@ -231,9 +214,9 @@ final class GameViewModel {
 
     func toggleExpanded(_ playerID: String) {
         guard result == .inProgress else { return }
-        expandedPlayerID = expandedPlayerID == playerID ? nil : playerID
         Haptics.tick()
-        AudioManager.shared.playInteraction(.cardSelect)
+        AudioManager.shared.play(.cardSelect)
+        expandedPlayerID = expandedPlayerID == playerID ? nil : playerID
     }
 
     /// Selects a deployment profile. Only profiles valid for the active game
@@ -241,14 +224,14 @@ final class GameViewModel {
     /// guard keeps the model airtight.
     func selectProfile(_ profile: PlayerProfile, for playerID: String) {
         guard result == .inProgress, availableProfiles.contains(profile) else { return }
+        Haptics.tick()
+        AudioManager.shared.play(.profileSelect)
         expandedPlayerID = playerID
         if selectedProfiles[playerID] == profile {
             selectedProfiles[playerID] = nil
         } else {
             selectedProfiles[playerID] = profile
         }
-        Haptics.tick()
-        AudioManager.shared.playInteraction(.profileSelect)
     }
 
     func showClue(at index: Int) {
@@ -289,7 +272,7 @@ final class GameViewModel {
         inspectedEvidenceID = nil
         updateDrag(to: location)
         Haptics.pickUp()
-        AudioManager.shared.playInteraction(.dragBegin)
+        AudioManager.shared.play(.dragBegin)
         return true
     }
 
@@ -308,19 +291,10 @@ final class GameViewModel {
     /// release ambiguously: whatever the geometry, a drop resolves to this
     /// single nearest target — or to nothing when no candidate is in range.
     private func dropTarget(near tokenPoint: CGPoint) -> PlacementSlot? {
-        if dragTargets == nil || dragTargets?.playerID != draggingPlayerID {
-            dragTargets = (draggingPlayerID, candidateSlots.map { ($0, point(x: $0.x, y: $0.y)) })
-        }
-        var nearest: PlacementSlot?
-        var nearestDistance = Self.snapRadius
-        for (slot, point) in dragTargets?.points ?? [] {
-            let d = distance(point, tokenPoint)
-            if d <= Self.snapRadius && (nearest == nil || d < nearestDistance) {
-                nearest = slot
-                nearestDistance = d
-            }
-        }
-        return nearest
+        candidateSlots
+            .map { slot in (slot, distance(point(x: slot.x, y: slot.y), tokenPoint)) }
+            .filter { $0.1 <= Self.snapRadius }
+            .min { $0.1 < $1.1 }?.0
     }
 
     /// The hovered target's true field point in gameplay coordinates. The

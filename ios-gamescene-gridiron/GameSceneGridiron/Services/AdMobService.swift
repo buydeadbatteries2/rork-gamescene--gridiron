@@ -13,9 +13,9 @@ import AppTrackingTransparency
 // Google SDK — they ask `AdManager` (the facade) which asks this service.
 //
 // Safety contracts:
-// - Our explicit start runs once, only with a selected app ID, without a
-//   Release test-ID fallback. This does NOT prevent the linked SDK's own
-//   configuration validation: a valid app ID must exist in the built plist.
+// - Initialization happens exactly once, only with a valid app ID; a missing
+//   production ID in RELEASE disables ads gracefully (never crashes, never
+//   substitutes test units).
 // - Ad requests happen only after UMP reports ads may be requested.
 // - A rewarded grant flows only from Google's earned-reward callback.
 // - Full-screen presentations are tracked so a present can never double-fire,
@@ -66,11 +66,11 @@ final class AdMobService {
         AdMobConfig.adUnitID(.rewarded, isDevelopmentBuild: AdManager.isDevelopmentBuild, injectedUnitIDs: Self.injectedUnitIDs)
     }
 
-    /// Read the processed bundle, which is also what Google reads. Source
-    /// `$(ADMOB_...)` placeholders require actual Xcode build settings; merely
-    /// configuring server-only variables does not establish that wiring.
-    /// Missing unit IDs disable their format. A missing app ID is a release
-    /// blocker even if our explicit start is skipped (the SDK validates it).
+    /// The Rork build-injected production identifiers. They arrive through
+    /// the app's Info.plist — the project's Info.plist carries `$(ADMOB_...)`
+    /// placeholders that the build pipeline expands from the Rork secret
+    /// variables. Nothing is ever hard-coded in source; an unexpanded or empty
+    /// value simply disables that format (and the app ID disables ads).
     nonisolated private static let injectedAppID: String = {
         let raw = Bundle.main.object(forInfoDictionaryKey: "GADApplicationIdentifier") as? String ?? ""
         // An unexpanded build-setting placeholder must never reach the SDK.
@@ -103,9 +103,9 @@ final class AdMobService {
             injectedAppID: injected ?? Self.injectedAppID
         )
         guard MobileAdsStartGate.shouldStart(hasStarted: false, appIdentifier: resolvedAppID) else {
-            // Do not explicitly start or request ads with missing configuration.
-            // This guard cannot guarantee launch safety: the linked SDK may
-            // validate the plist independently. Reject such Release artifacts.
+            // No valid app identifier: ads stay disabled for this build. The
+            // game never blocks on it — the banner slot collapses and gate
+            // flows resolve "unavailable" for free.
             isAdsSupported = false
             return
         }

@@ -21,10 +21,11 @@ nonisolated enum AppInfo {
 
 // MARK: - Production links
 
-/// Support opens email. Legal documents are bundled in LegalDocument;
-/// website URLs remain unset until the published addresses are supplied.
+/// Configurable production URLs for the About section. Insert the real links
+/// before App Store submission — nothing here invents a URL, and a nil link
+/// renders a neutral "not yet available" state instead of a dead end.
 nonisolated enum AppLinks {
     static let privacyPolicyURL: URL? = nil
     static let termsOfUseURL: URL? = nil
-    static let supportURL: URL? = URL(string: "mailto:support@ndstriistudios.com")
+    static let supportURL: URL? = nil
 }

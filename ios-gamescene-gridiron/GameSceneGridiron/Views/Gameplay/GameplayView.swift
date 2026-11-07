@@ -123,7 +123,16 @@ struct GameplayView: View {
         }
         .coordinateSpace(.named(Self.coordinateSpace))
         .overlay(alignment: .topLeading) {
-            GameplayDragOverlay(viewModel: viewModel, tint: userTeam?.primaryColor)
+            if let player = viewModel.draggingPlayer {
+                DraggedPlayerToken(
+                    player: player,
+                    profile: viewModel.selectedProfile(for: player.id),
+                    isOverSlot: viewModel.hoveredSlotID != nil,
+                    tint: userTeam?.primaryColor
+                )
+                .position(draggedTokenPosition(for: viewModel))
+                .transition(.scale(scale: 0.5).combined(with: .opacity))
+            }
         }
         .overlay(alignment: .top) {
             if let feedback = viewModel.feedback {
@@ -195,6 +204,7 @@ struct GameplayView: View {
         .sheet(isPresented: $isShopPresented) {
             ShopView()
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isDragging)
         .statusBarHidden(false)
         .task {
             AudioManager.shared.playMusic(.gameplayTheme)
@@ -273,7 +283,7 @@ struct GameplayView: View {
     /// token leans toward the target's true field point so the spot the player
     /// is about to drop into is unmistakable. Release still resolves the real
     /// drop location against the nearest candidate — nothing auto-completes.
-    fileprivate static func draggedTokenPosition(for viewModel: GameViewModel) -> CGPoint {
+    private func draggedTokenPosition(for viewModel: GameViewModel) -> CGPoint {
         let base = CGPoint(
             x: viewModel.dragLocation.x,
             y: viewModel.dragLocation.y - GameViewModel.dragLift
@@ -373,29 +383,6 @@ struct GameplayView: View {
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
-    }
-}
-
-/// Only this small subtree observes per-sample finger movement.
-private struct GameplayDragOverlay: View {
-    let viewModel: GameViewModel
-    let tint: Color?
-
-    var body: some View {
-        ZStack {
-            if let player = viewModel.draggingPlayer {
-                DraggedPlayerToken(
-                    player: player,
-                    profile: viewModel.selectedProfile(for: player.id),
-                    isOverSlot: viewModel.hoveredSlotID != nil,
-                    tint: tint
-                )
-                .position(GameplayView.draggedTokenPosition(for: viewModel))
-                .transition(.scale(scale: 0.5).combined(with: .opacity))
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isDragging)
-        .allowsHitTesting(false)
     }
 }
 

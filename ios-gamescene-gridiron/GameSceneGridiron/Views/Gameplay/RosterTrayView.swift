@@ -7,7 +7,7 @@ import SwiftUI
 /// - The left/right metallic arrows slide between pages; they dim at the ends.
 /// - A solved player is removed and pages re-flow with no gaps.
 /// - Tap selects/expandes a card; tap on a variant chip picks the profile;
-///   press-and-hold (~0.15s) sequences into the placement drag.
+///   press-and-hold (~0.28s) sequences into the placement drag.
 struct RosterTrayView: View {
     let viewModel: GameViewModel
     /// Team primary tint applied to the controlled body assets on every card.
@@ -22,7 +22,7 @@ struct RosterTrayView: View {
     @State private var slideDirection: SlideDirection = .forward
     @State private var trayWidth: CGFloat = 360
 
-    private let holdDuration: TimeInterval = 0.15
+    private let holdDuration: TimeInterval = 0.28
     private let cardSpacing: CGFloat = 10
     private let collapsedCardWidth: CGFloat = 112
     private let expandedCardWidth: CGFloat = 192
@@ -61,10 +61,9 @@ struct RosterTrayView: View {
             let pages = self.pages(for: viewModel.remainingPlayers, availableWidth: trayWidth - 32)
             if let target = pages.firstIndex(where: { $0.contains { $0.id == playerID } }), target != pageIndex {
                 slideDirection = target > pageIndex ? .forward : .back
-                // Selection-driven reflow is immediate; arrow browsing keeps its spring.
-                var transaction = Transaction(animation: nil)
-                transaction.disablesAnimations = true
-                withTransaction(transaction) { pageIndex = target }
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+                    pageIndex = target
+                }
             }
         }
     }
@@ -117,8 +116,7 @@ struct RosterTrayView: View {
                         availableProfiles: viewModel.availableProfiles,
                         isBeingDragged: viewModel.draggingPlayerID == player.id,
                         onToggle: { viewModel.toggleExpanded(player.id) },
-                        onSelectProfile: { viewModel.selectProfile($0, for: player.id) },
-                        holdDrag: dragGesture(for: player)
+                        onSelectProfile: { viewModel.selectProfile($0, for: player.id) }
                     )
                     .overlay {
                         if player.id == highlightedPlayerID, !viewModel.isDragging {
@@ -127,6 +125,7 @@ struct RosterTrayView: View {
                                 .allowsHitTesting(false)
                         }
                     }
+                    .simultaneousGesture(dragGesture(for: player))
                     .transition(.asymmetric(insertion: .opacity, removal: .scale(scale: 0.4).combined(with: .opacity)))
                 }
             }
@@ -248,9 +247,8 @@ struct RosterTrayView: View {
     // MARK: Drag
 
     private func dragGesture(for player: FootballPlayer) -> some Gesture {
-        // Installed only on the portrait/name surface inside PlayerCardView.
-        // Profile Buttons are siblings, outside this recognizer's hit region.
-        // Keep the 15pt movement tolerance to reject incidental motion.
+        // Long press first: only a successful hold sequences into the drag, so taps
+        // and any incidental touches never fight with selection.
         LongPressGesture(minimumDuration: holdDuration, maximumDistance: 15)
             .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(GameplayView.coordinateSpace)))
             .updating($isGestureActive) { _, state, _ in

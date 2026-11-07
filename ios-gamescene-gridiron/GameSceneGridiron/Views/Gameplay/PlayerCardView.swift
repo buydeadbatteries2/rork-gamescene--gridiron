@@ -3,7 +3,7 @@ import SwiftUI
 /// Premium roster card for a missing player: realistic visored portrait over a
 /// position-colored spotlight, name plaque, position accent strip at the base.
 /// Tap to reveal variants; press-and-hold and drag to place.
-struct PlayerCardView<HoldDrag: Gesture>: View {
+struct PlayerCardView: View {
     let player: FootballPlayer
     /// Team primary color multiplied over the controlled body asset so the
     /// fictional franchise recolors its players. Nil keeps the neutral base.
@@ -15,7 +15,6 @@ struct PlayerCardView<HoldDrag: Gesture>: View {
     let isBeingDragged: Bool
     let onToggle: () -> Void
     let onSelectProfile: (PlayerProfile) -> Void
-    let holdDrag: HoldDrag
 
     private var accent: Color { Theme.positionAccent(player.position) }
     private var cardWidth: CGFloat { isExpanded ? 192 : 112 }
@@ -23,18 +22,14 @@ struct PlayerCardView<HoldDrag: Gesture>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // One gesture surface, not a Button underneath a parent recognizer.
-            // A short tap resolves on release; a successful hold owns the touch
-            // through the drop and cannot also toggle the card on release.
-            VStack(spacing: 0) {
-                portrait
-                namePlaque
+            Button(action: onToggle) {
+                VStack(spacing: 0) {
+                    portrait
+                    namePlaque
+                }
+                .contentShape(.rect)
             }
-            .contentShape(.rect)
-            .gesture(holdDrag.exclusively(before: TapGesture().onEnded { onToggle() }))
-            .accessibilityElement(children: .ignore)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction { onToggle() }
+            .buttonStyle(PressableButtonStyle(scale: 0.97))
             .accessibilityLabel("\(player.position.fullName), \(player.shortName)")
             .accessibilityValue(selectedProfile.map { "\($0.title) selected" } ?? "No profile selected")
             .accessibilityHint(isExpanded ? "Collapse" : "Show the available profiles")
@@ -66,8 +61,7 @@ struct PlayerCardView<HoldDrag: Gesture>: View {
         .shadow(color: accent.opacity(isExpanded ? 0.4 : 0.18), radius: isExpanded ? 12 : 6, y: 2)
         .opacity(isBeingDragged ? 0.35 : 1)
         .scaleEffect(isBeingDragged ? 0.95 : 1)
-        .animation(nil, value: isExpanded)
-        .animation(nil, value: selectedProfile)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isExpanded)
         .animation(.easeOut(duration: 0.2), value: isBeingDragged)
     }
 

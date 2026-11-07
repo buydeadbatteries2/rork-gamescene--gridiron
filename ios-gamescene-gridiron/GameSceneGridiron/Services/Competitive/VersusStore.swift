@@ -73,12 +73,6 @@ final class VersusStore {
     }
 
     convenience init() {
-        guard ReleaseAvailability.versus else {
-            // No client, identity lookup, cache recovery, polling or queue flush.
-            // Existing persisted Versus work is deliberately left untouched.
-            self.init(backend: nil, userID: { nil })
-            return
-        }
         let provider = SupabaseClientProvider.shared
         let backend: (any VersusBackend)? = provider.isConfigured
             ? provider.supabase.map { SupabaseVersusBackend(client: $0) }
