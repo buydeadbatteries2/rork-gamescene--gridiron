@@ -24,7 +24,7 @@ struct HomeView: View {
     @State private var versus = VersusStore.shared
     @State private var lockedMessage: String?
     @State private var hasAppeared: Bool = false
-    @State private var glow: Bool = false
+    @State private var isScrolling = false
 
     var body: some View {
         ZStack {
@@ -62,7 +62,7 @@ struct HomeView: View {
                         .padding(.horizontal, 26)
                     }
                     .buttonStyle(GoldCapsuleButtonStyle())
-                    .shadow(color: Theme.gold.opacity(glow ? 0.35 : 0.1), radius: glow ? 22 : 10)
+                    .modifier(HomeCTAGlow(isScrolling: isScrolling))
                     .accessibilityHint(teamStore.hasTeam ? "Opens your season" : "Opens the investigation")
 
                     if ReleaseAvailability.versus {
@@ -174,6 +174,9 @@ struct HomeView: View {
                 .padding(.bottom, 40)
             }
             .scrollIndicators(.hidden)
+            .onScrollPhaseChange { _, phase in
+                isScrolling = phase != .idle
+            }
 
             if let lockedMessage {
                 VStack {
@@ -195,12 +198,6 @@ struct HomeView: View {
         }
         .onAppear {
             withAnimation(.spring(response: 0.8, dampingFraction: 0.8).delay(0.05)) { hasAppeared = true }
-            // Reduce Motion: the CTA glow rests at a gentle constant shine.
-            if !Motion.isReduced {
-                withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { glow = true }
-            } else {
-                glow = true
-            }
         }
         .fullScreenCover(isPresented: $isPlaying) {
             SeasonView()

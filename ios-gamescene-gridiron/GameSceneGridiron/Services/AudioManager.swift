@@ -57,14 +57,7 @@ final class AudioManager {
     /// swapped out, making a late `isPlaying` poll raise an uncatchable
     /// NSInvalidArgumentException. Reading `duration` right after creation
     /// (on a healthy object) avoids that entirely.
-    private struct ActiveEffect {
-        let player: AVAudioPlayer
-        let duration: TimeInterval
-        let startedAt = Date()
-    }
-
-    private var activeEffectPlayers: [ActiveEffect] = []
-    private var effectData: [SoundEffect: Data] = [:]
+    @ObservationIgnored private let effectsPlayback = EffectsPlayback()
     private var currentTrack: MusicTrack?
     /// True while a screen wants the music bed (even if music is currently muted),
     /// so re-enabling music mid-game resumes the correct track.
@@ -141,31 +134,17 @@ final class AudioManager {
 
     // MARK: Sound effects
 
+    /// Selection uses the same serial audio worker; no decoding or player
+    /// construction runs inside the gesture callback.
+    func playInteraction(_ effect: SoundEffect) {
+        play(effect)
+    }
+
     /// Plays a one-shot effect. Overlapping plays of the same effect are allowed.
     func play(_ effect: SoundEffect) {
         guard isSoundEffectsEnabled else { return }
         configureSessionIfNeeded()
-        let data: Data
-        if let cached = effectData[effect] {
-            data = cached
-        } else if let loaded = Self.loadData(named: effect.rawValue) {
-            effectData[effect] = loaded
-            data = loaded
-        } else {
-            return
-        }
-        guard let player = try? AVAudioPlayer(data: data, fileTypeHint: AVFileType.mp3.rawValue) else { return }
-        player.volume = effectVolume
-        player.prepareToPlay()
-        player.play()
-        // Reap finished players, then cap the pool: rapid taps (or a burst of
-        // overlapping stings) can never spawn runaway audio instances.
-        let now = Date()
-        activeEffectPlayers.removeAll { now.timeIntervalSince($0.startedAt) >= $0.duration }
-        if activeEffectPlayers.count >= Self.maxSimultaneousEffects {
-            activeEffectPlayers.removeFirst(activeEffectPlayers.count - Self.maxSimultaneousEffects + 1)
-        }
-        activeEffectPlayers.append(ActiveEffect(player: player, duration: player.duration))
+        effectsPlayback.play(name: effect.rawValue, volume: effectVolume, limit: Self.maxSimultaneousEffects)
     }
 
     // MARK: Settings
