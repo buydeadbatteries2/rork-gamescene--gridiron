@@ -78,7 +78,6 @@ struct GameFieldView: View {
                     .allowsHitTesting(false)
                 }
 
-                ZStack(alignment: .topLeading) {
                 if isInteractive {
                     // Only zones the dragged player could actually line up in —
                     // irrelevant landmarks for other positions stay hidden so
@@ -88,7 +87,7 @@ struct GameFieldView: View {
                     // Display-only de-overlap: markers may shift a few points
                     // so no two zones (or "?") ever stack. Snapping and solved
                     // placements always use the true field coordinates.
-                    let markerPoints = viewModel.markerPositions(
+                    let markerPoints = PlacementZoneLayout.displayPositions(
                         slots: dragSlots,
                         fieldSize: size,
                         visibleDiameter: zoneDiameter
@@ -137,9 +136,8 @@ struct GameFieldView: View {
                             .transition(.opacity.combined(with: .scale(scale: 0.7)))
                     }
                 }
-                }
-                .animation(.easeInOut(duration: 0.2), value: viewModel.isDragging)
             }
+            .animation(.easeInOut(duration: 0.2), value: viewModel.isDragging)
         }
         .clipShape(.rect(cornerRadius: 10, style: .continuous))
         .overlay {
@@ -153,13 +151,7 @@ struct GameFieldView: View {
                     lineWidth: 1.5
                 )
         }
-        .background {
-            // Shadow the opaque silhouette, not the changing field subtree.
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Theme.turf)
-                .shadow(color: .black.opacity(0.55), radius: 14, y: 8)
-                .allowsHitTesting(false)
-        }
+        .shadow(color: .black.opacity(0.55), radius: 14, y: 8)
         .overlay(alignment: .bottom) {
             if isInteractive, viewModel.isDragging {
                 Text("DROP WHERE THE EVIDENCE POINTS")

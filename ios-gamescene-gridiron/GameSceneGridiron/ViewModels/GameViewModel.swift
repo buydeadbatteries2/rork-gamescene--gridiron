@@ -177,19 +177,6 @@ final class GameViewModel {
         }
     }
 
-    /// Display-only single-entry cache. Cache writes must not invalidate the view.
-    @ObservationIgnored private var markerCache: (slots: [PlacementSlot], size: CGSize, diameter: CGFloat, points: [String: CGPoint])?
-
-    func markerPositions(slots: [PlacementSlot], fieldSize: CGSize, visibleDiameter: CGFloat) -> [String: CGPoint] {
-        if let cache = markerCache, cache.slots == slots,
-           cache.size == fieldSize, cache.diameter == visibleDiameter {
-            return cache.points
-        }
-        let points = PlacementZoneLayout.displayPositions(slots: slots, fieldSize: fieldSize, visibleDiameter: visibleDiameter)
-        markerCache = (slots, fieldSize, visibleDiameter, points)
-        return points
-    }
-
     var solvedPlayerIDs: Set<String> { Set(placements.map(\.player.id)) }
 
     var isDragging: Bool { draggingPlayerID != nil }
