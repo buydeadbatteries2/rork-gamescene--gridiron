@@ -65,6 +65,8 @@ final class AudioManager {
 
     private var activeEffectPlayers: [ActiveEffect] = []
     private var effectData: [SoundEffect: Data] = [:]
+    private var placementClipData: [Int: Data] = [:]
+    private var lastPlacementClip: Int?
     private var currentTrack: MusicTrack?
     /// True while a screen wants the music bed (even if music is currently muted),
     /// so re-enabling music mid-game resumes the correct track.
@@ -155,6 +157,30 @@ final class AudioManager {
             return
         }
         guard let player = try? AVAudioPlayer(data: data, fileTypeHint: AVFileType.mp3.rawValue) else { return }
+        playEffectPlayer(player)
+    }
+
+    /// Uploaded placement voices; exclude the previous clip to avoid repeats.
+    func playCorrectPlacement() {
+        guard isSoundEffectsEnabled else { return }
+        let candidates = (1...10).filter { $0 != lastPlacementClip }
+        guard let clip = candidates.randomElement() else { return }
+        let data: Data
+        if let cached = placementClipData[clip] {
+            data = cached
+        } else {
+            guard let url = Bundle.main.url(forResource: "victor_good_\(clip)", withExtension: "wav"),
+                  let loaded = try? Data(contentsOf: url) else { return }
+            placementClipData[clip] = loaded
+            data = loaded
+        }
+        guard let player = try? AVAudioPlayer(data: data) else { return }
+        lastPlacementClip = clip
+        configureSessionIfNeeded()
+        playEffectPlayer(player)
+    }
+
+    private func playEffectPlayer(_ player: AVAudioPlayer) {
         player.volume = effectVolume
         player.prepareToPlay()
         player.play()

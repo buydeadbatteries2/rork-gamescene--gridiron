@@ -339,7 +339,7 @@ final class GameViewModel {
                 lastPlacedPlayerID = player.id
             }
             Haptics.success()
-            AudioManager.shared.play(.placementCorrect)
+            AudioManager.shared.playCorrectPlacement()
             show(FeedbackMessage(title: "GOOD READ", detail: "\(player.position.rawValue) \(player.shortName) is in position.", tone: .success))
             advanceClueIfSolved()
 
