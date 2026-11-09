@@ -140,8 +140,16 @@ struct MatchFlowView: View {
             }
         }
         .animation(.easeInOut(duration: 0.35), value: matchViewModel.phase)
+        .onAppear {
+            AudioManager.shared.stopMusic(fadeOutDuration: 0.3, only: .menuTheme)
+        }
+        .onDisappear { AudioManager.shared.playMusic(.menuTheme) }
         .onChange(of: matchViewModel.phase) { _, phase in
-            guard phase == .gameResult else { return }
+            guard phase == .gameResult else {
+                AudioManager.shared.stopMusic(fadeOutDuration: 0.3, only: .menuTheme)
+                return
+            }
+            AudioManager.shared.playMusic(.menuTheme)
             // Natural-break bookkeeping for the interstitial frequency gate.
             if matchViewModel.match.isComplete {
                 AdManager.shared.recordCompletedGame()

@@ -297,7 +297,7 @@ struct SettingsView: View {
                 get: { audio.isMusicEnabled },
                 set: { audio.setMusicEnabled($0) }
             )) {
-                settingLabel("MUSIC", detail: "Investigation score")
+                settingLabel("BACKGROUND MUSIC", detail: "Menu theme and investigation score")
             }
             .tint(Theme.gold)
             .padding(.vertical, 6)

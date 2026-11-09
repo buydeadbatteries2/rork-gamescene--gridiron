@@ -268,12 +268,12 @@ struct GameplayView: View {
             if result == .inProgress {
                 AudioManager.shared.playMusic(.gameplayTheme)
             } else {
-                AudioManager.shared.stopMusic(fadeOutDuration: 1.4)
+                AudioManager.shared.stopMusic(fadeOutDuration: 1.4, only: .gameplayTheme)
                 onQuarterComplete(viewModel)
             }
         }
         .onDisappear {
-            AudioManager.shared.stopMusic(fadeOutDuration: 0.6)
+            AudioManager.shared.stopMusic(fadeOutDuration: 0.6, only: .gameplayTheme)
         }
     }
 

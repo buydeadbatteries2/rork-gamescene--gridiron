@@ -63,6 +63,11 @@ struct VersusPlayView: View {
             }
         }
         .animation(.easeInOut(duration: 0.35), value: matchViewModel.phase)
+        .onAppear { AudioManager.shared.stopMusic(fadeOutDuration: 0.3, only: .menuTheme) }
+        .onDisappear { AudioManager.shared.playMusic(.menuTheme) }
+        .onChange(of: matchViewModel.phase) { _, phase in
+            if phase == .gameResult { AudioManager.shared.playMusic(.menuTheme) }
+        }
         .confirmationDialog("Leave this case file?", isPresented: $isConfirmingLeave, titleVisibility: .visible) {
             Button("Leave — progress is saved") { dismiss() }
             Button("Stay", role: .cancel) {}

@@ -98,7 +98,9 @@ final class AudioManager {
     }
 
     /// Fades the music out and releases the bed (result screens, leaving gameplay).
-    func stopMusic(fadeOutDuration: TimeInterval = 0.8) {
+    func stopMusic(fadeOutDuration: TimeInterval = 0.8, only track: MusicTrack? = nil) {
+        // A disappearing gameplay view must not silence newly started menu music.
+        if let track, currentTrack != track { return }
         isMusicDesired = false
         currentTrack = nil
         guard let player = musicPlayer else { return }
@@ -124,8 +126,9 @@ final class AudioManager {
             player.setVolume(musicVolume, fadeDuration: fadeInDuration)
             return
         }
-        guard let data = Self.loadData(named: track.rawValue) else { return }
-        guard let player = try? AVAudioPlayer(data: data, fileTypeHint: AVFileType.mp3.rawValue) else { return }
+        // File-backed playback avoids allocating a complete music Data buffer.
+        guard let url = Bundle.main.url(forResource: track.rawValue, withExtension: Self.fileExtension),
+              let player = try? AVAudioPlayer(contentsOf: url) else { return }
         player.numberOfLoops = -1
         player.volume = 0
         player.prepareToPlay()

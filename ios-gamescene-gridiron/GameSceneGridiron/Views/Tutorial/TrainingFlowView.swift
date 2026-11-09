@@ -57,6 +57,7 @@ struct TrainingFlowView: View {
             }
         }
         .animation(.easeInOut(duration: 0.35), value: session.step)
+        .onDisappear { AudioManager.shared.playMusic(.menuTheme) }
         .onChange(of: viewModel.expandedPlayerID) { _, _ in
             session.handleExpansion()
         }
@@ -68,6 +69,7 @@ struct TrainingFlowView: View {
             // button tap, not on relaunch.
             if step == .complete {
                 TutorialManager.shared.markTutorialCompleted()
+                AudioManager.shared.playMusic(.menuTheme)
             }
         }
         // Safe exit from every mode: the confirm copy points at Settings
