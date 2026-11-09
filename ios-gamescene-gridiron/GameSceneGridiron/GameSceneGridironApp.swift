@@ -30,6 +30,7 @@ struct GameSceneGridironApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onAppear { AudioManager.shared.startMenuMusic() }
                 // Auth deep links (password-reset return trips) come through
                 // the gamescene:// scheme.
                 .onOpenURL { url in
