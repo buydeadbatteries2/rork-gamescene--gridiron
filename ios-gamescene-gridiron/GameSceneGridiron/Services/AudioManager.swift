@@ -71,6 +71,7 @@ final class AudioManager {
     private var incorrectPlacementClipData: [Int: Data] = [:]
     private var lastIncorrectPlacementClip: Int?
     private var currentTrack: MusicTrack?
+    private var loadedMusicTrack: MusicTrack?
     /// True while a screen wants the music bed (even if music is currently muted),
     /// so re-enabling music mid-game resumes the correct track.
     private var isMusicDesired = false
@@ -119,7 +120,7 @@ final class AudioManager {
     private func startMusicPlayer(_ track: MusicTrack, fadeInDuration: TimeInterval) {
         configureSessionIfNeeded()
         fadeTask?.cancel()
-        if let player = musicPlayer, player.isPlaying, currentTrack == track {
+        if let player = musicPlayer, player.isPlaying, loadedMusicTrack == track {
             player.setVolume(musicVolume, fadeDuration: fadeInDuration)
             return
         }
@@ -131,6 +132,7 @@ final class AudioManager {
         player.play()
         player.setVolume(musicVolume, fadeDuration: fadeInDuration)
         musicPlayer = player
+        loadedMusicTrack = track
     }
 
     private func fadeOutAndStop(_ player: AVAudioPlayer, duration: TimeInterval) {

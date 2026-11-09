@@ -5,6 +5,7 @@ struct ContentView: View {
     /// training case → Season 1). Returning users go straight home.
     @State private var showOnboarding = !TutorialManager.shared.hasCompletedOnboarding
     @State private var auth = AuthService.shared
+    @State private var hasStartedLaunchMusic = false
 
     var body: some View {
         HomeView()
@@ -36,6 +37,11 @@ struct ContentView: View {
                     .preferredColorScheme(.dark)
             }
             .buttonStyle(PressableButtonStyle(scale: 1))
+            .onAppear {
+                guard !hasStartedLaunchMusic else { return }
+                hasStartedLaunchMusic = true
+                AudioManager.shared.playMusic(.menuTheme)
+            }
     }
 }
 
