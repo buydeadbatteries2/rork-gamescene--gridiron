@@ -56,8 +56,8 @@ nonisolated enum RosterSlot: String, Codable, Hashable, Sendable, CaseIterable {
 nonisolated struct FranchisePlayer: Identifiable, Codable, Hashable, Sendable {
     let id: UUID
     let slot: RosterSlot
-    let firstName: String
-    let lastName: String
+    private(set) var firstName: String
+    private(set) var lastName: String
     /// Bundled imageset from the controlled 20-body art library.
     let bodyAssetID: String
     private(set) var seasonStats: PlayerStatLine
@@ -73,6 +73,11 @@ nonisolated struct FranchisePlayer: Identifiable, Codable, Hashable, Sendable {
         self.seasonStats = PlayerStatLine()
         self.careerStats = PlayerStatLine()
         self.gameLogs = []
+    }
+
+    mutating func rename(initial: String, surname: String) {
+        firstName = initial
+        lastName = surname
     }
 
     var position: FootballPosition { slot.position }

@@ -47,6 +47,29 @@ final class RosterManager {
         franchise?.player(withID: id)
     }
 
+    static func normalizedPlayerName(initial: String, surname: String) -> (initial: String, surname: String)? {
+        let initial = initial.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let surname = surname.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard initial.count == 1, initial.allSatisfy({ $0.isLetter }),
+              (1...30).contains(surname.count),
+              surname.first?.isLetter == true, surname.last?.isLetter == true,
+              surname.allSatisfy({ $0.isLetter || $0 == " " || $0 == "-" || $0 == "'" || $0 == "’" }) else { return nil }
+        return (initial, surname)
+    }
+
+    /// Rechecks funds and identity before spending; changes no stats or player IDs.
+    @discardableResult
+    func renamePlayer(id: UUID, initial: String, surname: String, wallet: PlayerWallet) -> Bool {
+        guard let name = Self.normalizedPlayerName(initial: initial, surname: surname),
+              var updated = franchise, let current = updated.player(withID: id),
+              current.displayName != "\(name.initial). \(name.surname)",
+              wallet.spend(amount: EconomyConfig.standard.playerRenameCost, kind: .playerRename) else { return false }
+        updated.renamePlayer(id: id, initial: name.initial, surname: name.surname)
+        franchise = updated
+        persist()
+        return true
+    }
+
     // MARK: Puzzle identity assignment
 
     /// Maps the case's missing-player keys onto real roster members. Each

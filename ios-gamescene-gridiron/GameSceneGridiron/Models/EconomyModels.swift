@@ -29,6 +29,7 @@ nonisolated struct EconomyConfig: Sendable {
     let hintCost: Int
     /// Entry fee for each post-creation team editing session.
     let teamEditCost: Int = 50
+    let playerRenameCost: Int = 10
     /// Game Ball price to skip one regulation between-quarter forced ad.
     let regulationAdSkipCost: Int
     /// Game Ball price to skip the overtime forced ad.
@@ -98,6 +99,7 @@ nonisolated enum RewardKind: String, Codable, Hashable, Sendable {
     case rewardDouble
     case hintPurchase
     case teamEdit
+    case playerRename
     case rewardedHint
     case rewardedLife
     case achievementReward

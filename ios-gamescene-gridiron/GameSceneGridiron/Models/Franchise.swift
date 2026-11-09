@@ -104,6 +104,11 @@ nonisolated struct Franchise: Codable, Hashable, Sendable {
         self.history = FranchiseHistory()
     }
 
+    mutating func renamePlayer(id: UUID, initial: String, surname: String) {
+        guard let index = players.firstIndex(where: { $0.id == id }) else { return }
+        players[index].rename(initial: initial, surname: surname)
+    }
+
     var allPlayers: [FranchisePlayer] { players }
 
     func player(withID id: UUID) -> FranchisePlayer? {

@@ -13,6 +13,17 @@ struct PlayerDetailView: View {
     @State private var hasAppeared: Bool = false
     @State private var showStatsTooltip: Bool = false
     @State private var rosterManager = RosterManager.shared
+    @State private var isRenaming = false
+    @State private var nameInitial = ""
+    @State private var nameSurname = ""
+    @State private var renameError: String?
+    private var currentPlayer: FranchisePlayer { rosterManager.player(withID: player.id) ?? player }
+    private var renameCost: Int { EconomyConfig.standard.playerRenameCost }
+    private var canRename: Bool { PlayerWallet.shared.gameBalls >= renameCost && rosterManager.franchise?.teamID == team.id }
+    private var validChange: Bool {
+        guard let name = RosterManager.normalizedPlayerName(initial: nameInitial, surname: nameSurname) else { return false }
+        return "\(name.initial). \(name.surname)" != currentPlayer.displayName
+    }
 
     var body: some View {
         ZStack {
@@ -55,6 +66,43 @@ struct PlayerDetailView: View {
                 .padding(.bottom, 30)
             }
             .scrollIndicators(.hidden)
+        }
+        .sheet(isPresented: $isRenaming) {
+            NavigationStack {
+                Form {
+                    Section("PLAYER NAME") {
+                        TextField("First initial", text: $nameInitial)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                        TextField("Last name", text: $nameSurname)
+                            .textInputAutocapitalization(.words)
+                            .autocorrectionDisabled()
+                        Text("Use one letter for the initial and a last name of up to 30 characters.")
+                            .font(.caption)
+                    }
+                    Section {
+                        Text("Saving costs \(renameCost) Game Balls. Balance: \(PlayerWallet.shared.gameBalls).")
+                        Button("SAVE NAME — \(renameCost) GAME BALLS") {
+                            guard canRename, validChange else { return }
+                            if rosterManager.renamePlayer(id: player.id, initial: nameInitial, surname: nameSurname, wallet: PlayerWallet.shared) {
+                                isRenaming = false
+                                Haptics.success()
+                            } else {
+                                renameError = "Unable to save. Check your name and Game Ball balance."
+                            }
+                        }
+                        .disabled(!canRename || !validChange)
+                        if let renameError { Text(renameError).foregroundStyle(Theme.danger) }
+                    }
+                }
+                .navigationTitle("Edit Player Name")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { isRenaming = false }
+                    }
+                }
+            }
+            .preferredColorScheme(.dark)
         }
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.05)) { hasAppeared = true }
@@ -134,12 +182,33 @@ struct PlayerDetailView: View {
                 }
 
             VStack(spacing: 6) {
-                Text(player.displayName.uppercased())
+                HStack(spacing: 10) {
+                Text(currentPlayer.displayName.uppercased())
                     .font(.system(size: 28, weight: .black).width(.compressed))
                     .tracking(1)
                     .foregroundStyle(Theme.paperInk)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
+                    Button {
+                        guard canRename else { return }
+                        nameInitial = String(currentPlayer.firstName.prefix(1))
+                        nameSurname = currentPlayer.lastName
+                        renameError = nil
+                        isRenaming = true
+                    } label: {
+                        Label("EDIT", systemImage: "pencil")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Theme.paperInk)
+                            .frame(minHeight: 44)
+                    }
+                    .buttonStyle(PressableButtonStyle())
+                    .disabled(!canRename)
+                    .opacity(canRename ? 1 : 0.4)
+                    .accessibilityLabel("Edit player name for \(renameCost) Game Balls")
+                }
+                Text(canRename ? "NAME EDIT: \(renameCost) GAME BALLS" : "\(renameCost) GAME BALLS REQUIRED TO EDIT NAME")
+                    .font(Theme.typewriter(10))
+                    .foregroundStyle(Theme.paperInkSoft)
 
                 HStack(spacing: 8) {
                     Text(player.slot.label)
