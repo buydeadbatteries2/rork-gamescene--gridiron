@@ -27,5 +27,5 @@ nonisolated enum AppInfo {
 nonisolated enum AppLinks {
     static let privacyPolicyURL: URL? = nil
     static let termsOfUseURL: URL? = nil
-    static let supportURL: URL? = nil
+    static let supportURL: URL? = URL(string: "mailto:support@ndstriistudios.com?subject=GameScene%20Gridiron%20Support")
 }

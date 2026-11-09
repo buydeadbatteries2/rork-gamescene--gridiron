@@ -19,6 +19,7 @@ struct SettingsView: View {
     @State private var hasAppeared: Bool = false
     @State private var isReplayingTutorial: Bool = false
     @State private var isShowingProfile: Bool = false
+    @State private var aboutDocument: AboutDocument?
 
     /// Phase 11.6: while a season is running the difficulty is pinned to the
     /// level the season was started with. The current difficulty stays fully
@@ -55,6 +56,7 @@ struct SettingsView: View {
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.05)) { hasAppeared = true }
         }
+        .sheet(item: $aboutDocument) { AboutDocumentView(document: $0) }
         .sheet(isPresented: $isShowingProfile) {
             NavigationStack { ProfileView() }
                 .preferredColorScheme(.dark)
@@ -490,30 +492,28 @@ struct SettingsView: View {
                 .padding(.bottom, 6)
                 .accessibilityLabel("App version \(AppInfo.version), build \(AppInfo.build)")
 
-            aboutLinkRow("PRIVACY POLICY", symbol: "hand.raised.fill", url: AppLinks.privacyPolicyURL)
-            aboutLinkRow("TERMS OF USE", symbol: "doc.plaintext", url: AppLinks.termsOfUseURL)
-            aboutLinkRow("SUPPORT", symbol: "envelope", url: AppLinks.supportURL)
+            aboutLinkRow("PRIVACY POLICY", symbol: "hand.raised.fill", document: .privacy)
+            aboutLinkRow("TERMS OF USE", symbol: "doc.plaintext", document: .terms)
+            aboutLinkRow("SUPPORT", symbol: "envelope", document: .support)
         }
     }
 
-    private func aboutLinkRow(_ title: String, symbol: String, url: URL?) -> some View {
+    private func aboutLinkRow(_ title: String, symbol: String, document: AboutDocument) -> some View {
         Button {
             Haptics.tick()
-            guard let url else { return }
-            AudioManager.shared.play(.buttonPress)
-            UIApplication.shared.open(url)
+            aboutDocument = document
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: symbol)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(url != nil ? Theme.gold : Theme.paperInkSoft.opacity(0.5))
+                    .foregroundStyle(Theme.gold)
                     .frame(width: 24)
                 Text(title)
                     .font(.system(size: 13, weight: .heavy).width(.condensed))
                     .tracking(1.4)
-                    .foregroundStyle(url != nil ? Theme.paperInk : Theme.paperInkSoft.opacity(0.7))
+                    .foregroundStyle(Theme.paperInk)
                 Spacer()
-                Text(url != nil ? "OPEN" : "COMING SOON")
+                Text("OPEN")
                     .font(.system(size: 9, weight: .black).width(.condensed))
                     .tracking(1.2)
                     .foregroundStyle(Theme.paperInkSoft.opacity(0.7))
@@ -522,9 +522,8 @@ struct SettingsView: View {
             .contentShape(.rect)
         }
         .buttonStyle(PressableButtonStyle())
-        .disabled(url == nil)
         .accessibilityLabel(title)
-        .accessibilityHint(url != nil ? "Opens the page" : "Not yet available")
+        .accessibilityHint("Opens the page")
     }
 
     // MARK: Shared pieces
