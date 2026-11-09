@@ -24,6 +24,11 @@ struct AccountEntryView: View {
             .scrollIndicators(.hidden)
         }
         .preferredColorScheme(.dark)
+        .onChange(of: auth.state) { _, state in
+            if case .authenticated = state {
+                dismiss()
+            }
+        }
     }
 
     private var header: some View {

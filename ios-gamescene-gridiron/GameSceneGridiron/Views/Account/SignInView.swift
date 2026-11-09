@@ -8,7 +8,6 @@ struct SignInView: View {
 
     @State private var email = ""
     @State private var password = ""
-    @State private var didSubmitSuccessfully = false
     @State private var isShowingForgotPassword = false
 
     var body: some View {
@@ -48,9 +47,6 @@ struct SignInView: View {
         .sheet(isPresented: $isShowingForgotPassword) {
             ForgotPasswordView()
                 .preferredColorScheme(.dark)
-        }
-        .onDisappear {
-            if didSubmitSuccessfully { dismiss() }
         }
     }
 
@@ -137,7 +133,11 @@ struct SignInView: View {
     private var submitButton: some View {
         Button {
             Haptics.pickUp()
-            Task { didSubmitSuccessfully = await auth.signIn(email: email, password: password) }
+            Task {
+                if await auth.signIn(email: email, password: password) {
+                    dismiss()
+                }
+            }
         } label: {
             Text(auth.isWorking ? "OPENING…" : "SIGN IN")
                 .font(.system(size: 14, weight: .heavy).width(.condensed))
