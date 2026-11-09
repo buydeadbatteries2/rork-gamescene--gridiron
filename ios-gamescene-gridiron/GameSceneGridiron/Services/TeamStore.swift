@@ -12,10 +12,30 @@ final class TeamStore {
 
     private let defaults: UserDefaults
     private(set) var userTeam: GameTeam?
+    private(set) var ownerID: UUID?
+    var onLocalSave: (() -> Void)?
+    private static let ownerKey = storageKey + ".owner"
+
+    func setOwner(_ id: UUID?) {
+        ownerID = id
+        defaults.set(id?.uuidString, forKey: Self.ownerKey)
+    }
+
+    /// Remote hydration must never trigger an upload. Displaced identities are retained.
+    func hydrate(_ team: GameTeam?, owner: UUID?) {
+        if let old = userTeam, old.id != team?.id {
+            SaveStore.save(old, key: Self.storageKey + ".backup." + old.id.uuidString, defaults: defaults)
+        }
+        userTeam = team
+        setOwner(owner)
+        if let team { SaveStore.save(team, key: Self.storageKey, defaults: defaults) }
+        else { defaults.removeObject(forKey: Self.storageKey) }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         userTeam = Self.load(from: defaults)
+        ownerID = defaults.string(forKey: Self.ownerKey).flatMap(UUID.init(uuidString:))
     }
 
     var hasTeam: Bool { userTeam != nil }
@@ -36,12 +56,18 @@ final class TeamStore {
                 isUserTeam: true
             )
         }
+        if let existing = userTeam, existing.id != stored.id {
+            SaveStore.save(existing, key: Self.storageKey + ".backup." + existing.id.uuidString, defaults: defaults)
+            setOwner(nil)
+        }
         userTeam = stored
         SaveStore.save(stored, key: Self.storageKey, defaults: defaults)
+        onLocalSave?()
     }
 
     func clear() {
         userTeam = nil
+        setOwner(nil)
         defaults.removeObject(forKey: Self.storageKey)
     }
 

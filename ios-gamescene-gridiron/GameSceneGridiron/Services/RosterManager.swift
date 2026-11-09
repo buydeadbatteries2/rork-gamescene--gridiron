@@ -38,8 +38,12 @@ final class RosterManager {
     /// same franchise (e.g. editing the team's look) never regenerates it.
     func ensureRoster(for team: GameTeam) {
         guard franchise?.teamID != team.id else { return }
+        if let franchise {
+            SaveStore.save(franchise, key: Self.storageKey + ".backup." + franchise.teamID.uuidString, defaults: defaults)
+        }
         let players = Self.generatePlayers(teamID: team.id)
-        franchise = Franchise(teamID: team.id, players: players)
+        franchise = SaveStore.load(Franchise.self, key: Self.storageKey + ".backup." + team.id.uuidString, defaults: defaults)
+            ?? Franchise(teamID: team.id, players: players)
         persist()
     }
 

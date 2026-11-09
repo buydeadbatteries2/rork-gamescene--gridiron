@@ -15,6 +15,7 @@ struct OnboardingFlowView: View {
     }
 
     @State private var step: Step = .intro
+    @State private var showSignIn = false
 
     var body: some View {
         ZStack {
@@ -22,9 +23,9 @@ struct OnboardingFlowView: View {
 
             switch step {
             case .intro:
-                IntroView {
+                IntroView(onBegin: {
                     withAnimation(.easeInOut(duration: 0.35)) { step = .createTeam }
-                }
+                }, onReturning: { showSignIn = true })
                 .transition(.opacity)
 
             case .createTeam:
@@ -56,6 +57,16 @@ struct OnboardingFlowView: View {
         }
         .animation(.easeInOut(duration: 0.35), value: step)
         .interactiveDismissDisabled()
+        .sheet(isPresented: $showSignIn) {
+            NavigationStack {
+                SignInView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("BACK") { showSignIn = false }
+                        }
+                    }
+            }
+        }
     }
 
     /// Completes onboarding and enters Season 1 with the confirmed difficulty.

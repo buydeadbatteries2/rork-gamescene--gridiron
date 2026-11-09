@@ -4,6 +4,7 @@ import SwiftUI
 /// and BEGIN. Kept deliberately short — this is a doorway, not a manual.
 struct IntroView: View {
     let onBegin: () -> Void
+    var onReturning: (() -> Void)? = nil
 
     @State private var hasAppeared: Bool = false
 
@@ -55,14 +56,23 @@ struct IntroView: View {
                     AudioManager.shared.play(.profileSelect)
                     onBegin()
                 } label: {
-                    Text("BEGIN")
+                    Text("NEW PLAYER / CONTINUE")
                         .font(.system(size: 16, weight: .heavy).width(.condensed))
                         .tracking(3)
-                        .padding(.horizontal, 54)
+                        .padding(.horizontal, 20)
                 }
                 .buttonStyle(GoldCapsuleButtonStyle())
-                .padding(.bottom, 44)
                 .opacity(hasAppeared ? 1 : 0)
+                if let onReturning {
+                    Button("RETURNING PLAYER / SIGN IN", action: onReturning)
+                        .font(.system(size: 14, weight: .bold).width(.condensed))
+                        .foregroundStyle(Theme.goldLight)
+                        .accessibilityIdentifier("onboarding.returningSignIn")
+                }
+                Text("New players can play as guests. No account required.")
+                    .font(Theme.typewriter(11, relativeTo: .caption))
+                    .foregroundStyle(Theme.paperInkSoft)
+                    .padding(.bottom, 24)
             }
         }
         .onAppear {

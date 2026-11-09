@@ -204,6 +204,26 @@ final class SeasonManager {
         return generateSeason(userTeamID: season.userTeamID, seasonNumber: season.seasonNumber)
     }
 
+    /// Switch identity without treating the displaced season as completed or cancelled.
+    /// Keep resumable local match data with its team, never with the incoming account.
+    func activateTeam(_ teamID: UUID?, previousTeamID: UUID?) {
+        let oldID = season?.userTeamID ?? previousTeamID
+        guard oldID != teamID else { return }
+        let keys = [Self.storageKey, ActiveInvestigationStore.storageKey,
+                    GameViewModel.clockSnapshotKey, Self.cancelledSeasonNumberKey]
+        for key in keys {
+            if let oldID {
+                let backup = key + ".backup." + oldID.uuidString
+                if let value = defaults.object(forKey: key) { defaults.set(value, forKey: backup) }
+                else { defaults.removeObject(forKey: backup) }
+            }
+            if let teamID, let value = defaults.object(forKey: key + ".backup." + teamID.uuidString) {
+                defaults.set(value, forKey: key)
+            } else { defaults.removeObject(forKey: key) }
+        }
+        season = Self.load(from: defaults)
+    }
+
     // MARK: Persistence
 
     private func persist() {

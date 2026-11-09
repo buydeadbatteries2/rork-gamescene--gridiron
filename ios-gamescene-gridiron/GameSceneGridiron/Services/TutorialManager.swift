@@ -90,6 +90,12 @@ final class TutorialManager {
     /// Called once the full flow finishes (intro → team → difficulty →
     /// training case → season entry). Onboarding never gates again, and
     /// tutorial graduates never need the first-game training wheels.
+    /// Restored players skip setup, not the tutorial/assist completion records.
+    func skipSetupForRestoredTeam() {
+        hasCompletedOnboarding = true
+        defaults.set(true, forKey: DefaultsKey.onboardingComplete)
+    }
+
     func completeOnboarding() {
         hasCompletedOnboarding = true
         defaults.set(true, forKey: DefaultsKey.onboardingComplete)
