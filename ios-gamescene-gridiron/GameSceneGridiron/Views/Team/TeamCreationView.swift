@@ -21,6 +21,11 @@ struct TeamCreationView: View {
     @State private var primaryIndex: Int = 0
     @State private var secondaryIndex: Int = 3
     @State private var hasAppeared: Bool = false
+    @State private var editSessionPaid = false
+    @Environment(\.dismiss) private var dismiss
+
+    private var requiresEditPayment: Bool { existingTeam != nil && !editSessionPaid }
+    private var editCost: Int { EconomyConfig.standard.teamEditCost }
 
     private var draftTeam: GameTeam? {
         guard let state, let teamName, let logoID else { return nil }
@@ -52,7 +57,9 @@ struct TeamCreationView: View {
             VStack(spacing: 14) {
                 header
 
-                if step == .franchise, let team = draftTeam {
+                if requiresEditPayment {
+                    editPaymentGate
+                } else if step == .franchise, let team = draftTeam {
                     FranchisePresentation(team: team, onConfirm: confirm, onEdit: { withAnimation(.snappy) { step = .colors } })
                         .transition(.opacity)
                 } else {
@@ -90,6 +97,44 @@ struct TeamCreationView: View {
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) { hasAppeared = true }
         }
+    }
+
+    private var editPaymentGate: some View {
+        VStack(spacing: 18) {
+            Spacer()
+            Text("EDIT YOUR TEAM")
+                .font(.system(size: 24, weight: .black).width(.compressed))
+                .foregroundStyle(Theme.goldLight)
+            Text("Each editing session costs \(editCost) Game Balls.")
+                .font(Theme.typewriter(16))
+                .foregroundStyle(Theme.paper)
+            WalletPill(amount: PlayerWallet.shared.gameBalls)
+            Text("The fee is charged when you unlock the editor, even if you leave without saving. Your initial team creation is free.")
+                .font(Theme.typewriter(13))
+                .foregroundStyle(Theme.paper)
+                .multilineTextAlignment(.center)
+            Button("PAY \(editCost) GAME BALLS & EDIT") {
+                guard requiresEditPayment,
+                      PlayerWallet.shared.spend(amount: editCost, kind: .teamEdit) else { return }
+                editSessionPaid = true
+                Haptics.success()
+            }
+            .buttonStyle(GoldCapsuleButtonStyle())
+            .disabled(PlayerWallet.shared.gameBalls < editCost)
+            .opacity(PlayerWallet.shared.gameBalls < editCost ? 0.45 : 1)
+            if PlayerWallet.shared.gameBalls < editCost {
+                Text("NOT ENOUGH GAME BALLS — \(editCost) REQUIRED")
+                    .font(Theme.typewriter(12))
+                    .foregroundStyle(Theme.goldLight)
+            }
+            Button("CANCEL") {
+                if let onClose { onClose() } else { dismiss() }
+            }
+            .foregroundStyle(Theme.goldLight)
+            .buttonStyle(PressableButtonStyle())
+            Spacer()
+        }
+        .padding(.horizontal, 24)
     }
 
     // MARK: Header
@@ -321,7 +366,7 @@ struct TeamCreationView: View {
     }
 
     private func confirm() {
-        guard let team = draftTeam else { return }
+        guard !requiresEditPayment, let team = draftTeam else { return }
         Haptics.success()
         TeamStore.shared.save(team)
         // Every franchise gets its permanent 12 players the moment it exists.
