@@ -19,6 +19,7 @@ struct GameBallIcon: View {
 struct WalletPill: View {
     let amount: Int
     var label: String = "GAME BALLS"
+    var numberColor: Color = Theme.paperInk
 
     var body: some View {
         HStack(spacing: 6) {
@@ -26,7 +27,7 @@ struct WalletPill: View {
             Text("\(amount)")
                 .font(Theme.condensed(17))
                 .monospacedDigit()
-                .foregroundStyle(Theme.paperInk)
+                .foregroundStyle(numberColor)
             Text(label)
                 .font(Theme.condensed(9))
                 .tracking(1.2)
@@ -44,6 +45,7 @@ struct WalletPill: View {
 /// Hint pill matching the wallet pill's shape for the Home strip.
 struct HintPill: View {
     let count: Int
+    var numberColor: Color = Theme.paperInk
 
     var body: some View {
         HStack(spacing: 6) {
@@ -53,7 +55,7 @@ struct HintPill: View {
             Text("\(count)")
                 .font(Theme.condensed(17))
                 .monospacedDigit()
-                .foregroundStyle(Theme.paperInk)
+                .foregroundStyle(numberColor)
             Text("HINTS")
                 .font(Theme.condensed(9))
                 .tracking(1.2)

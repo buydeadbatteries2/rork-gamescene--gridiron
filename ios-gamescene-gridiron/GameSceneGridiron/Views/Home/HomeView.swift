@@ -65,9 +65,8 @@ struct HomeView: View {
                     .shadow(color: Theme.gold.opacity(glow ? 0.35 : 0.1), radius: glow ? 22 : 10)
                     .accessibilityHint(teamStore.hasTeam ? "Opens your season" : "Opens the investigation")
 
-                    versusTile
-                        .opacity(hasAppeared ? 1 : 0)
-                        .offset(y: hasAppeared ? 0 : 14)
+                    // Versus entry temporarily hidden for this release.
+                    // Keep the tile, routes and saved match progress for a later update.
 
                     walletStrip
                         .opacity(hasAppeared ? 1 : 0)
@@ -352,8 +351,8 @@ struct HomeView: View {
 
     private var walletStrip: some View {
         HStack(spacing: 12) {
-            WalletPill(amount: PlayerWallet.shared.gameBalls)
-            HintPill(count: PlayerWallet.shared.hints)
+            WalletPill(amount: PlayerWallet.shared.gameBalls, numberColor: Theme.goldLight)
+            HintPill(count: PlayerWallet.shared.hints, numberColor: Theme.goldLight)
         }
     }
 
