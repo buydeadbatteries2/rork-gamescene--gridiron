@@ -361,7 +361,7 @@ final class GameViewModel {
             persistClockSnapshot()
             BalanceTelemetry.shared.recordWrongPlacement(caseID: puzzle.id)
             Haptics.error()
-            AudioManager.shared.play(.placementWrong)
+            AudioManager.shared.playIncorrectPlacement()
             if isTraining {
                 // Mistakes explain the mechanic and let the player continue —
                 // the tutorial can never be permanently failed.

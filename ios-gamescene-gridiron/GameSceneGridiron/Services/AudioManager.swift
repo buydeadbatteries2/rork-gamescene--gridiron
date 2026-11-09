@@ -67,6 +67,8 @@ final class AudioManager {
     private var effectData: [SoundEffect: Data] = [:]
     private var placementClipData: [Int: Data] = [:]
     private var lastPlacementClip: Int?
+    private var incorrectPlacementClipData: [Int: Data] = [:]
+    private var lastIncorrectPlacementClip: Int?
     private var currentTrack: MusicTrack?
     /// True while a screen wants the music bed (even if music is currently muted),
     /// so re-enabling music mid-game resumes the correct track.
@@ -176,6 +178,26 @@ final class AudioManager {
         }
         guard let player = try? AVAudioPlayer(data: data) else { return }
         lastPlacementClip = clip
+        configureSessionIfNeeded()
+        playEffectPlayer(player)
+    }
+
+    /// Incorrect-placement voices have an independent no-repeat selection.
+    func playIncorrectPlacement() {
+        guard isSoundEffectsEnabled else { return }
+        let candidates = (1...10).filter { $0 != lastIncorrectPlacementClip }
+        guard let clip = candidates.randomElement() else { return }
+        let data: Data
+        if let cached = incorrectPlacementClipData[clip] {
+            data = cached
+        } else {
+            guard let url = Bundle.main.url(forResource: "victor_bad_\(clip)", withExtension: "wav"),
+                  let loaded = try? Data(contentsOf: url) else { return }
+            incorrectPlacementClipData[clip] = loaded
+            data = loaded
+        }
+        guard let player = try? AVAudioPlayer(data: data) else { return }
+        lastIncorrectPlacementClip = clip
         configureSessionIfNeeded()
         playEffectPlayer(player)
     }
