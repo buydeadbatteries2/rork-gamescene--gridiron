@@ -134,9 +134,29 @@ final class SeasonManager {
 
     private let defaults: UserDefaults
     private(set) var season: Season?
+    private(set) var cancellationCount: Int = 0
+    private static let cancellationCountKey = "gamescene.gridiron.seasonCancellationCount"
+    private static let cancelledSeasonNumberKey = "gamescene.gridiron.cancelledSeasonNumber"
+    var cancellationCost: Int { 25 + min(max(0, cancellationCount) / 2, 5) * 5 }
+
+    @discardableResult
+    func cancelSeason(wallet: PlayerWallet) -> Bool {
+        guard hasSeasonInProgress, let current = season,
+              wallet.spend(amount: cancellationCost, kind: .seasonCancellation) else { return false }
+        cancellationCount += 1
+        defaults.set(cancellationCount, forKey: Self.cancellationCountKey)
+        defaults.set(current.seasonNumber, forKey: Self.cancelledSeasonNumberKey)
+        ActiveInvestigationStore.clear(defaults: defaults)
+        defaults.removeObject(forKey: GameViewModel.clockSnapshotKey)
+        if defaults === UserDefaults.standard { RosterManager.shared.archiveCancelledSeasonStats() }
+        season = nil
+        persist()
+        return true
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        cancellationCount = max(0, defaults.integer(forKey: Self.cancellationCountKey))
         let loaded = Self.load(from: defaults)
         if let repaired = loaded.map(Self.repairCorruptedSeason) {
             var scheduled = Self.withCaseSchedule(repaired)
@@ -270,7 +290,7 @@ final class SeasonManager {
             RosterManager.shared.completeSeason(finishedSeasonNumber: finished.seasonNumber)
         }
         let resolved = difficulty ?? DifficultyManager.shared.selected
-        let nextNumber = (season?.seasonNumber ?? 0) + 1
+        let nextNumber = max(season?.seasonNumber ?? 0, defaults.integer(forKey: Self.cancelledSeasonNumberKey)) + 1
         var next = Self.generateSeason(userTeamID: userTeam.id, seasonNumber: nextNumber)
         next.difficulty = resolved
         // Phase 14B: the server season id arrives with game 1's assignment.

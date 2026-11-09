@@ -7,6 +7,7 @@ struct HomeView: View {
     @State private var seasonManager = SeasonManager.shared
     @State private var auth = AuthService.shared
     @State private var isPlaying: Bool = false
+    @State private var showCancelSeason = false
     @State private var isEditingTeam: Bool = false
     @State private var isShowingTeamRoster: Bool = false
     @State private var isShowingRecords: Bool = false
@@ -64,6 +65,27 @@ struct HomeView: View {
                     .buttonStyle(GoldCapsuleButtonStyle())
                     .shadow(color: Theme.gold.opacity(glow ? 0.35 : 0.1), radius: glow ? 22 : 10)
                     .accessibilityHint(teamStore.hasTeam ? "Opens your season" : "Opens the investigation")
+
+                    if seasonManager.hasSeasonInProgress {
+                        Button { showCancelSeason = true } label: {
+                            Text("CANCEL SEASON — \(seasonManager.cancellationCost) GAME BALLS")
+                                .font(Theme.condensed(13))
+                                .foregroundStyle(Theme.goldLight)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .background(Color.black.opacity(0.55), in: .capsule)
+                                .overlay { Capsule().strokeBorder(Theme.gold.opacity(0.35), lineWidth: 1) }
+                        }
+                        .buttonStyle(PressableButtonStyle())
+                        .alert("Cancel current season?", isPresented: $showCancelSeason) {
+                            Button("Keep Season", role: .cancel) { }
+                            Button("Pay \(seasonManager.cancellationCost) & Cancel", role: .destructive) {
+                                _ = seasonManager.cancelSeason(wallet: PlayerWallet.shared)
+                            }
+                            .disabled(PlayerWallet.shared.gameBalls < seasonManager.cancellationCost)
+                        } message: {
+                            Text("This ends your current season and discards any unfinished match. Your team and earned rewards remain. Cost: \(seasonManager.cancellationCost) Game Balls. Balance: \(PlayerWallet.shared.gameBalls). You can then start a new season. The fee rises by 5 after every two cancellations, up to 50.")
+                        }
+                    }
 
                     // Versus entry temporarily hidden for this release.
                     // Keep the tile, routes and saved match progress for a later update.

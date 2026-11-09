@@ -181,6 +181,11 @@ nonisolated struct Franchise: Codable, Hashable, Sendable {
         }
     }
 
+    /// Keep earned stats without counting cancellation as a completed season.
+    mutating func archiveCancelledSeasonStats() {
+        for index in players.indices { players[index].rollSeasonIntoCareer() }
+    }
+
     mutating func completeSeason() {
         history.completeSeason()
         for index in players.indices {

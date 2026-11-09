@@ -100,6 +100,7 @@ nonisolated enum RewardKind: String, Codable, Hashable, Sendable {
     case hintPurchase
     case teamEdit
     case playerRename
+    case seasonCancellation
     case rewardedHint
     case rewardedLife
     case achievementReward

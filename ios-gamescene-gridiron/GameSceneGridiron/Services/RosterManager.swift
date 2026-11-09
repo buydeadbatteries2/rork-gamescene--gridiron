@@ -173,6 +173,13 @@ final class RosterManager {
         persist()
     }
 
+    func archiveCancelledSeasonStats() {
+        guard var updated = franchise else { return }
+        updated.archiveCancelledSeasonStats()
+        franchise = updated
+        persist()
+    }
+
     // MARK: Persistence
 
     private func persist() {
