@@ -155,6 +155,24 @@ struct DragTargetTests {
         #expect(viewModel.placements[0].slot.y == slot.y)
     }
 
+    @Test func cachedMarkersMatchLayoutAcrossInputChanges() {
+        let vm = GameViewModel(puzzle: SampleQuarter.puzzle)
+        let slots = vm.puzzle.slots
+        for subset in [slots, Array(slots.dropFirst()), slots] {
+            for size in [CGSize(width: 360, height: 560), CGSize(width: 300, height: 420)] {
+                for diameter: CGFloat in [24, 36] {
+                    let expected = PlacementZoneLayout.displayPositions(slots: subset, fieldSize: size, visibleDiameter: diameter)
+                    // Repeat identical inputs to exercise the cache-hit path.
+                    for _ in 0..<2 {
+                        #expect(vm.markerPositions(slots: subset, fieldSize: size, visibleDiameter: diameter) == expected)
+                    }
+                }
+            }
+        }
+        #expect(vm.placements.isEmpty)
+        #expect(!vm.isDragging)
+    }
+
     // MARK: Marker layout (no stacked "?")
 
     @Test func mysteryMarkersNeverOverlap() {

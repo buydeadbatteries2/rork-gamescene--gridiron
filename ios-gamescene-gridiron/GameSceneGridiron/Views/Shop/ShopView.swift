@@ -158,15 +158,12 @@ struct ShopView: View {
                             .monospacedDigit()
                         GameBallIcon(size: 12)
                     }
-                    .foregroundStyle(Theme.ink)
-                    .padding(.horizontal, 14)
-                    .frame(height: 40)
+                    .foregroundStyle(Theme.goldLight)
+                    .frame(width: 112, height: 38)
                 }
-                .buttonStyle(GoldCapsuleButtonStyle())
-                .frame(height: 40)
+                .buttonStyle(ShopPriceButtonStyle())
                 .disabled(!wallet.canAffordHint)
                 .opacity(wallet.canAffordHint ? 1 : 0.45)
-                .scaleEffect(wallet.canAffordHint ? 1 : 0.92)
                 .accessibilityLabel("Buy one hint for \(config.hintCost) Game Balls")
                 .accessibilityHint(wallet.canAffordHint ? "Adds one hint to your inventory" : "Not enough Game Balls")
             }
@@ -298,12 +295,12 @@ struct ShopView: View {
                                 .font(.system(size: 15, weight: .black).width(.condensed))
                         }
                     }
-                    .foregroundStyle(Theme.ink)
-                    .padding(.horizontal, 14)
-                    .frame(minWidth: 74, minHeight: 40)
+                    .foregroundStyle(Theme.goldLight)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .frame(width: 112, height: 38)
                 }
-                .buttonStyle(GoldCapsuleButtonStyle())
-                .frame(height: 40)
+                .buttonStyle(ShopPriceButtonStyle())
                 .disabled(isWorking)
                 .accessibilityLabel("Buy \(title) for \(price)")
             } else {
@@ -419,6 +416,31 @@ struct ShopView: View {
 
     private func showToast(_ message: String) {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { toast = message }
+    }
+}
+
+/// Local compact variant; the shared primary CTA stays 64pt tall.
+private struct ShopPriceButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(width: 112, height: 38)
+            .background {
+                Capsule()
+                    .fill(Theme.bronzeButton)
+                    .overlay {
+                        Capsule()
+                            .fill(LinearGradient(colors: [.white.opacity(0.18), .clear], startPoint: .top, endPoint: .center))
+                            .padding(3)
+                    }
+                    .overlay { Capsule().strokeBorder(Theme.goldGradient, lineWidth: 2) }
+                    .shadow(color: Theme.bronze.opacity(configuration.isPressed ? 0.25 : 0.5), radius: configuration.isPressed ? 8 : 18)
+                    .shadow(color: .black.opacity(0.6), radius: 6, y: 5)
+            }
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, isPressed in
+                if isPressed { AudioManager.shared.play(.buttonPress) }
+            }
     }
 }
 
