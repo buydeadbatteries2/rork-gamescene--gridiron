@@ -265,16 +265,6 @@ final class SeasonManager {
     /// the live selection. The user's franchise identity is never touched —
     /// only competition data resets. The finished season's player stats roll
     /// into career totals via the roster manager.
-    @discardableResult
-    func restartSeason(userTeam: GameTeam, wallet: PlayerWallet) -> Bool {
-        guard let current = season, current.userTeamID == userTeam.id,
-              wallet.spend(amount: EconomyConfig.standard.seasonRestartCost, kind: .seasonRestart) else { return false }
-        ActiveInvestigationStore.clear(defaults: defaults)
-        defaults.removeObject(forKey: GameViewModel.clockSnapshotKey)
-        startNewSeason(userTeam: userTeam, difficulty: current.difficulty)
-        return true
-    }
-
     func startNewSeason(userTeam: GameTeam, difficulty: DifficultyLevel? = nil) {
         if let finished = season {
             RosterManager.shared.completeSeason(finishedSeasonNumber: finished.seasonNumber)
