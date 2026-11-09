@@ -139,7 +139,6 @@ struct MatchFlowView: View {
                 .transition(.opacity)
             }
         }
-        .modifier(GameAudioScope())
         .animation(.easeInOut(duration: 0.35), value: matchViewModel.phase)
         .onChange(of: matchViewModel.phase) { _, phase in
             guard phase == .gameResult else { return }

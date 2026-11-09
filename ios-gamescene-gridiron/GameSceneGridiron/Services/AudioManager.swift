@@ -39,7 +39,6 @@ final class AudioManager {
             guard oldValue != musicVolume else { return }
             defaults.set(musicVolume, forKey: DefaultsKey.musicVolume)
             musicPlayer?.setVolume(musicVolume, fadeDuration: 0.12)
-            menuPlayers.forEach { $0.setVolume(musicVolume * 0.5, fadeDuration: 0.12) }
         }
     }
 
@@ -52,38 +51,6 @@ final class AudioManager {
 
     private let defaults: UserDefaults
     private var musicPlayer: AVAudioPlayer?
-    private var menuPlayers: [AVAudioPlayer] = []
-    private var gameAudioScopes: Set<UUID> = []
-    private var menuRequested = false
-    private var musicPaused = false
-
-    func startMenuMusic() {
-        menuRequested = true
-        guard gameAudioScopes.isEmpty, isMusicEnabled, !musicPaused else { return }
-        configureSessionIfNeeded()
-        if menuPlayers.isEmpty {
-            menuPlayers = ["menu_stadium", "menu_evidence"].compactMap { name in
-                guard let url = Bundle.main.url(forResource: name, withExtension: "wav"),
-                      let player = try? AVAudioPlayer(contentsOf: url) else { return nil }
-                player.numberOfLoops = -1
-                player.volume = musicVolume * 0.5
-                player.prepareToPlay()
-                return player
-            }
-        }
-        for player in menuPlayers where !player.isPlaying { player.play() }
-    }
-
-    func enterGameAudio(_ id: UUID) {
-        gameAudioScopes.insert(id)
-        menuPlayers.forEach { $0.stop() }
-        menuPlayers.removeAll()
-    }
-
-    func leaveGameAudio(_ id: UUID) {
-        gameAudioScopes.remove(id)
-        if gameAudioScopes.isEmpty { startMenuMusic() }
-    }
     /// One playing one-shot effect. Reaping is TIME-based (startedAt vs the
     /// duration read at enqueue) rather than polling `isPlaying`: on the
     /// cloud simulator a recycled AVAudioPlayer's underlying storage can be
@@ -139,14 +106,10 @@ final class AudioManager {
 
     /// Silence during the pause menu; `resumeMusic` brings it back smoothly.
     func pauseMusic() {
-        musicPaused = true
-        menuPlayers.forEach { $0.pause() }
         musicPlayer?.pause()
     }
 
     func resumeMusic(fadeInDuration: TimeInterval = 0.6) {
-        musicPaused = false
-        if menuRequested { startMenuMusic() }
         guard isMusicEnabled, isMusicDesired, let player = musicPlayer, !player.isPlaying else { return }
         player.volume = min(player.volume, musicVolume * 0.4)
         player.play()
@@ -266,13 +229,11 @@ final class AudioManager {
         guard isEnabled != isMusicEnabled else { return }
         isMusicEnabled = isEnabled
         if isEnabled {
-            if menuRequested { startMenuMusic() }
             if isMusicDesired, let track = currentTrack {
                 startMusicPlayer(track, fadeInDuration: 0.6)
             }
-        } else {
-            menuPlayers.forEach { $0.pause() }
-            if let player = musicPlayer { fadeOutAndStop(player, duration: 0.3) }
+        } else if let player = musicPlayer {
+            fadeOutAndStop(player, duration: 0.3)
         }
     }
 

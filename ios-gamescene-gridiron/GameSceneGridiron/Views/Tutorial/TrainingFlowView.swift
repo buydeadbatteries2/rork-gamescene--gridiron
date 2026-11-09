@@ -56,7 +56,6 @@ struct TrainingFlowView: View {
                     .zIndex(10)
             }
         }
-        .modifier(GameAudioScope())
         .animation(.easeInOut(duration: 0.35), value: session.step)
         .onChange(of: viewModel.expandedPlayerID) { _, _ in
             session.handleExpansion()

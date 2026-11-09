@@ -62,7 +62,6 @@ struct VersusPlayView: View {
                 }
             }
         }
-        .modifier(GameAudioScope())
         .animation(.easeInOut(duration: 0.35), value: matchViewModel.phase)
         .confirmationDialog("Leave this case file?", isPresented: $isConfirmingLeave, titleVisibility: .visible) {
             Button("Leave — progress is saved") { dismiss() }
