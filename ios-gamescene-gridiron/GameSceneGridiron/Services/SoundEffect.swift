@@ -6,7 +6,7 @@ import Foundation
 /// sports-thriller flavor — never childish or arcade-like. Winning moments
 /// (correct placement, quarter victory) get triumphant victory cues.
 enum SoundEffect: String, CaseIterable {
-    case buttonPress = "cinematic_synth_button_tick"
+    case buttonPress = "button_all"
     case cardSelect = "detective_card_flip"
     case profileSelect = "synth_chirp_confirm"
     case dragBegin = "card_lift_synth_whoosh"

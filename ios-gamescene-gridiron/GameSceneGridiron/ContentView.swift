@@ -35,6 +35,7 @@ struct ContentView: View {
                 ResetPasswordView()
                     .preferredColorScheme(.dark)
             }
+            .buttonStyle(PressableButtonStyle(scale: 1))
     }
 }
 

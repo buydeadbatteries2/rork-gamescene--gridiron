@@ -162,7 +162,7 @@ struct ProfileView: View {
                     .background(Theme.goldGradient, in: .capsule)
                     .contentShape(.capsule)
             }
-            .buttonStyle(PressableButtonStyle(playsPressSound: false))
+            .buttonStyle(PressableButtonStyle(playsPressSound: true))
             .disabled(auth.isWorking)
             .accessibilityLabel("Finish player file")
         }
@@ -350,7 +350,7 @@ struct ResetPasswordView: View {
                             .opacity(auth.isWorking ? 0.6 : 1)
                             .contentShape(.capsule)
                     }
-                    .buttonStyle(PressableButtonStyle(playsPressSound: false))
+                    .buttonStyle(PressableButtonStyle(playsPressSound: true))
                     .disabled(auth.isWorking)
                     .accessibilityLabel("Update password")
 

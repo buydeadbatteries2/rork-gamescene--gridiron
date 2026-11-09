@@ -60,12 +60,10 @@ struct HUDButtonStyle: ButtonStyle {
 }
 
 /// Generic springy press feedback for custom tappable surfaces.
-/// Opt in to the button-press sound for plain action buttons — surfaces that
-/// already have a distinct cue (player cards, variant chips, arrows) keep it off
-/// so sounds never double-fire.
+/// Buttons and back arrows use the uploaded universal tap cue by default.
 struct PressableButtonStyle: ButtonStyle {
     var scale: CGFloat = 0.96
-    var playsPressSound: Bool = false
+    var playsPressSound: Bool = true
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

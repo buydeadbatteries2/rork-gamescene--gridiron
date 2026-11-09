@@ -93,7 +93,7 @@ struct CreateAccountView: View {
                     .background(Theme.goldGradient, in: .capsule)
                     .contentShape(.capsule)
             }
-            .buttonStyle(PressableButtonStyle(playsPressSound: false))
+            .buttonStyle(PressableButtonStyle(playsPressSound: true))
             .accessibilityLabel("Enter the game")
         }
         .padding(.vertical, 20)
@@ -252,7 +252,7 @@ struct CreateAccountView: View {
                 .opacity(auth.isWorking ? 0.6 : 1)
                 .contentShape(.capsule)
         }
-        .buttonStyle(PressableButtonStyle(playsPressSound: false))
+        .buttonStyle(PressableButtonStyle(playsPressSound: true))
         .disabled(auth.isWorking)
         .accessibilityLabel("Create account")
     }

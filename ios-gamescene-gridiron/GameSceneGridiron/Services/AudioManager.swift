@@ -65,6 +65,7 @@ final class AudioManager {
 
     private var activeEffectPlayers: [ActiveEffect] = []
     private var effectData: [SoundEffect: Data] = [:]
+    private var lastButtonSoundTime: TimeInterval = -.infinity
     private var placementClipData: [Int: Data] = [:]
     private var lastPlacementClip: Int?
     private var incorrectPlacementClipData: [Int: Data] = [:]
@@ -148,6 +149,12 @@ final class AudioManager {
     /// Plays a one-shot effect. Overlapping plays of the same effect are allowed.
     func play(_ effect: SoundEffect) {
         guard isSoundEffectsEnabled else { return }
+        // Shared styles and legacy actions can both request the same tap cue.
+        if effect == .buttonPress {
+            let now = ProcessInfo.processInfo.systemUptime
+            guard now - lastButtonSoundTime >= 0.12 else { return }
+            lastButtonSoundTime = now
+        }
         configureSessionIfNeeded()
         let data: Data
         if let cached = effectData[effect] {
@@ -158,7 +165,7 @@ final class AudioManager {
         } else {
             return
         }
-        guard let player = try? AVAudioPlayer(data: data, fileTypeHint: AVFileType.mp3.rawValue) else { return }
+        guard let player = try? AVAudioPlayer(data: data) else { return }
         playEffectPlayer(player)
     }
 
@@ -246,7 +253,8 @@ final class AudioManager {
     }
 
     private static func loadData(named name: String) -> Data? {
-        guard let url = Bundle.main.url(forResource: name, withExtension: fileExtension) else { return nil }
+        let ext = name == SoundEffect.buttonPress.rawValue ? "wav" : fileExtension
+        guard let url = Bundle.main.url(forResource: name, withExtension: ext) else { return nil }
         return try? Data(contentsOf: url)
     }
 }

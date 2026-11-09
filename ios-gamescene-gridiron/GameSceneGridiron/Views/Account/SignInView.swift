@@ -148,7 +148,7 @@ struct SignInView: View {
                 .opacity(auth.isWorking ? 0.6 : 1)
                 .contentShape(.capsule)
         }
-        .buttonStyle(PressableButtonStyle(playsPressSound: false))
+        .buttonStyle(PressableButtonStyle(playsPressSound: true))
         .disabled(auth.isWorking)
         .accessibilityLabel("Sign in")
     }
@@ -198,7 +198,7 @@ struct ForgotPasswordView: View {
                             .opacity(auth.isWorking ? 0.6 : 1)
                             .contentShape(.capsule)
                     }
-                    .buttonStyle(PressableButtonStyle(playsPressSound: false))
+                    .buttonStyle(PressableButtonStyle(playsPressSound: true))
                     .disabled(auth.isWorking)
                     .accessibilityLabel("Send reset link")
 
