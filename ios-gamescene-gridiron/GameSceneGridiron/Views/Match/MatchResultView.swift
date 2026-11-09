@@ -430,10 +430,12 @@ struct MatchResultView: View {
 
             Button(action: leave) {
                 Text(continueLabel)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.paperInk)
+                    .font(Theme.condensed(15))
+                    .tracking(1.2)
+                    .foregroundStyle(Theme.goldLight)
                     .frame(maxWidth: .infinity, minHeight: 44)
-                    .overlay { Capsule().strokeBorder(Theme.paperInk.opacity(0.4), lineWidth: 1.2) }
+                    .background(Color.black.opacity(0.55), in: .capsule)
+                    .overlay { Capsule().strokeBorder(Theme.gold.opacity(0.35), lineWidth: 1) }
                     .contentShape(.capsule)
             }
             .buttonStyle(PressableButtonStyle(playsPressSound: true))
