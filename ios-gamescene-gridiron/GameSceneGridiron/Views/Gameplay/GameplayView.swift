@@ -60,7 +60,7 @@ struct GameplayView: View {
                 withAnimation(.easeOut(duration: 0.2)) { viewModel.isPaused = true }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 6)
+            .padding(.top, 16)
 
             GameFieldView(
                 viewModel: viewModel,
@@ -70,9 +70,8 @@ struct GameplayView: View {
                 guidedSlotID: training?.guidedSlotID
             )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .frame(minHeight: 220)
+                // Flexible turf yields to the HUD, roster and notebook on short screens.
                 .padding(.horizontal, 6)
-                .layoutPriority(1)
 
             // Coach banner (training) or first-game reminder strip — always
             // its own layout row, never covering field, notebook or tray.

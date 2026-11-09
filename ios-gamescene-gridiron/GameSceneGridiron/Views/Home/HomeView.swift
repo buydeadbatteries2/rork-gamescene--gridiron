@@ -25,6 +25,7 @@ struct HomeView: View {
     @State private var lockedMessage: String?
     @State private var hasAppeared: Bool = false
     @State private var glow: Bool = false
+    @State private var confirmRestart = false
 
     var body: some View {
         ZStack {
@@ -64,6 +65,36 @@ struct HomeView: View {
                     .buttonStyle(GoldCapsuleButtonStyle())
                     .shadow(color: Theme.gold.opacity(glow ? 0.35 : 0.1), radius: glow ? 22 : 10)
                     .accessibilityHint(teamStore.hasTeam ? "Opens your season" : "Opens the investigation")
+
+                    if teamStore.hasTeam, seasonManager.season != nil {
+                        VStack(spacing: 6) {
+                            Button("RESTART SEASON — 25 GAME BALLS") { confirmRestart = true }
+                                .font(Theme.condensed(14))
+                                .foregroundStyle(Theme.goldLight)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .background(Color.black.opacity(0.55), in: .capsule)
+                                .overlay { Capsule().strokeBorder(Theme.gold.opacity(0.35), lineWidth: 1) }
+                                .buttonStyle(PressableButtonStyle())
+                                .disabled(PlayerWallet.shared.gameBalls < EconomyConfig.standard.seasonRestartCost)
+                                .opacity(PlayerWallet.shared.gameBalls < EconomyConfig.standard.seasonRestartCost ? 0.45 : 1)
+                            if PlayerWallet.shared.gameBalls < EconomyConfig.standard.seasonRestartCost {
+                                Text("25 GAME BALLS REQUIRED TO RESTART")
+                                    .font(Theme.typewriter(10))
+                                    .foregroundStyle(Theme.goldLight)
+                            }
+                        }
+                        .confirmationDialog("Restart your season?", isPresented: $confirmRestart, titleVisibility: .visible) {
+                            Button("Pay 25 Game Balls & Restart", role: .destructive) {
+                                guard let team = teamStore.userTeam else { return }
+                                if seasonManager.restartSeason(userTeam: team, wallet: PlayerWallet.shared) {
+                                    isPlaying = true
+                                }
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("This costs 25 Game Balls and replaces your current schedule and unfinished match with a new season at the same difficulty. Your team, roster and earned career stats are kept. This cannot be undone.")
+                        }
+                    }
 
                     // Versus entry temporarily hidden for this release.
                     // Keep the tile, routes and saved match progress for a later update.
