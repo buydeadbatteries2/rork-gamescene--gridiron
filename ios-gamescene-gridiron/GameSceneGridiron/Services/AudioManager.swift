@@ -228,6 +228,13 @@ final class AudioManager {
         activeEffectPlayers.append(ActiveEffect(player: player, duration: player.duration))
     }
 
+    func reloadCloudState() {
+        setMusicEnabled(defaults.object(forKey: DefaultsKey.musicEnabled) as? Bool ?? true)
+        setSoundEffectsEnabled(defaults.object(forKey: DefaultsKey.effectsEnabled) as? Bool ?? true)
+        musicVolume = (defaults.object(forKey: DefaultsKey.musicVolume) as? NSNumber)?.floatValue ?? 0.3
+        effectVolume = (defaults.object(forKey: DefaultsKey.effectVolume) as? NSNumber)?.floatValue ?? 0.85
+    }
+
     // MARK: Settings
 
     func setMusicEnabled(_ isEnabled: Bool) {

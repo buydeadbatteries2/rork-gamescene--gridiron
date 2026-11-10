@@ -81,7 +81,18 @@ final class TutorialManager {
         hasCompletedFirstGameAssist = defaults.bool(forKey: DefaultsKey.firstGameAssistDone)
         isHapticsEnabled = defaults.object(forKey: DefaultsKey.hapticsEnabled) as? Bool ?? true
         isReduceMotionEnabled = defaults.bool(forKey: DefaultsKey.reduceMotion)
-        isLargerClueTextEnabled = defaults.bool(forKey: DefaultsKey.largerClueText)
+        isLargerClueTextEnabled = defaults.object(forKey: DefaultsKey.largerClueText) as? Bool ?? true
+        isHighContrastCluesEnabled = defaults.bool(forKey: DefaultsKey.highContrastClues)
+    }
+
+    func reloadCloudState() {
+        hasCompletedOnboarding = defaults.bool(forKey: DefaultsKey.onboardingComplete)
+        hasCompletedTutorial = defaults.bool(forKey: DefaultsKey.tutorialCompleted)
+        completedTooltips = Set(defaults.stringArray(forKey: DefaultsKey.completedTooltips) ?? [])
+        hasCompletedFirstGameAssist = defaults.bool(forKey: DefaultsKey.firstGameAssistDone)
+        isHapticsEnabled = defaults.object(forKey: DefaultsKey.hapticsEnabled) as? Bool ?? true
+        isReduceMotionEnabled = defaults.bool(forKey: DefaultsKey.reduceMotion)
+        isLargerClueTextEnabled = defaults.object(forKey: DefaultsKey.largerClueText) as? Bool ?? true
         isHighContrastCluesEnabled = defaults.bool(forKey: DefaultsKey.highContrastClues)
     }
 

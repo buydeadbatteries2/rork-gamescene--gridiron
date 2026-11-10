@@ -18,6 +18,8 @@ import Foundation
 /// fields to a Codable model is always safe (unknown keys are ignored), and
 /// breaking shape changes go through a migration here, keyed by version.
 nonisolated enum SaveStore {
+    static let progressDidSave = Notification.Name("gridiron.progressDidSave")
+
     /// Bump when a save model changes incompatibly and add a migration branch
     /// in `load` below.
     static let currentSchemaVersion = 2
@@ -35,6 +37,9 @@ nonisolated enum SaveStore {
         defaults.set(wrapped, forKey: key)
         // The migration landed cleanly — a stale corrupt backup is no longer needed.
         defaults.removeObject(forKey: corruptBackupKey(for: key))
+        if defaults === UserDefaults.standard, GameStateSnapshot.blobKeys.contains(key) {
+            NotificationCenter.default.post(name: progressDidSave, object: nil)
+        }
     }
 
     /// Loads `value` from `key`, migrating older schemas transparently.

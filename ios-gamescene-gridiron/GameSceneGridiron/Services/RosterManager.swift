@@ -30,6 +30,15 @@ final class RosterManager {
         }
     }
 
+    func reloadCloudState() { franchise = Self.load(from: defaults) }
+
+    /// Missing cloud roster means a fresh roster, not a stale team-keyed backup.
+    func ensureCloudRoster(for team: GameTeam) {
+        guard franchise == nil else { return }
+        franchise = Franchise(teamID: team.id, players: Self.generatePlayers(teamID: team.id))
+        persist()
+    }
+
     var hasFranchise: Bool { franchise != nil }
 
     // MARK: Roster creation

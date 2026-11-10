@@ -7,7 +7,7 @@ final class TeamSyncCoordinator {
     enum Phase: Equatable { case loading, local, ready, migration, failure }
     static let shared = TeamSyncCoordinator(
         repository: SupabaseClientProvider.shared.supabase.map { SupabaseUserTeamRepository(client: $0) },
-        store: .shared, tutorial: .shared, defaults: .standard,
+        store: .shared, tutorial: .shared, defaults: .standard, progress: .shared,
         activate: { team, previousID in
             SeasonManager.shared.activateTeam(team?.id, previousTeamID: previousID)
             if let team { RosterManager.shared.ensureRoster(for: team) }
@@ -31,15 +31,16 @@ final class TeamSyncCoordinator {
     private let tutorial: TutorialManager
     private let defaults: UserDefaults
     private let activate: (GameTeam?, UUID?) -> Void
+    private let progress: GameStateSync?
     private var accountID: UUID?
     private var remoteTeamID: UUID?
     private var generation = UUID()
     private var writeRevision = 0
 
     init(repository: (any UserTeamRepository)?, store: TeamStore, tutorial: TutorialManager,
-         defaults: UserDefaults, activate: @escaping (GameTeam?, UUID?) -> Void = { _, _ in }) {
+         defaults: UserDefaults, progress: GameStateSync? = nil, activate: @escaping (GameTeam?, UUID?) -> Void = { _, _ in }) {
         self.repository = repository; self.store = store; self.tutorial = tutorial
-        self.defaults = defaults; self.activate = activate
+        self.defaults = defaults; self.activate = activate; self.progress = progress
         store.onLocalSave = { [weak self] in self?.localSave() }
     }
 
@@ -53,6 +54,7 @@ final class TeamSyncCoordinator {
     private func valid(_ token: UUID) -> Bool { generation == token && !Task.isCancelled }
 
     func resolve(_ auth: AuthSessionState) async {
+        progress?.begin()
         lastSyncError = nil
         generation = UUID()
         let token = generation
@@ -72,7 +74,13 @@ final class TeamSyncCoordinator {
             let remote = try await repository.fetch(userID: id)
             guard valid(token) else { return }
             if let remote {
+                let candidate = progress?.candidate(owner: id, localTeam: store.userTeam, localOwner: store.ownerID)
+                let state = try await progress?.prepare(owner: id, team: remote, candidate: candidate)
+                guard valid(token) else { return }
+                progress?.archiveLocal()
                 apply(remote, owner: id)
+                if let state { progress?.install(state) }
+                activate(remote, remote.id)
                 remoteTeamID = remote.id
                 tutorial.skipSetupForRestoredTeam()
                 phase = .ready
@@ -81,6 +89,7 @@ final class TeamSyncCoordinator {
                 phase = .migration
             } else {
                 // An account's retained local team is never adopted by another account.
+                progress?.prepareNewAccount(owner: id)
                 apply(nil, owner: id)
                 phase = .ready
             }
@@ -105,7 +114,13 @@ final class TeamSyncCoordinator {
         do {
             let winner = try await repository.createIfAbsent(userID: id, team: team)
             guard valid(token) else { return }
+            let candidate = progress?.candidate(owner: id, localTeam: team, localOwner: store.ownerID, explicitlyLinked: true)
+            let state = try await progress?.prepare(owner: id, team: winner, candidate: candidate)
+            guard valid(token) else { return }
+            progress?.archiveLocal()
             apply(winner, owner: id)
+            if let state { progress?.install(state) }
+            activate(winner, winner.id)
             remoteTeamID = winner.id
             tutorial.skipSetupForRestoredTeam()
             phase = .ready
@@ -117,12 +132,14 @@ final class TeamSyncCoordinator {
 
     func createNewInstead() {
         guard phase == .migration, let id = accountID else { return }
+        progress?.prepareNewAccount(owner: id)
         apply(nil, owner: id)
         phase = .ready
     }
 
     /// Explicit offline escape; ownership and every local solo save remain intact.
     func useLocalOffline() {
+        progress?.begin()
         generation = UUID()
         accountID = nil
         phase = .local
@@ -149,14 +166,21 @@ final class TeamSyncCoordinator {
             let revision = writeRevision
             do {
                 if remoteTeamID == nil {
+                    phase = .loading
                     let winner = try await repository.createIfAbsent(userID: id, team: pending)
                     guard valid(token) else { return }
+                    let candidate = progress?.candidate(owner: id, localTeam: store.userTeam, localOwner: store.ownerID)
+                    let state = try await progress?.prepare(owner: id, team: winner, candidate: candidate)
+                    guard valid(token) else { return }
+                    progress?.archiveLocal()
+                    apply(winner, owner: id)
+                    if let state { progress?.install(state) }
+                    activate(winner, winner.id)
+                    phase = .ready
                     remoteTeamID = winner.id
                     if winner.id != pending.id {
                         // Preserve the displaced draft, but never retry it over the winner.
-                        if let displaced = store.userTeam {
-                            SaveStore.save(displaced, key: pendingKey(id) + ".superseded", defaults: defaults)
-                        }
+                        SaveStore.save(pending, key: pendingKey(id) + ".superseded", defaults: defaults)
                         apply(winner, owner: id)
                         tutorial.skipSetupForRestoredTeam()
                         defaults.removeObject(forKey: pendingKey(id))
@@ -178,7 +202,10 @@ final class TeamSyncCoordinator {
                     hasPendingSave = false
                     return
                 }
-            } catch { return }
+            } catch {
+                if valid(token), phase == .loading { recordSyncError(error); phase = .failure }
+                return
+            }
         }
     }
 }

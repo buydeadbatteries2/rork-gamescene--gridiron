@@ -1,18 +1,45 @@
 import SwiftUI
+import Combine
 
 struct ContentView: View {
     /// First launch only: the guided onboarding (intro → team → difficulty →
     /// training case → Season 1). Returning users go straight home.
     @State private var teamSync = TeamSyncCoordinator.shared
     @State private var auth = AuthService.shared
+    @State private var progress = GameStateSync.shared
+    @Environment(\.scenePhase) private var scenePhase
+    private let syncTimer = Timer.publish(every: 15, on: .main, in: .common).autoconnect()
     @State private var hasStartedLaunchMusic = false
 
     var body: some View {
         routedContent
             .preferredColorScheme(.dark)
             .task(id: auth.state) { await teamSync.resolve(auth.state) }
+            .onReceive(NotificationCenter.default.publisher(for: SaveStore.progressDidSave)) { _ in
+                Task { @MainActor in progress.checkpoint() }
+            }
+            .onReceive(syncTimer) { _ in
+                if teamSync.phase == .ready { Task { await progress.retry() } }
+            }
+            .onChange(of: scenePhase) { _, _ in
+                progress.checkpoint()
+                if teamSync.phase == .ready { Task { await progress.retry() } }
+            }
             .safeAreaInset(edge: .top) {
-                if teamSync.phase == .ready && teamSync.hasPendingSave {
+                if teamSync.phase == .ready && progress.hasPendingSave {
+                    HStack {
+                        Text(progress.isSaving ? "SAVING PROGRESS…" : (progress.conflict ? "NEWER CLOUD SAVE FOUND" : "PROGRESS NOT SYNCED"))
+                            .font(Theme.typewriter(11, relativeTo: .caption))
+                        Spacer()
+                        Button(progress.conflict ? "RESTORE" : "RETRY") {
+                            Task {
+                                if progress.conflict { await teamSync.resolve(auth.state) }
+                                else { await progress.retry() }
+                            }
+                        }.disabled(progress.isSaving)
+                    }
+                    .padding(12).foregroundStyle(Theme.goldLight).background(Theme.ink)
+                } else if teamSync.phase == .ready && teamSync.hasPendingSave {
                     HStack {
                         Text(teamSync.isSaving ? "SAVING TEAM…" : "TEAM CHANGES NOT SYNCED")
                             .font(Theme.typewriter(11, relativeTo: .caption))
@@ -80,11 +107,11 @@ struct ContentView: View {
             ZStack {
                 DeskBackground()
                 VStack(spacing: 22) {
-                    Text(teamSync.phase == .migration ? "LINK YOUR LOCAL TEAM?" : "TEAM FILE UNAVAILABLE")
+                    Text(teamSync.phase == .migration ? "LINK YOUR LOCAL TEAM?" : "PLAYER FILE UNAVAILABLE")
                         .font(Theme.display(24)).foregroundStyle(Theme.goldLight)
                     Text(teamSync.phase == .migration
                          ? "This account has no saved team. Link this device’s team only if it belongs to you. A team already saved to the account will always take priority."
-                         : "We couldn’t check your saved team. Retry before creating a team, or continue with this device’s local solo data. Nothing has been deleted.")
+                         : "We couldn’t check your saved team and progress. Retry before playing, or keep this device’s local solo data. Nothing has been deleted.")
                         .font(Theme.typewriter(14, relativeTo: .body)).foregroundStyle(Theme.paper)
                     if teamSync.phase == .migration {
                         Button("LINK LOCAL TEAM") { Task { await teamSync.migrateLocalTeam() } }

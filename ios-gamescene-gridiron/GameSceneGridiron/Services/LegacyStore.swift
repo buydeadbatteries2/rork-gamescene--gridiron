@@ -39,6 +39,13 @@ final class LegacyStore {
         state = SaveStore.load(PersistedState.self, key: Self.storageKey, defaults: defaults) ?? PersistedState()
     }
 
+    func reloadCloudState() {
+        state = SaveStore.load(PersistedState.self, key: Self.storageKey, defaults: defaults) ?? PersistedState()
+    }
+    static func validateCloudState(_ defaults: UserDefaults) -> Bool {
+        defaults.data(forKey: storageKey) == nil || SaveStore.load(PersistedState.self, key: storageKey, defaults: defaults) != nil
+    }
+
     // MARK: Queries
 
     var trophies: [ChampionshipTrophy] { state.trophies }

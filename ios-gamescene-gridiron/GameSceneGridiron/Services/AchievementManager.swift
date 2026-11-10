@@ -48,6 +48,14 @@ final class AchievementManager {
         state = SaveStore.load(PersistedState.self, key: Self.storageKey, defaults: defaults) ?? PersistedState()
     }
 
+    func reloadCloudState() {
+        state = SaveStore.load(PersistedState.self, key: Self.storageKey, defaults: defaults) ?? PersistedState()
+        popupQueue = []; currentPopupID = nil
+    }
+    static func validateCloudState(_ defaults: UserDefaults) -> Bool {
+        defaults.data(forKey: storageKey) == nil || SaveStore.load(PersistedState.self, key: storageKey, defaults: defaults) != nil
+    }
+
     // MARK: Queries
 
     var totalCount: Int { AchievementCatalog.all.count }

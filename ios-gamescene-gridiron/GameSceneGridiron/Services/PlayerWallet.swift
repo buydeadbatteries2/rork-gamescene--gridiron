@@ -114,6 +114,17 @@ final class PlayerWallet {
         starterPackGranted = state.starterPackGranted
     }
 
+    func reloadCloudState() {
+        let state = Self.load(from: defaults)
+        gameBalls = max(0, state.gameBalls); hints = max(0, state.hints)
+        transactions = state.transactions; claimedTransactionIDs = state.claimedTransactionIDs
+        doubledMatchIDs = state.doubledMatchIDs; rescueFlags = state.rescueFlags
+        forcedAdCounts = state.forcedAdCounts; starterPackGranted = state.starterPackGranted
+    }
+    static func validateCloudState(_ defaults: UserDefaults) -> Bool {
+        defaults.data(forKey: storageKey) == nil || SaveStore.load(PersistedState.self, key: storageKey, defaults: defaults) != nil
+    }
+
     private static func load(from defaults: UserDefaults) -> PersistedState {
         SaveStore.load(PersistedState.self, key: PlayerWallet.storageKey, defaults: defaults) ?? PersistedState()
     }

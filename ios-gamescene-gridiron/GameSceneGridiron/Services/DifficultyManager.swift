@@ -33,6 +33,10 @@ final class DifficultyManager {
             .flatMap(DifficultyLevel.init(rawValue:)) ?? .pro
     }
 
+    func reloadCloudState() {
+        selected = defaults.string(forKey: Self.storageKey).flatMap(DifficultyLevel.init(rawValue:)) ?? .pro
+    }
+
     /// Selects and immediately persists — unless an active season has the
     /// difficulty locked, in which case this is a no-op. PRO stays the
     /// default until the player explicitly chooses otherwise.

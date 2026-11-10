@@ -224,6 +224,11 @@ final class SeasonManager {
         season = Self.load(from: defaults)
     }
 
+    func reloadCloudState() {
+        season = Self.load(from: defaults)
+        cancellationCount = max(0, defaults.integer(forKey: Self.cancellationCountKey))
+    }
+
     // MARK: Persistence
 
     private func persist() {

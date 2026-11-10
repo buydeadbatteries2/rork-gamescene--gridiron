@@ -284,7 +284,7 @@ struct TeamRestorationTests {
 }
 
 @MainActor
-private final class TeamRepositoryStub: UserTeamRepository {
+final class TeamRepositoryStub: UserTeamRepository {
     var remote: GameTeam?
     var fail = false
     var fetchCount = 0, insertCount = 0, updateCount = 0

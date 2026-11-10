@@ -609,14 +609,13 @@ def build_case(cid, seed, band, tier, title, index_in_tier):
         sd = side_depth_phrase(slot["x"], slot["y"])
         geo = FAMILY_GEOMETRY[families[i]].format(pos=pos_full, ev=ev_title, side_depth=sd)
         clause = PROFILE_CLAUSES[profiles[p]][(i + seed) % len(PROFILE_CLAUSES[profiles[p]])]
-        stamp = f"Case file: {title} — sheet {i + 1}."
-        text = f"{geo} {clause} {stamp}"
+        text = f"{geo} {clause}"
 
         constraints = [f"nearEvidence:{p}:{ev_key}:0.08", f"profileIs:{p}:{profiles[p]}"]
         clues.append(dict(player=p, family=families[i], difficulty=pattern[i],
                           text=text, constraints=constraints, evidence=[ev_key]))
         hints.append(dict(player=p,
-                          text=f"Focus on the {pos_full} — {sd.replace(', ', ', ')}, by the {ev_title}. (The {title} file.)"))
+                          text=f"Focus on the {pos_full} — {sd.replace(', ', ', ')}, by the {ev_title}."))
         solution.append(dict(player=p, slot=slot["key"], profile=profiles[p]))
 
     # One cross-player relational statement per case (always true of the

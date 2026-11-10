@@ -169,11 +169,16 @@ struct TutorialTests {
         #expect(DifficultyManager(defaults: defaults).selected == .hallOfFamer, "difficulty survives a tutorial reset")
     }
 
+    @Test func explicitSmallerCluePreferenceSurvives() {
+        defaults.set(false, forKey: "accessibility.largerClueText")
+        #expect(!TutorialManager(defaults: defaults).isLargerClueTextEnabled)
+    }
+
     // MARK: 11–13. Accessibility settings
 
     @Test("Larger Clue Text, Reduce Motion and High Contrast persist and are respected")
     func accessibilitySettingsPersistAndApply() {
-        #expect(!tutorial.isLargerClueTextEnabled)
+        #expect(tutorial.isLargerClueTextEnabled)
         #expect(!tutorial.isReduceMotionEnabled)
         #expect(!tutorial.isHighContrastCluesEnabled)
         #expect(tutorial.isHapticsEnabled)
