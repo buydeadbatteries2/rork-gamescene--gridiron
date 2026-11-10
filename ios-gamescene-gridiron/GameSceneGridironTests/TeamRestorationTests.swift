@@ -15,6 +15,40 @@ struct TeamRestorationTests {
         TeamSyncCoordinator(repository: repo, store: store, tutorial: TutorialManager(defaults: defaults), defaults: defaults)
     }
 
+    @Test func authenticatedUnavailableSyncNeverShowsNewPlayerOnboarding() async {
+        let repo = TeamRepositoryStub(), store = TeamStore(defaults: defaults)
+        repo.fail = true
+        let sync = coordinator(repo, store)
+        let tutorial = TutorialManager(defaults: defaults)
+        #expect(!tutorial.hasCompletedOnboarding)
+        await sync.resolve(auth)
+        #expect(sync.phase == .failure)
+        #expect(ContentView.requiresTeamRecovery(auth: auth, phase: sync.phase))
+        #expect(!ContentView.shouldShowOnboarding(auth: auth, phase: sync.phase,
+                                                onboardingComplete: tutorial.hasCompletedOnboarding))
+        sync.useLocalOffline()
+        #expect(sync.phase == .local)
+        #expect(ContentView.requiresTeamRecovery(auth: auth, phase: sync.phase))
+        #expect(!ContentView.shouldShowOnboarding(auth: auth, phase: sync.phase,
+                                                onboardingComplete: tutorial.hasCompletedOnboarding))
+        #expect(!store.hasTeam)
+        #expect(repo.insertCount == 0)
+    }
+
+    @Test func guestOnboardingAndConfirmedCloudRoutesRemainUnchanged() {
+        #expect(ContentView.shouldShowOnboarding(auth: .guest, phase: .local, onboardingComplete: false))
+        #expect(!ContentView.shouldShowOnboarding(auth: .guest, phase: .local, onboardingComplete: true))
+        #expect(!ContentView.requiresTeamRecovery(auth: .guest, phase: .local))
+        #expect(!ContentView.requiresTeamRecovery(auth: auth, phase: .ready))
+        #expect(ContentView.requiresTeamRecovery(auth: auth, phase: .migration))
+        #expect(!ContentView.shouldShowOnboarding(auth: auth, phase: .ready, onboardingComplete: false))
+        if case .authenticated(let profile) = auth {
+            let recovery = AuthSessionState.needsProfileRecovery(profile)
+            #expect(ContentView.requiresTeamRecovery(auth: recovery, phase: .local))
+            #expect(!ContentView.shouldShowOnboarding(auth: recovery, phase: .local, onboardingComplete: false))
+        }
+    }
+
     @Test func freshGuestNeedsOnboardingWithoutCloudCalls() async {
         let repo = TeamRepositoryStub(), store = TeamStore(defaults: defaults)
         let sync = coordinator(repo, store)

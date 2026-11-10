@@ -62,10 +62,21 @@ struct ContentView: View {
             }
     }
 
+    // Shared with regression tests: local mode is not evidence of a signed-out user.
+    static func requiresTeamRecovery(auth: AuthSessionState, phase: TeamSyncCoordinator.Phase) -> Bool {
+        phase == .failure || phase == .migration
+            || (phase == .local && TeamSyncCoordinator.userID(auth) != nil)
+    }
+
+    static func shouldShowOnboarding(auth: AuthSessionState, phase: TeamSyncCoordinator.Phase,
+                                     onboardingComplete: Bool) -> Bool {
+        auth == .guest && phase == .local && !onboardingComplete
+    }
+
     @ViewBuilder private var routedContent: some View {
         if auth.state == .restoring || teamSync.resolvedState != auth.state || teamSync.phase == .loading {
             AuthLoadingBoard()
-        } else if teamSync.phase == .failure || teamSync.phase == .migration {
+        } else if Self.requiresTeamRecovery(auth: auth.state, phase: teamSync.phase) {
             ZStack {
                 DeskBackground()
                 VStack(spacing: 22) {
@@ -91,7 +102,8 @@ struct ContentView: View {
             TeamCreationView(onConfirm: { _ in
                 TutorialManager.shared.skipSetupForRestoredTeam()
             }, onClose: { teamSync.useLocalOffline() })
-        } else if teamSync.phase == .local && !TutorialManager.shared.hasCompletedOnboarding {
+        } else if Self.shouldShowOnboarding(auth: auth.state, phase: teamSync.phase,
+                                            onboardingComplete: TutorialManager.shared.hasCompletedOnboarding) {
             OnboardingFlowView()
         } else {
             HomeView()
