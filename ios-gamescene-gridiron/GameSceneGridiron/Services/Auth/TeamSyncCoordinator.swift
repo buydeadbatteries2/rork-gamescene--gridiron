@@ -13,6 +13,15 @@ final class TeamSyncCoordinator {
             if let team { RosterManager.shared.ensureRoster(for: team) }
         })
 
+    private(set) var lastSyncError: String?
+
+    private func recordSyncError(_ error: Error) {
+        lastSyncError = TeamSyncDiagnostic.describe(error)
+        #if DEBUG
+        print("team_sync_fetch_failed \(lastSyncError ?? "unknown")")
+        #endif
+    }
+
     private(set) var phase: Phase = .loading
     private(set) var resolvedState: AuthSessionState?
     private(set) var hasPendingSave = false
@@ -44,6 +53,7 @@ final class TeamSyncCoordinator {
     private func valid(_ token: UUID) -> Bool { generation == token && !Task.isCancelled }
 
     func resolve(_ auth: AuthSessionState) async {
+        lastSyncError = nil
         generation = UUID()
         let token = generation
         resolvedState = auth
@@ -53,7 +63,11 @@ final class TeamSyncCoordinator {
         guard auth != .restoring else { phase = .loading; return }
         guard let id = accountID else { phase = .local; return }
         phase = .loading
-        guard let repository else { phase = .failure; return }
+        guard let repository else {
+            lastSyncError = "configuration: Supabase client unavailable"
+            phase = .failure
+            return
+        }
         do {
             let remote = try await repository.fetch(userID: id)
             guard valid(token) else { return }
@@ -72,6 +86,7 @@ final class TeamSyncCoordinator {
             }
         } catch {
             guard valid(token) else { return }
+            recordSyncError(error)
             phase = .failure // Network failure is NOT an empty account.
         }
     }
