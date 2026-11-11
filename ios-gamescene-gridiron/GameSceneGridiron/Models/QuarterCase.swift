@@ -79,6 +79,8 @@ nonisolated struct CaseClue: Hashable, Sendable {
     let constraints: [CaseConstraint]
     /// Evidence object keys this clue is about (validated against the case).
     let evidenceKeys: [String]
+    /// Rendered prose that explicitly supports the profile dimension.
+    var profileSignal: ProfileSignal? = nil
 }
 
 nonisolated struct CaseHint: Hashable, Sendable {
@@ -223,16 +225,21 @@ nonisolated enum CaseSolver {
                 }
             }
         )
-        let profileUniverse = Set([PlayerProfile.fast, .powerful, .veteran]).union(referencedProfiles)
+        let profileUniverse = Set(PlayerProfile.allCases).union(referencedProfiles)
 
         var allowedVariants: [String: Set<PlayerProfile>] = [:]
         for key in playerKeys {
             var options = profileUniverse
             for constraint in profileConstraints[key] ?? [] {
                 switch constraint {
-                case .profileIs(_, let profile): options = [profile]
+                case .profileIs(_, let profile): options.formIntersection([profile])
                 case .profileIsNot(_, let profile): options.remove(profile)
                 default: break
+                }
+            }
+            for clue in puzzleCase.clues where clue.playerKey == key {
+                if let signal = clue.profileSignal, (0..<2).contains(signal.variant), clue.text.contains(signal.phrase) {
+                    options.formIntersection([signal.profile])
                 }
             }
             allowedVariants[key] = options

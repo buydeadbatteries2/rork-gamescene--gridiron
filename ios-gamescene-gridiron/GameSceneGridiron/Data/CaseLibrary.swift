@@ -146,15 +146,13 @@ nonisolated enum CaseLibrary {
             missing: missing.map { CasePlayer(key: $0.key, position: $0.position) },
             evidence: evidence.map { CaseEvidence(key: $0.key, kind: $0.kind, x: $0.x, y: $0.y, rotation: $0.rotation) },
             slots: slots.map { CaseSlot(key: $0.key, x: $0.x, y: $0.y) },
-            clues: clues.map {
-                CaseClue(
-                    playerKey: $0.player,
-                    family: $0.family,
-                    difficulty: $0.difficulty,
-                    text: $0.text,
-                    constraints: $0.constraints,
-                    evidenceKeys: $0.evidence
-                )
+            clues: clues.enumerated().map { index, authored in
+                let clue = CaseClue(playerKey: authored.player, family: authored.family,
+                                    difficulty: authored.difficulty, text: authored.text,
+                                    constraints: authored.constraints, evidenceKeys: authored.evidence)
+                guard let answer = solution.first(where: { $0.player == authored.player }) else { return clue }
+                return ProfileDialect.addingSignal(to: clue, profile: answer.profile,
+                    tier: tier ?? Self.tier(forBand: band), key: "\(id)/\(index)")
             },
             hints: hints.map { CaseHint(playerKey: $0.player, text: $0.text) },
             solution: solution.map { CaseSolution(playerKey: $0.player, slotKey: $0.slot, profile: $0.profile) }

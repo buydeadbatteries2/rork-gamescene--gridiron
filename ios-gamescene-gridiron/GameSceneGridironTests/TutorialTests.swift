@@ -97,7 +97,9 @@ struct TutorialTests {
 
         // The RB card: right slot, wrong profile — a genuine wrong placement.
         let runningBack = puzzle.missingPlayers.first { $0.position == .rb }!
-        gameViewModel.selectProfile(.powerful, for: runningBack.id)
+        let answer = puzzle.solutions[runningBack.id]!.profile
+        let wrong = gameViewModel.availableProfiles(for: runningBack.id).first { $0 != answer }!
+        gameViewModel.selectProfile(wrong, for: runningBack.id)
 
         #expect(gameViewModel.beginDrag(playerID: runningBack.id, at: CGPoint(x: 420, y: 740)))
         gameViewModel.updateDrag(to: CGPoint(x: 420, y: 740))

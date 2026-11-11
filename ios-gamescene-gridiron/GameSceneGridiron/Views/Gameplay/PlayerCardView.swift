@@ -10,8 +10,8 @@ struct PlayerCardView: View {
     var tint: Color?
     let isExpanded: Bool
     let selectedProfile: PlayerProfile?
-    /// Profiles valid at the active game difficulty — only these render.
-    var availableProfiles: [PlayerProfile] = PlayerProfile.pool(for: .pro)
+    /// The player's four session-stable options, including the case answer.
+    let availableProfiles: [PlayerProfile]
     let isBeingDragged: Bool
     let onToggle: () -> Void
     let onSelectProfile: (PlayerProfile) -> Void
@@ -145,7 +145,7 @@ struct PlayerCardView: View {
 
     // MARK: Profile selection
 
-    /// Profile chips wrap in a clean adaptive grid — five options never clip
+    /// Profile chips wrap in a clean adaptive grid — four options never clip
     /// and never shrink below a comfortable tap target.
     private var variantChips: some View {
         LazyVGrid(

@@ -122,7 +122,12 @@ struct DifficultyTests {
             })
             guard referenced.isSubset(of: proPool) else { continue }
             let adapted = CaseDifficultyAdapter.adapt(puzzleCase, to: Self.proTarget)
-            #expect(adapted == puzzleCase, "\(puzzleCase.id): Pro must be the authored case")
+            #expect(adapted.solution == puzzleCase.solution)
+            #expect(adapted.slots == puzzleCase.slots)
+            #expect(adapted.evidence == puzzleCase.evidence)
+            #expect(adapted.missing == puzzleCase.missing)
+            #expect(adapted.clues.map(\.constraints) == puzzleCase.clues.map(\.constraints))
+            #expect(ProfileDialect.failures(in: adapted).isEmpty, "Pro only changes the profile's prose dialect")
         }
     }
 

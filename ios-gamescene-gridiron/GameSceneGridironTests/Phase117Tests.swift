@@ -65,7 +65,8 @@ struct Phase117Tests {
 
     /// Burns one life with a wrong profile on the RB's correct slot.
     private func loseLife(_ viewModel: GameViewModel) {
-        select(viewModel, playerID: "p-rb", profile: .veteran)
+        let wrong = viewModel.availableProfiles(for: "p-rb").first { $0 != .fast }!
+        select(viewModel, playerID: "p-rb", profile: wrong)
         drag(viewModel, playerID: "p-rb", x: 0.50, y: 0.78)
     }
 

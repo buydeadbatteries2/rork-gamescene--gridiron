@@ -40,7 +40,12 @@ final class GameViewModel {
     /// Set BEFORE `lastChanceKey` (whose didSet restores the snapshot).
     var snapshotKey: String = GameViewModel.clockSnapshotKey
     var lastChanceKey: String = "standalone-quarter" {
-        didSet { restoreClockSnapshotIfMatching() }
+        didSet {
+            if lastChanceKey != oldValue {
+                profileOptions = ProfileOptions.make(puzzle: puzzle, session: lastChanceKey)
+            }
+            restoreClockSnapshotIfMatching()
+        }
     }
     /// TRAINING CASE mode: wrong placements teach the mechanic instead of
     /// costing a heart, so the tutorial can never permanently fail.
@@ -102,8 +107,12 @@ final class GameViewModel {
     /// Frame of the turf in the gameplay coordinate space; reported by the field view.
     var fieldFrame: CGRect = .zero
 
-    /// Profiles the player may choose from at this game difficulty.
-    var availableProfiles: [PlayerProfile] { PlayerProfile.pool(for: difficulty) }
+    /// Generated at initialization / match identity binding, never on redraw.
+    private(set) var profileOptions: [String: [PlayerProfile]] = [:]
+
+    func availableProfiles(for playerID: String) -> [PlayerProfile] {
+        profileOptions[playerID] ?? []
+    }
 
     private var usedHintIDs: Set<String> = []
     /// Prevents repeated warnings while a blocked drag gesture keeps firing.
@@ -128,6 +137,7 @@ final class GameViewModel {
         self.isTimed = timed
         self.timeoutsRemaining = timed ? Self.timeoutsPerQuarter : 0
         self.isClockIntroPresented = timed && !defaults.bool(forKey: Self.clockIntroKey)
+        self.profileOptions = ProfileOptions.make(puzzle: puzzle, session: UUID().uuidString)
         if timed {
             let clock = self.makeClock(40)
             playClock = clock
@@ -219,11 +229,9 @@ final class GameViewModel {
         expandedPlayerID = expandedPlayerID == playerID ? nil : playerID
     }
 
-    /// Selects a deployment profile. Only profiles valid for the active game
-    /// difficulty are selectable — the UI never shows the others, and this
-    /// guard keeps the model airtight.
+    /// Selection accepts only this player's four cached card choices.
     func selectProfile(_ profile: PlayerProfile, for playerID: String) {
-        guard result == .inProgress, availableProfiles.contains(profile) else { return }
+        guard result == .inProgress, availableProfiles(for: playerID).contains(profile) else { return }
         Haptics.tick()
         AudioManager.shared.play(.profileSelect)
         expandedPlayerID = playerID
@@ -263,7 +271,7 @@ final class GameViewModel {
             blockedDragPlayerID = playerID
             expandedPlayerID = playerID
             Haptics.warning()
-            let options = availableProfiles.map { $0.title.uppercased() }.joined(separator: ", ")
+            let options = availableProfiles(for: playerID).map { $0.title.uppercased() }.joined(separator: ", ")
             show(FeedbackMessage(title: "PICK A PROFILE FIRST", detail: "Choose \(options).", tone: .info))
             return false
         }

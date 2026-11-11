@@ -18,8 +18,27 @@ nonisolated enum PlayerProfile: String, Codable, CaseIterable, Hashable, Identif
     case fast
     case powerful
     case overrated
+    case underrated
+    case elusive
+    case reliable
+    case technical
 
     var id: String { rawValue }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        if value == "power" { self = .powerful; return }
+        guard let profile = Self(rawValue: value) else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unknown player profile")
+        }
+        self = profile
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 
     /// Legacy internal variant this profile maps onto, when one exists.
     /// `powerful` bridges to the legacy `power` spelling so older case data
@@ -29,7 +48,7 @@ nonisolated enum PlayerProfile: String, Codable, CaseIterable, Hashable, Identif
         case .fast: .fast
         case .veteran: .veteran
         case .powerful: .power
-        case .rookie, .overrated: nil
+        case .rookie, .overrated, .underrated, .elusive, .reliable, .technical: nil
         }
     }
 
@@ -49,6 +68,10 @@ nonisolated enum PlayerProfile: String, Codable, CaseIterable, Hashable, Identif
         case .fast: "Fast"
         case .powerful: "Powerful"
         case .overrated: "Overrated"
+        case .underrated: "Underrated"
+        case .elusive: "Elusive"
+        case .reliable: "Reliable"
+        case .technical: "Technical"
         }
     }
 
@@ -59,6 +82,10 @@ nonisolated enum PlayerProfile: String, Codable, CaseIterable, Hashable, Identif
         case .fast: "bolt.fill"
         case .powerful: "dumbbell.fill"
         case .overrated: "star.slash.fill"
+        case .underrated: "sparkle.magnifyingglass"
+        case .elusive: "arrow.triangle.branch"
+        case .reliable: "checkmark.shield.fill"
+        case .technical: "scope"
         }
     }
 
@@ -69,29 +96,33 @@ nonisolated enum PlayerProfile: String, Codable, CaseIterable, Hashable, Identif
         case .fast: "Speed and quickness"
         case .powerful: "Strength and physicality"
         case .overrated: "Reputation over execution"
+        case .underrated: "Overlooked production beyond the reputation"
+        case .elusive: "Changes direction and makes defenders miss"
+        case .reliable: "Dependable execution, snap after snap"
+        case .technical: "Precise footwork, hands and mechanics"
         }
     }
 
     /// The body archetype used for card/field body selection.
     var bodyArchetype: PlayerBodyCatalog.BodyArchetype {
         switch self {
-        case .fast: .fast
+        case .fast, .elusive: .fast
         case .powerful: .power
-        case .rookie, .veteran, .overrated: .veteran
+        case .rookie, .veteran, .overrated, .underrated, .reliable, .technical: .veteran
         }
     }
 
     // MARK: Profile pools by GAME difficulty
 
-    /// Which profiles a player may pick from at the selected game difficulty.
-    /// Rookie simplifies profile reasoning (Rookie/Veteran only), Pro adds the
-    /// physical archetypes, and All-Pro / Hall of Famer open the full pool —
-    /// Overrated included.
+    /// Historical answer-adaptation contract, NOT the visible card options.
+    /// Keep these shipped mappings for saved investigations and Ranked variant
+    /// parity. Cards independently draw four choices from all nine profiles.
+    /// Newly authored profiles pass through the adapter without remapping.
     static func pool(for difficulty: DifficultyLevel) -> [PlayerProfile] {
         switch difficulty {
         case .rookie: [.rookie, .veteran]
         case .pro: [.rookie, .veteran, .fast, .powerful]
-        case .allPro, .hallOfFamer: PlayerProfile.allCases
+        case .allPro, .hallOfFamer: [.rookie, .veteran, .fast, .powerful, .overrated]
         }
     }
 }
@@ -108,7 +139,7 @@ nonisolated enum ProfilePoolAdapter {
     /// the two-profile Rookie pool, speed scenarios map to Rookie and power
     /// scenarios to Veteran.
     static func remap(_ profile: PlayerProfile, into pool: [PlayerProfile]) -> PlayerProfile {
-        if pool.contains(profile) { return profile }
+        if pool.contains(profile) || [.underrated, .elusive, .reliable, .technical].contains(profile) { return profile }
         switch profile {
         case .fast, .overrated: return pool.contains(.rookie) ? .rookie : (pool.first ?? .veteran)
         case .powerful: return pool.contains(.veteran) ? .veteran : (pool.first ?? .rookie)

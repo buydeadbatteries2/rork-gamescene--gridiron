@@ -243,8 +243,9 @@ struct HallOfFamerClockTests {
         #expect(viewModel.draggingPlayerID == nil)
 
         // Review actions stay allowed: profile selection and expansion.
-        viewModel.selectProfile(.veteran, for: "p-rb")
-        #expect(viewModel.selectedProfile(for: "p-rb") == .veteran)
+        let other = viewModel.availableProfiles(for: "p-rb").first { $0 != .fast }!
+        viewModel.selectProfile(other, for: "p-rb")
+        #expect(viewModel.selectedProfile(for: "p-rb") == other)
     }
 
     // MARK: Automatic pauses

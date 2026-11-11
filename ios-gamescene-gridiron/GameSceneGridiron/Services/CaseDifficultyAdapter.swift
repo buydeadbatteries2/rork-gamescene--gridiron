@@ -22,6 +22,15 @@ nonisolated enum CaseDifficultyAdapter {
         adapted = addDecoys(adapted, count: target.addedDecoys)
         adapted = reorderClues(adapted, ordering: target.clueOrdering)
         adapted = rewriteHints(adapted, strength: target.hintStrength)
+        let signalTier: DifficultyLevel
+        if target.profilePool == PlayerProfile.pool(for: .rookie) { signalTier = .rookie }
+        else if target.profilePool == PlayerProfile.pool(for: .pro) { signalTier = .pro }
+        else { signalTier = target.tier == .hallOfFamer ? .hallOfFamer : .allPro }
+        adapted = replacing(adapted, clues: adapted.clues.enumerated().map { index, clue in
+            guard let answer = adapted.solution.first(where: { $0.playerKey == clue.playerKey }) else { return clue }
+            return ProfileDialect.addingSignal(to: clue, profile: answer.profile, tier: signalTier,
+                                               key: "\(adapted.id)/\(clue.playerKey)/\(index)")
+        })
         return adapted
     }
 
@@ -32,7 +41,9 @@ nonisolated enum CaseDifficultyAdapter {
     /// and the profile-dialect clue text all move together, and the solver
     /// re-verifies uniqueness through the normal validation tests.
     private static func adaptProfiles(_ puzzleCase: QuarterCase, pool: [PlayerProfile]) -> QuarterCase {
-        guard Set(pool) != Set(PlayerProfile.allCases) else { return puzzleCase }
+        // Preserve the shipped five-answer contract. New profiles pass through.
+        guard Set(pool) != Set(PlayerProfile.pool(for: .hallOfFamer)),
+              Set(pool) != Set(PlayerProfile.allCases) else { return puzzleCase }
 
         // New profile per player: identity when the authored profile is
         // available, deterministic remap otherwise.
@@ -59,7 +70,7 @@ nonisolated enum CaseDifficultyAdapter {
             }
         })
         let caseUniverse = Set([PlayerProfile.fast, .powerful, .veteran]).union(referenced)
-        let outOfPool = caseUniverse.subtracting(pool)
+        let outOfPool = Set(caseUniverse.filter { ProfilePoolAdapter.remap($0, into: pool) != $0 })
         var exclusionsPerPlayer: [String: [CaseConstraint]] = [:]
         for playerKey in puzzleCase.missing.map(\.key) {
             exclusionsPerPlayer[playerKey] = outOfPool.map { .profileIsNot(player: playerKey, profile: $0) }.sorted { $0.hashValue < $1.hashValue }
@@ -70,15 +81,15 @@ nonisolated enum CaseDifficultyAdapter {
             var addedExclusions = exclusionsPerPlayer[clue.playerKey] ?? []
             if hasAddedExclusions.contains(clue.playerKey) { addedExclusions = [] }
             else if !addedExclusions.isEmpty { hasAddedExclusions.insert(clue.playerKey) }
-            return CaseClue(
+            let remapped = CaseClue(
                 playerKey: clue.playerKey,
                 family: clue.family,
                 difficulty: clue.difficulty,
                 text: adaptedProfileText(
-                    clue.text,
+                    clue.profileSignal.map { clue.text.replacingOccurrences(of: $0.phrase, with: "").trimmingCharacters(in: .whitespacesAndNewlines) } ?? clue.text,
                     oldProfile: puzzleCase.solution.first { $0.playerKey == clue.playerKey }?.profile,
                     newProfile: newProfileFor[clue.playerKey],
-                    pool: pool
+                    context: profileContext(for: clue, in: puzzleCase)
                 ),
                 constraints: clue.constraints.map { constraint in
                     switch constraint {
@@ -102,6 +113,10 @@ nonisolated enum CaseDifficultyAdapter {
                 } + addedExclusions,
                 evidenceKeys: clue.evidenceKeys
             )
+            guard let profile = newProfileFor[clue.playerKey] else { return remapped }
+            return ProfileDialect.addingSignal(to: remapped, profile: profile,
+                tier: pool == PlayerProfile.pool(for: .rookie) ? .rookie : .pro,
+                key: "\(puzzleCase.id)/\(clue.playerKey)")
         }
 
         return QuarterCase(
@@ -122,96 +137,57 @@ nonisolated enum CaseDifficultyAdapter {
         )
     }
 
-    /// Rewrites the profile-dialect language of a clue when the player's
-    /// profile was remapped. The trailing reasoning clause (after the em
-    /// dash, or the last dialect sentence) is replaced with language that
-    /// implies the NEW profile; geometry and evidence sentences stay intact.
-    private static func adaptedProfileText(
+    /// Remapping replaces old prose with a typed spatial context; the new
+    /// signal is attached immediately afterward. No regex-only dialect guessing.
+    static func adaptedProfileText(
         _ text: String,
         oldProfile: PlayerProfile?,
         newProfile: PlayerProfile?,
-        pool: [PlayerProfile]
+        context: String
     ) -> String {
         guard let oldProfile, let newProfile, oldProfile != newProfile else { return text }
-        let dialect = profileDialectSentences(text)
-        guard !dialect.isEmpty else { return text + " " + profileClause(newProfile, ordinal: 0) }
-
-        var replacementIndex = 0
-        var result = text
-        for sentence in dialect {
-            guard result.contains(sentence) else { continue }
-            let replacement = profileClause(newProfile, ordinal: replacementIndex)
-            replacementIndex += 1
-            // Prefer replacing just the em-dash tail (the authored profile
-            // reasoning); fall back to the whole sentence.
-            if let dash = sentence.range(of: " — ") {
-                let kept = String(sentence[..<dash.lowerBound])
-                result = result.replacingOccurrences(of: sentence, with: kept.isEmpty ? replacement : kept + " — " + Self.lowerFirst(replacement))
-            } else {
-                result = result.replacingOccurrences(of: sentence, with: replacement)
-            }
-        }
-        return result
+        // Rebuild from typed spatial constraints, not keyword deletion. This
+        // cannot leave an old profile's synonym behind or erase field evidence.
+        return context
     }
 
-    /// Sentences that carry profile-dialect language (speed, power, or
-    /// experience reasoning).
-    private static func profileDialectSentences(_ text: String) -> [String] {
-        let keywords = [
-            "acceleration", "speed", "burst", "quick", "sprint", "burner", "fastest",
-            "fast", "legs", "recovery", "track", "blaze", "pace", "strength", "power",
-            "bull rush", "anchor", "leverage", "physical", "force", "immovable", "seal",
-            "veteran", "seasoned", "seasons", "discipline", "steady", "composed",
-            "savvy", "experience", "film study", "decade", "run reads", "route discipline",
-        ]
-        var sentences: [String] = []
-        var current: [String] = []
-        for token in text.split(separator: " ", omittingEmptySubsequences: false) {
-            current.append(String(token))
-            if token.hasSuffix(".") || token.hasSuffix("!") || token.hasSuffix("?") {
-                sentences.append(current.joined(separator: " "))
-                current = []
+    private static func profileContext(for clue: CaseClue, in puzzle: QuarterCase) -> String {
+        func player(_ key: String) -> String { puzzle.player(withKey: key)?.position.fullName.lowercased() ?? "other missing player" }
+        func evidence(_ key: String) -> String { puzzle.evidence(withKey: key)?.kind.title.lowercased() ?? "marked evidence" }
+        let subject = player(clue.playerKey)
+        var lines = ["Read the \(subject)'s assignment against the field."]
+        for constraint in clue.constraints {
+            switch constraint {
+            case .nearEvidence(let key, let item, _):
+                lines.append("The \(player(key)) belongs beside the \(evidence(item)).")
+            case .nearestToEvidence(let key, let item):
+                lines.append("Of the missing players, the \(player(key)) is closest to the \(evidence(item)).")
+            case .farthestFromEvidence(let key, let item):
+                lines.append("Of the missing players, the \(player(key)) is farthest from the \(evidence(item)).")
+            case .yAbove(let a, let b, _):
+                lines.append("The \(player(a)) stands farther toward the top of the field than the \(player(b)).")
+            case .yBelow(let a, let b, _):
+                lines.append("The \(player(a)) stands farther toward the bottom of the field than the \(player(b)).")
+            case .sameSideOfBall(let a, let b):
+                lines.append("The \(player(a)) and \(player(b)) share the same left-or-right half of the field.")
+            case .oppositeSideOfBall(let a, let b):
+                lines.append("The \(player(a)) and \(player(b)) occupy opposite left-or-right halves of the field.")
+            case .depthBand(let key, let low, let high):
+                let area = high < 0.3 ? "deep downfield" : low >= 0.6 ? "in the backfield" : "between the deep posts and the backfield"
+                lines.append("Look \(area) for the \(player(key)).")
+            case .xBand(let key, let low, let high):
+                let side = high <= 0.5 ? "left half" : low >= 0.5 ? "right half" : "middle lanes"
+                lines.append("The \(player(key)) works the \(side) of the field.")
+            case .profileIs, .profileIsNot: break
             }
         }
-        if !current.isEmpty { sentences.append(current.joined(separator: " ")) }
-        return sentences.filter { sentence in
-            let sentenceLower = sentence.lowercased()
-            return keywords.contains { sentenceLower.contains($0) }
-        }
+        return lines.joined(separator: " ")
     }
 
     /// Implying (never naming) language for a remapped profile.
-    private static func profileClause(_ profile: PlayerProfile, ordinal: Int) -> String {
-        let clauses: [String] = switch profile {
-        case .rookie: [
-            "the young one is still learning the assignment — hesitant when the formation shifts.",
-            "a first-year player still developing, raw but in the right spot.",
-            "the newest jersey out there, late recognizing the look.",
-        ]
-        case .veteran: [
-            "a seasoned head who has seen this look before — calm under pressure.",
-            "years of reps show in the discipline of the assignment.",
-            "the steadiest head on the roster recognizes the situation instantly.",
-        ]
-        case .fast: [
-            "instant acceleration is the only way this spot works.",
-            "recovery speed is the whole job here.",
-        ]
-        case .powerful: [
-            "strength over everything — the spot demands someone who will not be moved.",
-            "an anchor at the point of attack, built to hold ground.",
-        ]
-        case .overrated: [
-            "the reputation is bigger than the recent tape.",
-            "the name gets the headlines; the execution has not followed.",
-        ]
-        }
-        return clauses[abs(ordinal) % clauses.count]
-    }
-
-    private static func lowerFirst(_ value: String) -> String {
-        guard let first = value.first else { return value }
-        return first.lowercased() + value.dropFirst()
+    static func profileClause(_ profile: PlayerProfile, ordinal: Int) -> String {
+        let clauses = ProfileDialect.phrases(profile, tier: .pro)
+        return clauses[Int(ordinal.magnitude % UInt(clauses.count))]
     }
 
     // MARK: Missing players

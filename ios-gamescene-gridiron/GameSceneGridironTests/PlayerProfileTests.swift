@@ -65,25 +65,26 @@ struct PlayerProfileTests {
         let viewModel = GameViewModel(puzzle: SampleQuarter.puzzle, difficulty: .rookie)
         let player = SampleQuarter.puzzle.player(id: "p-rb")!
 
-        viewModel.selectProfile(.fast, for: player.id)
-        #expect(viewModel.selectedProfile(for: player.id) == nil, "Rookie difficulty hides Fast — selection must be refused")
-
-        viewModel.selectProfile(.rookie, for: player.id)
-        #expect(viewModel.selectedProfile(for: player.id) == .rookie)
-
-        // Picking a different profile replaces the choice…
-        viewModel.selectProfile(.veteran, for: player.id)
-        #expect(viewModel.selectedProfile(for: player.id) == .veteran)
-
-        // …and tapping it again clears it.
-        viewModel.selectProfile(.veteran, for: player.id)
+        let options = viewModel.availableProfiles(for: player.id)
+        let hidden = PlayerProfile.allCases.first { !options.contains($0) }!
+        viewModel.selectProfile(hidden, for: player.id)
+        #expect(viewModel.selectedProfile(for: player.id) == nil)
+        viewModel.selectProfile(options[0], for: player.id)
+        #expect(viewModel.selectedProfile(for: player.id) == options[0])
+        viewModel.selectProfile(options[1], for: player.id)
+        #expect(viewModel.selectedProfile(for: player.id) == options[1])
+        viewModel.selectProfile(options[1], for: player.id)
         #expect(viewModel.selectedProfile(for: player.id) == nil)
     }
 
-    @Test func availableProfilesMirrorTheDifficulty() {
-        #expect(GameViewModel(puzzle: SampleQuarter.puzzle, difficulty: .rookie).availableProfiles == [.rookie, .veteran])
-        #expect(GameViewModel(puzzle: SampleQuarter.puzzle, difficulty: .pro).availableProfiles == [.rookie, .veteran, .fast, .powerful])
-        #expect(GameViewModel(puzzle: SampleQuarter.puzzle, difficulty: .hallOfFamer).availableProfiles.count == 5)
+    @Test func visibleOptionsAreFourAtEveryDifficulty() {
+        for level in DifficultyLevel.allCases {
+            let vm = GameViewModel(puzzle: SampleQuarter.puzzle, difficulty: level)
+            for player in vm.puzzle.missingPlayers {
+                #expect(vm.availableProfiles(for: player.id).count == 4)
+                #expect(vm.availableProfiles(for: player.id).contains(vm.puzzle.solutions[player.id]!.profile))
+            }
+        }
     }
 
     // MARK: Case validation (§30)

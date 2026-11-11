@@ -221,7 +221,8 @@ struct InvestigationResumeTests {
         first.lastChanceKey = key
         first.selectProfile(.fast, for: "p-rb")
         drag(first, playerID: "p-rb", x: 0.50, y: 0.78) // correct
-        first.selectProfile(.rookie, for: "p-te")
+        let wrong = first.availableProfiles(for: "p-te").first { $0 != .powerful }!
+        first.selectProfile(wrong, for: "p-te")
         drag(first, playerID: "p-te", x: 0.775, y: 0.565) // right slot, wrong profile — a life gone
 
         let reopened = makeViewModel(difficulty: .pro, defaults: defaults)

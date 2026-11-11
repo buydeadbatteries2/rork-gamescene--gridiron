@@ -143,9 +143,10 @@ struct CaseLibraryTests {
 
     // MARK: Text variety
 
-    @Test func noDuplicateClueOrHintTextAcrossLibrary() {
-        var clueTexts: [String: String] = [:]
-        var hintTexts: [String: String] = [:]
+    @Test func noDuplicateLeadsWithinACaseOrClonedCaseFiles() {
+        // Short, accurate directions may recur in different games. The removed
+        // internal case-id suffixes must not be restored merely to fake variety.
+        var caseFiles = Set<[String]>()
         var failures: [String] = []
         func normalize(_ text: String) -> String {
             text.lowercased()
@@ -154,22 +155,11 @@ struct CaseLibraryTests {
                 .joined(separator: " ")
         }
         for puzzleCase in library {
-            for clue in puzzleCase.clues {
-                let key = normalize(clue.text)
-                if let first = clueTexts[key] {
-                    failures.append("clue text duplicated: \(puzzleCase.id) and \(first)")
-                } else {
-                    clueTexts[key] = puzzleCase.id
-                }
-            }
-            for hint in puzzleCase.hints {
-                let key = normalize(hint.text)
-                if let first = hintTexts[key] {
-                    failures.append("hint text duplicated: \(puzzleCase.id) and \(first)")
-                } else {
-                    hintTexts[key] = puzzleCase.id
-                }
-            }
+            let clues = puzzleCase.clues.map { normalize($0.text) }
+            let hints = puzzleCase.hints.map { normalize($0.text) }
+            if Set(clues).count != clues.count { failures.append("duplicate clues in \(puzzleCase.id)") }
+            if Set(hints).count != hints.count { failures.append("duplicate hints in \(puzzleCase.id)") }
+            if !caseFiles.insert(clues.sorted()).inserted { failures.append("cloned case file \(puzzleCase.id)") }
         }
         #expect(failures.isEmpty, "\(failures.joined(separator: "\n"))")
     }

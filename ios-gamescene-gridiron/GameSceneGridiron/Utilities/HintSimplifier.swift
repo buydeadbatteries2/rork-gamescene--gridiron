@@ -62,6 +62,14 @@ nonisolated enum HintSimplifier {
             return ("They are a FIRST-YEAR player still learning the game.", ["first-year"])
         case .overrated:
             return ("They are HIGHLY REGARDED but keep MAKING MISTAKES.", ["highly regarded", "making mistakes"])
+        case .underrated:
+            return ("They are OVERLOOKED despite what the tape proves.", ["overlooked"])
+        case .elusive:
+            return ("They CHANGE DIRECTION to make defenders miss.", ["change direction"])
+        case .reliable:
+            return ("They are DEPENDABLE on every assignment.", ["dependable"])
+        case .technical:
+            return ("They win with PRECISE FOOTWORK and hand placement.", ["precise footwork", "hand placement"])
         }
     }
 
