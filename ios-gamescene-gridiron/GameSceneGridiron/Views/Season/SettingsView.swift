@@ -484,14 +484,6 @@ struct SettingsView: View {
         card(rotation: -0.3) {
             sectionHeader("ABOUT", symbol: "info.circle")
 
-            Text(AppInfo.displayLine)
-                .font(.system(size: 14, weight: .heavy).width(.condensed))
-                .tracking(1)
-                .foregroundStyle(Theme.paperInk)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 6)
-                .accessibilityLabel("App version \(AppInfo.version), build \(AppInfo.build)")
-
             aboutLinkRow("PRIVACY POLICY", symbol: "hand.raised.fill", document: .privacy)
             aboutLinkRow("TERMS OF USE", symbol: "doc.plaintext", document: .terms)
             aboutLinkRow("SUPPORT", symbol: "envelope", document: .support)
