@@ -1,10 +1,15 @@
 {
+  "$schema": "https://rork.com/schema/rork.json",
   "apps": [
     {
       "name": "GameScene: Gridiron",
       "path": "ios-gamescene-gridiron",
       "framework": "swift"
+    },
+    {
+      "name": "GameScene Gridiron",
+      "path": "web-gamescene-gridiron",
+      "framework": "web"
     }
-  ],
-  "$schema": "https://rork.com/schema/rork.json"
+  ]
 }
